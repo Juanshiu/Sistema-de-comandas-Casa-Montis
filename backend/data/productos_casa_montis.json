@@ -1,0 +1,517 @@
+[
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "BISTEC A CABALLO COMPLETO",
+    "precio": 22000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "BISTEC A CABALLO BANDEJA",
+    "precio": 20000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "CAKEPOP",
+    "precio": 3500
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "PORCIÓN BROWNIE",
+    "precio": 10000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "PORCIÓN BESO ANGEL",
+    "precio": 12000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PAN",
+    "precio": 500
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "ADICIÓN DE QUESO",
+    "precio": 4000
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "MANI EL ESPECIAL",
+    "precio": 1000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "CAJA DE GALLETAS",
+    "precio": 10000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "TORTA",
+    "precio": 18000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "CAJA DE PANDEROS",
+    "precio": 10000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "PORCION DE FRUTAS",
+    "precio": 6000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "POLLO A LA FRICASE",
+    "precio": 23000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "CARNE CON REDUCCIÓN AL VINO",
+    "precio": 25000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "PECHUGA NAPOLITANA",
+    "precio": 25000
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "SERVICIO RESTAURANTE",
+    "precio": 59066
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "TINTO",
+    "precio": 1000
+  },
+  {
+    "categoria": "ESPECIALES - PECHUGAS",
+    "nombre": "PECHUGA ESPECIAL SOLO",
+    "precio": 20000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "BANDEJA MONTIS",
+    "precio": 23000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "BOTELLA AGUA 1LT",
+    "precio": 5000
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "CENA NAVIDEÑA",
+    "precio": 30000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "CAJA DE BIZCOCHO ACHIRA",
+    "precio": 10000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "GALLETA",
+    "precio": 3000
+  },
+  {
+    "categoria": "CAFETERÍA",
+    "nombre": "PORCION TORTA",
+    "precio": 10000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "BANDEJA DESAYUNO",
+    "precio": 15000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "TORTIN DE AGUACATE MONTIS",
+    "precio": 19000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "HUEVOS MONTIS CON AMOR",
+    "precio": 20000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "HUEVOS MONTIS A LA CACEROLA",
+    "precio": 19000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "BISTE A CABALLO MONTIS",
+    "precio": 22000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "CALENTADO DE FRIJOL",
+    "precio": 19000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "HUEVOS RANCHEROS MONTIS",
+    "precio": 20000
+  },
+  {
+    "categoria": "ESPECIALES - PASTAS",
+    "nombre": "PASTA AL CARBONARA",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PASTAS",
+    "nombre": "PASTA MAR Y TIERRA",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PASTAS",
+    "nombre": "PASTA PAD THAI",
+    "precio": 43000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "CAFÉ",
+    "precio": 4000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN DE SALCHICHA",
+    "precio": 3000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN QUESO",
+    "precio": 1000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "GATORADE",
+    "precio": 5000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "MICHELADA",
+    "precio": 7000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "SODA",
+    "precio": 3000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "CERVEZA INDIAN",
+    "precio": 8000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "CERVEZA AGUILA",
+    "precio": 5000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "GASEOSA 3L",
+    "precio": 15000
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "DOMICILIO",
+    "precio": 2000
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "DESECHABLES",
+    "precio": 500
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "MANI",
+    "precio": 1000
+  },
+  {
+    "categoria": "Otros",
+    "nombre": "COVER AIRE",
+    "precio": 1000
+  },
+  {
+    "categoria": "ESPECIALES - ARROZ",
+    "nombre": "PAELLA",
+    "precio": 47000
+  },
+  {
+    "categoria": "ESPECIALES - ARROZ",
+    "nombre": "ARROZ CON CAMARÓN",
+    "precio": 45000
+  },
+  {
+    "categoria": "ESPECIALES - ARROZ",
+    "nombre": "ARROZ MIXTO",
+    "precio": 35000
+  },
+  {
+    "categoria": "ESPECIALES - ARROZ",
+    "nombre": "ARROZ CON POLLO",
+    "precio": 35000
+  },
+  {
+    "categoria": "ESPECIALES - CARNES",
+    "nombre": "TABLA MIXTA",
+    "precio": 45000
+  },
+  {
+    "categoria": "ESPECIALES - CARNES",
+    "nombre": "COSTILLAS BBQ",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - CARNES",
+    "nombre": "LOMO DE CERDO TROPICAL",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - CARNES",
+    "nombre": "LOMO DE CERDO A LA PLANCHA",
+    "precio": 35000
+  },
+  {
+    "categoria": "ESPECIALES - CARNES",
+    "nombre": "CHURRAZCO",
+    "precio": 38000
+  },
+  {
+    "categoria": "ESPECIALES - PECHUGAS",
+    "nombre": "PECHUGA GRILLE",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PECHUGAS",
+    "nombre": "PECHUGA MAÍZ AL QUESO",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PECHUGAS",
+    "nombre": "PECHUGA GOURMET",
+    "precio": 35000
+  },
+  {
+    "categoria": "ESPECIALES - PECHUGAS",
+    "nombre": "PECHUGA HAWAIANA",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PECHUGAS",
+    "nombre": "PECHUGA MARINERA",
+    "precio": 45000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "CAZUELA DE MARIZCOS",
+    "precio": 53000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "CAZUELA DE PESCADO",
+    "precio": 50000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "CEVICHE",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "VIUDO DE BOCACHICO",
+    "precio": 55000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "VIUDO DE BAGRE",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "MOJARRA FRITA",
+    "precio": 35000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "RÓBALO AL AJILLO",
+    "precio": 55000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "RÓBALO A LA PLANCHA",
+    "precio": 50000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "RÓBALO A LA MARINERA",
+    "precio": 60000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "SALMÓN SUECO",
+    "precio": 53000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "TRUCHA AL AJILLO",
+    "precio": 40000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "TRUCHA A LA PLANCHA",
+    "precio": 35000
+  },
+  {
+    "categoria": "ESPECIALES - PESCADOS",
+    "nombre": "TRUCHA MARINERA",
+    "precio": 50000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "BANDEJA PAISA",
+    "precio": 25000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "FILETE",
+    "precio": 23000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "C. BAGRE Y BANDEJA",
+    "precio": 21000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "C. CAMPESINO Y BANDEJA",
+    "precio": 19000
+  },
+  {
+    "categoria": "DESAYUNO",
+    "nombre": "CALDO Y BANDEJA",
+    "precio": 17000
+  },
+  {
+    "categoria": "SOPAS",
+    "nombre": "CREMA",
+    "precio": 6000
+  },
+  {
+    "categoria": "SOPAS",
+    "nombre": "SOPA",
+    "precio": 7000
+  },
+  {
+    "categoria": "SOPAS",
+    "nombre": "CALDO DE BAGRE",
+    "precio": 13000
+  },
+  {
+    "categoria": "SOPAS",
+    "nombre": "CALDO CAMPESINO",
+    "precio": 11000
+  },
+  {
+    "categoria": "SOPAS",
+    "nombre": "CALDO DE COSTILLA",
+    "precio": 6000
+  },
+  {
+    "categoria": "SOPAS",
+    "nombre": "CALDO DE POLLO",
+    "precio": 6000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN DE HUEVO",
+    "precio": 1500
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN AGUACATE",
+    "precio": 3000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN PRINCIPIO",
+    "precio": 7000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN FILETE TILAPIA",
+    "precio": 12000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PROTEINA",
+    "precio": 10000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "ENSALADA",
+    "precio": 4000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN ARROZ",
+    "precio": 5000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PAPAS FRANCESA",
+    "precio": 7000
+  },
+  {
+    "categoria": "PORCIONES",
+    "nombre": "PORCIÓN PATACONA",
+    "precio": 7000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "CHOCOLATE",
+    "precio": 4000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "ALMUERZO CON CALDO DE BAGRE",
+    "precio": 24000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "JARRA DE JUGO",
+    "precio": 15000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "JUGO ADICIONAL",
+    "precio": 4000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "AGUA POOL",
+    "precio": 3000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "GASEOSA 1/2",
+    "precio": 10000
+  },
+  {
+    "categoria": "BEBIDAS",
+    "nombre": "GASEOSA PERSONAL",
+    "precio": 3500
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "ALMUERZO SOLO BANDEJA",
+    "precio": 20000
+  },
+  {
+    "categoria": "ALMUERZO",
+    "nombre": "ALMUERZO COMPLETO",
+    "precio": 22000
+  }
+]
