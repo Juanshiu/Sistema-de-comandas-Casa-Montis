@@ -4,9 +4,10 @@ import { useState } from 'react';
 import FormularioComandas from '@/components/FormularioComandas';
 import InterfazCaja from '@/components/InterfazCaja';
 import Reportes from '@/components/Reportes';
-import { ShoppingCart, Calculator, BarChart3, Menu, X } from 'lucide-react';
+import Administracion from '@/components/Administracion';
+import { ShoppingCart, Calculator, BarChart3, Settings, Menu, X } from 'lucide-react';
 
-type Vista = 'comandas' | 'caja' | 'reportes';
+type Vista = 'comandas' | 'caja' | 'reportes' | 'admin';
 
 export default function SistemaPrincipal() {
   const [vistaActual, setVistaActual] = useState<Vista>('comandas');
@@ -30,6 +31,12 @@ export default function SistemaPrincipal() {
       nombre: 'Reportes',
       icon: BarChart3,
       descripcion: 'Ver estadísticas de ventas'
+    },
+    {
+      id: 'admin' as Vista,
+      nombre: 'Administración',
+      icon: Settings,
+      descripcion: 'Gestionar productos y personalizaciones'
     }
   ];
 
@@ -41,6 +48,8 @@ export default function SistemaPrincipal() {
         return <InterfazCaja />;
       case 'reportes':
         return <Reportes />;
+      case 'admin':
+        return <Administracion />;
       default:
         return <FormularioComandas />;
     }
