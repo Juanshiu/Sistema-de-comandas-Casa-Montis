@@ -7,11 +7,13 @@ import path from 'path';
 
 import { initDatabase } from './database/init';
 import { updateDatabaseWithProducts } from './database/update';
+import { crearTablasPersonalizaciones } from './database/migration-personalizaciones';
 import mesasRoutes from './routes/mesas';
 import productosRoutes from './routes/productos';
 import comandasRoutes from './routes/comandas';
 import facturasRoutes from './routes/facturas';
 import reportesRoutes from './routes/reportes';
+import personalizacionesRoutes from './routes/personalizaciones';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -41,6 +43,7 @@ app.use('/api/productos', productosRoutes);
 app.use('/api/comandas', comandasRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/reportes', reportesRoutes);
+app.use('/api/personalizaciones', personalizacionesRoutes);
 
 // Ruta de salud
 app.get('/health', (req, res) => {
@@ -71,6 +74,10 @@ async function startServer() {
   try {
     await initDatabase();
     console.log('✅ Base de datos inicializada');
+    
+    // Crear tablas de personalizaciones
+    await crearTablasPersonalizaciones();
+    console.log('✅ Tablas de personalizaciones inicializadas');
     
     // Actualizar con productos y mesas reales
     await updateDatabaseWithProducts();

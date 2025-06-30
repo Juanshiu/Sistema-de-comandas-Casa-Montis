@@ -23,6 +23,25 @@ router.get('/', (req: Request, res: Response) => {
   });
 });
 
+// Obtener todos los productos (incluyendo no disponibles) - para administración
+router.get('/all', (req: Request, res: Response) => {
+  const query = 'SELECT * FROM productos ORDER BY categoria, nombre';
+  
+  db.all(query, [], (err: any, rows: Producto[]) => {
+    if (err) {
+      console.error('Error al obtener todos los productos:', err);
+      return res.status(500).json({ error: 'Error al obtener los productos' });
+    }
+    
+    const productos = rows.map(producto => ({
+      ...producto,
+      disponible: Boolean(producto.disponible)
+    }));
+    
+    res.json(productos);
+  });
+});
+
 // Obtener productos por categoría
 router.get('/categoria/:categoria', (req: Request, res: Response) => {
   const { categoria } = req.params;
@@ -146,6 +165,92 @@ router.put('/:id', (req: Request, res: Response) => {
       
       res.json(producto);
     });
+  });
+});
+
+// Actualizar producto (PATCH)
+router.patch('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { nombre, descripcion, precio, categoria, disponible } = req.body;
+  
+  // Construir query dinámicamente solo con campos presentes
+  const fields = [];
+  const values = [];
+  
+  if (nombre !== undefined) {
+    fields.push('nombre = ?');
+    values.push(nombre);
+  }
+  if (descripcion !== undefined) {
+    fields.push('descripcion = ?');
+    values.push(descripcion);
+  }
+  if (precio !== undefined) {
+    fields.push('precio = ?');
+    values.push(precio);
+  }
+  if (categoria !== undefined) {
+    fields.push('categoria = ?');
+    values.push(categoria);
+  }
+  if (disponible !== undefined) {
+    fields.push('disponible = ?');
+    values.push(disponible ? 1 : 0);
+  }
+  
+  if (fields.length === 0) {
+    return res.status(400).json({ error: 'No se proporcionaron campos para actualizar' });
+  }
+  
+  fields.push('updated_at = CURRENT_TIMESTAMP');
+  values.push(id);
+  
+  const query = `UPDATE productos SET ${fields.join(', ')} WHERE id = ?`;
+  
+  db.run(query, values, function(err: any) {
+    if (err) {
+      console.error('Error al actualizar producto:', err);
+      return res.status(500).json({ error: 'Error al actualizar el producto' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+    
+    // Obtener el producto actualizado
+    db.get('SELECT * FROM productos WHERE id = ?', [id], (err: any, row: Producto) => {
+      if (err) {
+        console.error('Error al obtener producto actualizado:', err);
+        return res.status(500).json({ error: 'Error al obtener el producto actualizado' });
+      }
+      
+      const producto = {
+        ...row,
+        disponible: Boolean(row.disponible)
+      };
+      
+      res.json(producto);
+    });
+  });
+});
+
+// Eliminar producto
+router.delete('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  const query = 'DELETE FROM productos WHERE id = ?';
+  
+  db.run(query, [id], function(err: any) {
+    if (err) {
+      console.error('Error al eliminar producto:', err);
+      return res.status(500).json({ error: 'Error al eliminar el producto' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Producto no encontrado' });
+    }
+    
+    res.status(204).send();
   });
 });
 
