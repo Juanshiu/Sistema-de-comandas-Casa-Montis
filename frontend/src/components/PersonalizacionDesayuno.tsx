@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
-import { PersonalizacionItem, OpcionCaldo, OpcionPrincipio, OpcionProteina, OpcionBebida } from '@/types';
+import { useState, useEffect } from 'react';
+import { PersonalizacionItem, OpcionCaldo, OpcionProteina, OpcionBebida } from '@/types';
+import { apiService } from '@/services/api';
 
 interface PersonalizacionDesayunoProps {
   onPersonalizacionChange: (personalizacion: PersonalizacionItem) => void;
@@ -12,32 +13,33 @@ export default function PersonalizacionDesayuno({ onPersonalizacionChange, perso
   const [personalizacion, setPersonalizacion] = useState<PersonalizacionItem>(
     personalizacionInicial || {}
   );
+  const [caldos, setCaldos] = useState<OpcionCaldo[]>([]);
+  const [proteinas, setProteinas] = useState<OpcionProteina[]>([]);
+  const [bebidas, setBebidas] = useState<OpcionBebida[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Opciones de caldos para desayunos
-  const caldos: OpcionCaldo[] = [
-    { id: 'pollo', nombre: 'Caldo de Pollo', precio_adicional: 0 },
-    { id: 'costilla', nombre: 'Caldo de Costilla', precio_adicional: 0 },
-    { id: 'campesino', nombre: 'Caldo Campesino', precio_adicional: 2000 },
-    { id: 'bagre', nombre: 'Caldo de Bagre', precio_adicional: 3000 }
-  ];
+  useEffect(() => {
+    cargarOpciones();
+  }, []);
 
-  // Opciones de proteínas para desayunos
-  const proteinas: OpcionProteina[] = [
-    { id: 'cerdo', nombre: 'Cerdo', precio_adicional: 0 },
-    { id: 'huevos_revueltos', nombre: 'Huevos Revueltos', precio_adicional: 0 },
-    { id: 'bistec_res', nombre: 'Bistec de Res', precio_adicional: 1000 },
-    { id: 'pollo', nombre: 'Pollo', precio_adicional: 500 },
-    { id: 'higado', nombre: 'Hígado', precio_adicional: 0 }
-  ];
-
-  // Opciones de bebidas para desayunos
-  const bebidas: OpcionBebida[] = [
-    { id: 'chocolate', nombre: 'Chocolate', precio_adicional: 0 },
-    { id: 'chocolate_leche', nombre: 'Chocolate en Leche', precio_adicional: 1000 },
-    { id: 'cafe', nombre: 'Café', precio_adicional: 0 },
-    { id: 'cafe_leche', nombre: 'Café en Leche', precio_adicional: 800 },
-    { id: 'agua_panela', nombre: 'Agua de Panela', precio_adicional: 0 }
-  ];
+  const cargarOpciones = async () => {
+    try {
+      setLoading(true);
+      const [caldosData, proteinasData, bebidasData] = await Promise.all([
+        apiService.getCaldos(),
+        apiService.getProteinas(),
+        apiService.getBebidas()
+      ]);
+      
+      setCaldos(caldosData);
+      setProteinas(proteinasData);
+      setBebidas(bebidasData);
+    } catch (error) {
+      console.error('Error al cargar opciones de personalización:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSeleccion = (tipo: 'caldo' | 'proteina' | 'bebida', opcion: any) => {
     const nuevaPersonalizacion = {
@@ -60,6 +62,17 @@ export default function PersonalizacionDesayuno({ onPersonalizacionChange, perso
     if (pers.bebida) total += pers.bebida.precio_adicional;
     return total;
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 p-4 bg-orange-50 rounded-lg border border-orange-200">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
+          <p className="text-secondary-600 mt-2">Cargando opciones de personalización...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 bg-orange-50 rounded-lg border border-orange-200">

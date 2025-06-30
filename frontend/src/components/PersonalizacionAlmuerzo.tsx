@@ -1,7 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { PersonalizacionItem, OpcionCaldo, OpcionPrincipio, OpcionProteina } from '@/types';
+import { apiService } from '@/services/api';
 
 interface PersonalizacionAlmuerzoProps {
   onPersonalizacionChange: (personalizacion: PersonalizacionItem) => void;
@@ -12,40 +13,33 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
   const [personalizacion, setPersonalizacion] = useState<PersonalizacionItem>(
     personalizacionInicial || {}
   );
+  const [caldos, setCaldos] = useState<OpcionCaldo[]>([]);
+  const [principios, setPrincipios] = useState<OpcionPrincipio[]>([]);
+  const [proteinas, setProteinas] = useState<OpcionProteina[]>([]);
+  const [loading, setLoading] = useState(true);
 
-  // Opciones de sopas/caldos para almuerzos
-  const caldos: OpcionCaldo[] = [
-    { id: 'sopa_verduras', nombre: 'Sopa de Verduras', precio_adicional: 0 },
-    { id: 'caldo_pollo', nombre: 'Caldo de Pollo', precio_adicional: 0 },
-    { id: 'caldo_costilla', nombre: 'Caldo de Costilla', precio_adicional: 1000 },
-    { id: 'caldo_bagre', nombre: 'Caldo de Bagre', precio_adicional: 3000 },
-    { id: 'sancocho', nombre: 'Sancocho', precio_adicional: 2000 }
-  ];
+  useEffect(() => {
+    cargarOpciones();
+  }, []);
 
-  // Opciones de principios para almuerzos
-  const principios: OpcionPrincipio[] = [
-    { id: 'frijol', nombre: 'Frijol', precio_adicional: 0 },
-    { id: 'verduras_atun', nombre: 'Verduras con Atún', precio_adicional: 1500 },
-    { id: 'verduras_salteadas', nombre: 'Verduras Salteadas', precio_adicional: 500 },
-    { id: 'pasta_fria', nombre: 'Pasta Fría', precio_adicional: 1000 },
-    { id: 'pure_papa', nombre: 'Puré de Papa', precio_adicional: 0 },
-    { id: 'lentejas', nombre: 'Lentejas', precio_adicional: 0 },
-    { id: 'arroz_coco', nombre: 'Arroz con Coco', precio_adicional: 1200 }
-  ];
-
-  // Opciones de proteínas para almuerzos
-  const proteinas: OpcionProteina[] = [
-    { id: 'pollo_asado', nombre: 'Pollo Asado', precio_adicional: 0 },
-    { id: 'pollo_sudado', nombre: 'Pollo Sudado', precio_adicional: 0 },
-    { id: 'cerdo_asado', nombre: 'Cerdo Asado', precio_adicional: 500 },
-    { id: 'res_sudada', nombre: 'Carne de Res Sudada', precio_adicional: 1000 },
-    { id: 'bistec_res', nombre: 'Bistec de Res', precio_adicional: 1500 },
-    { id: 'pechuga_plancha', nombre: 'Pechuga a la Plancha', precio_adicional: 2000 },
-    { id: 'higado_encebollado', nombre: 'Hígado Encebollado', precio_adicional: 0 },
-    { id: 'sobrebarriga_salsa', nombre: 'Sobrebarriga en Salsa', precio_adicional: 2500 },
-    { id: 'sobrebarriga_asada', nombre: 'Sobrebarriga Asada', precio_adicional: 2000 },
-    { id: 'filete_tilapia', nombre: 'Filete de Tilapia', precio_adicional: 4000 }
-  ];
+  const cargarOpciones = async () => {
+    try {
+      setLoading(true);
+      const [caldosData, principiosData, proteinasData] = await Promise.all([
+        apiService.getCaldos(),
+        apiService.getPrincipios(),
+        apiService.getProteinas()
+      ]);
+      
+      setCaldos(caldosData);
+      setPrincipios(principiosData);
+      setProteinas(proteinasData);
+    } catch (error) {
+      console.error('Error al cargar opciones de personalización:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleSeleccion = (tipo: 'caldo' | 'principio' | 'proteina', opcion: any) => {
     const nuevaPersonalizacion = {
@@ -68,6 +62,17 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
     if (pers.proteina) total += pers.proteina.precio_adicional;
     return total;
   };
+
+  if (loading) {
+    return (
+      <div className="space-y-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+        <div className="text-center py-8">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="text-secondary-600 mt-2">Cargando opciones de personalización...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
