@@ -6,18 +6,34 @@ const router = Router();
 
 // Obtener todas las mesas
 router.get('/', (req: Request, res: Response) => {
-  const query = 'SELECT * FROM mesas ORDER BY numero';
+  const query = `
+    SELECT m.*, s.nombre as salon_nombre 
+    FROM mesas m 
+    LEFT JOIN salones s ON m.salon_id = s.id 
+    ORDER BY 
+      CASE 
+        WHEN m.numero GLOB '[0-9]*' THEN CAST(m.numero AS INTEGER)
+        ELSE 999999 
+      END,
+      m.numero
+  `;
   
-  db.all(query, [], (err: any, rows: Mesa[]) => {
+  db.all(query, [], (err: any, rows: any[]) => {
     if (err) {
       console.error('Error al obtener mesas:', err);
       return res.status(500).json({ error: 'Error al obtener las mesas' });
     }
     
-    // Convertir valores de SQLite
+    // Convertir valores de SQLite y mapear salon
     const mesas = rows.map(mesa => ({
-      ...mesa,
-      ocupada: Boolean(mesa.ocupada)
+      id: mesa.id,
+      numero: mesa.numero,
+      capacidad: mesa.capacidad,
+      salon_id: mesa.salon_id,
+      salon: mesa.salon_nombre || 'Sin salón',
+      ocupada: Boolean(mesa.ocupada),
+      created_at: mesa.created_at,
+      updated_at: mesa.updated_at
     }));
     
     res.json(mesas);
@@ -27,9 +43,14 @@ router.get('/', (req: Request, res: Response) => {
 // Obtener una mesa específica
 router.get('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
-  const query = 'SELECT * FROM mesas WHERE id = ?';
+  const query = `
+    SELECT m.*, s.nombre as salon_nombre 
+    FROM mesas m 
+    LEFT JOIN salones s ON m.salon_id = s.id 
+    WHERE m.id = ?
+  `;
   
-  db.get(query, [id], (err: any, row: Mesa) => {
+  db.get(query, [id], (err: any, row: any) => {
     if (err) {
       console.error('Error al obtener mesa:', err);
       return res.status(500).json({ error: 'Error al obtener la mesa' });
@@ -40,8 +61,14 @@ router.get('/:id', (req: Request, res: Response) => {
     }
     
     const mesa = {
-      ...row,
-      ocupada: Boolean(row.ocupada)
+      id: row.id,
+      numero: row.numero,
+      capacidad: row.capacidad,
+      salon_id: row.salon_id,
+      salon: row.salon_nombre || 'Sin salón',
+      ocupada: Boolean(row.ocupada),
+      created_at: row.created_at,
+      updated_at: row.updated_at
     };
     
     res.json(mesa);
@@ -88,25 +115,78 @@ router.patch('/:id', (req: Request, res: Response) => {
 
 // Crear nueva mesa
 router.post('/', (req: Request, res: Response) => {
-  const { numero, capacidad } = req.body;
+  const { numero, capacidad, salon_id } = req.body;
   
   if (!numero || !capacidad) {
     return res.status(400).json({ error: 'Número y capacidad son requeridos' });
   }
   
-  const query = 'INSERT INTO mesas (numero, capacidad) VALUES (?, ?)';
+  // Verificar que el salón existe
+  if (salon_id) {
+    db.get('SELECT id FROM salones WHERE id = ?', [salon_id], (err: any, row: any) => {
+      if (err || !row) {
+        return res.status(400).json({ error: 'Salón no encontrado' });
+      }
+      
+      crearMesa();
+    });
+  } else {
+    crearMesa();
+  }
   
-  db.run(query, [numero, capacidad], function(err: any) {
+  function crearMesa() {
+    const query = 'INSERT INTO mesas (numero, capacidad, salon_id) VALUES (?, ?, ?)';
+    
+    db.run(query, [numero, capacidad, salon_id || null], function(err: any) {
+      if (err) {
+        console.error('Error al crear mesa:', err);
+        return res.status(500).json({ error: 'Error al crear la mesa' });
+      }
+      
+      // Obtener la mesa creada
+      db.get('SELECT * FROM mesas WHERE id = ?', [this.lastID], (err: any, row: Mesa) => {
+        if (err) {
+          console.error('Error al obtener mesa creada:', err);
+          return res.status(500).json({ error: 'Error al obtener la mesa creada' });
+        }
+        
+        const mesa = {
+          ...row,
+          ocupada: Boolean(row.ocupada)
+        };
+        
+        res.status(201).json(mesa);
+      });
+    });
+  }
+});
+
+// Actualizar mesa
+router.put('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { numero, capacidad, salon_id } = req.body;
+  
+  if (!numero || !capacidad) {
+    return res.status(400).json({ error: 'Número y capacidad son requeridos' });
+  }
+  
+  const query = 'UPDATE mesas SET numero = ?, capacidad = ?, salon_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
+  
+  db.run(query, [numero, capacidad, salon_id || null, id], function(err: any) {
     if (err) {
-      console.error('Error al crear mesa:', err);
-      return res.status(500).json({ error: 'Error al crear la mesa' });
+      console.error('Error al actualizar mesa:', err);
+      return res.status(500).json({ error: 'Error al actualizar la mesa' });
     }
     
-    // Obtener la mesa creada
-    db.get('SELECT * FROM mesas WHERE id = ?', [this.lastID], (err: any, row: Mesa) => {
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Mesa no encontrada' });
+    }
+    
+    // Obtener la mesa actualizada
+    db.get('SELECT * FROM mesas WHERE id = ?', [id], (err: any, row: Mesa) => {
       if (err) {
-        console.error('Error al obtener mesa creada:', err);
-        return res.status(500).json({ error: 'Error al obtener la mesa creada' });
+        console.error('Error al obtener mesa actualizada:', err);
+        return res.status(500).json({ error: 'Error al obtener la mesa actualizada' });
       }
       
       const mesa = {
@@ -114,7 +194,42 @@ router.post('/', (req: Request, res: Response) => {
         ocupada: Boolean(row.ocupada)
       };
       
-      res.status(201).json(mesa);
+      res.json(mesa);
+    });
+  });
+});
+
+// Eliminar mesa
+router.delete('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  // Verificar si la mesa tiene comandas asociadas
+  db.get('SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ?', [id], (err: any, row: any) => {
+    if (err) {
+      console.error('Error al verificar comandas:', err);
+      return res.status(500).json({ error: 'Error al verificar comandas asociadas' });
+    }
+    
+    if (row.count > 0) {
+      return res.status(400).json({ 
+        error: 'No se puede eliminar la mesa porque tiene comandas asociadas' 
+      });
+    }
+    
+    // Eliminar la mesa
+    const query = 'DELETE FROM mesas WHERE id = ?';
+    
+    db.run(query, [id], function(err: any) {
+      if (err) {
+        console.error('Error al eliminar mesa:', err);
+        return res.status(500).json({ error: 'Error al eliminar la mesa' });
+      }
+      
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Mesa no encontrada' });
+      }
+      
+      res.json({ message: 'Mesa eliminada exitosamente' });
     });
   });
 });

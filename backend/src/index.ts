@@ -8,7 +8,10 @@ import path from 'path';
 import { initDatabase } from './database/init';
 import { updateDatabaseWithProducts } from './database/update';
 import { crearTablasPersonalizaciones } from './database/migration-personalizaciones';
+import { migrarSalonesYMesas } from './database/migration-salones';
+import { initMigrationControl, migracionSalones_v1 } from './database/migration-control';
 import mesasRoutes from './routes/mesas';
+import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
 import comandasRoutes from './routes/comandas';
 import facturasRoutes from './routes/facturas';
@@ -39,6 +42,7 @@ app.use((req, res, next) => {
 
 // Rutas de API
 app.use('/api/mesas', mesasRoutes);
+app.use('/api/salones', salonesRoutes);
 app.use('/api/productos', productosRoutes);
 app.use('/api/comandas', comandasRoutes);
 app.use('/api/facturas', facturasRoutes);
@@ -75,9 +79,17 @@ async function startServer() {
     await initDatabase();
     console.log('✅ Base de datos inicializada');
     
+    // Inicializar control de migraciones
+    await initMigrationControl();
+    console.log('✅ Control de migraciones inicializado');
+    
     // Crear tablas de personalizaciones
     await crearTablasPersonalizaciones();
     console.log('✅ Tablas de personalizaciones inicializadas');
+    
+    // Ejecutar migración de salones (solo una vez)
+    await migracionSalones_v1();
+    console.log('✅ Migración de salones verificada');
     
     // Actualizar con productos y mesas reales
     await updateDatabaseWithProducts();
