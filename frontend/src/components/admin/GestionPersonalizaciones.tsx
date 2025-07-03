@@ -28,7 +28,7 @@ export default function GestionPersonalizaciones() {
     { id: 'caldos' as TipoPersonalizacion, label: 'Caldos/Sopas', descripcion: 'Para almuerzos y desayunos' },
     { id: 'principios' as TipoPersonalizacion, label: 'Principios', descripcion: 'Solo para almuerzos' },
     { id: 'proteinas' as TipoPersonalizacion, label: 'Proteínas', descripcion: 'Para almuerzos y desayunos' },
-    { id: 'bebidas' as TipoPersonalizacion, label: 'Bebidas', descripcion: 'Solo para almuerzos' }
+    { id: 'bebidas' as TipoPersonalizacion, label: 'Bebidas', descripcion: 'Solo para desayunos' }
   ];
 
   useEffect(() => {

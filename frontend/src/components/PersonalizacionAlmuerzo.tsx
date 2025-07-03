@@ -172,7 +172,7 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
 
       {/* Información adicional */}
       <div className="text-xs text-gray-600 bg-gray-50 p-2 rounded">
-        💡 <strong>Especialidades:</strong> Filete de tilapia y sobrebarriga tienen costo adicional por ser proteínas premium
+        💡 <strong>Especialidades:</strong> Filete de tilapia tiene un costo adicional por ser proteína premium
       </div>
     </div>
   );
