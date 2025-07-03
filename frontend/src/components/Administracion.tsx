@@ -1,11 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Package, Utensils, Coffee } from 'lucide-react';
+import { Settings, Package, Utensils, Coffee, Users, Home } from 'lucide-react';
 import GestionProductos from './admin/GestionProductos';
 import GestionPersonalizaciones from './admin/GestionPersonalizaciones';
+import GestionMesas from './admin/GestionMesas';
+import GestionSalones from './admin/GestionSalones';
 
-type SeccionAdmin = 'productos' | 'personalizaciones';
+type SeccionAdmin = 'productos' | 'personalizaciones' | 'mesas' | 'salones';
 
 export default function Administracion() {
   const [seccionActiva, setSeccionActiva] = useState<SeccionAdmin>('productos');
@@ -22,6 +24,18 @@ export default function Administracion() {
       nombre: 'Personalizaciones',
       icon: Utensils,
       descripcion: 'Gestionar opciones de caldos, principios y proteínas'
+    },
+    {
+      id: 'mesas' as SeccionAdmin,
+      nombre: 'Gestión de Mesas',
+      icon: Users,
+      descripcion: 'Crear, editar y eliminar mesas del restaurante'
+    },
+    {
+      id: 'salones' as SeccionAdmin,
+      nombre: 'Gestión de Salones',
+      icon: Home,
+      descripcion: 'Crear, editar y eliminar salones del restaurante'
     }
   ];
 
@@ -31,6 +45,10 @@ export default function Administracion() {
         return <GestionProductos />;
       case 'personalizaciones':
         return <GestionPersonalizaciones />;
+      case 'mesas':
+        return <GestionMesas />;
+      case 'salones':
+        return <GestionSalones />;
       default:
         return <GestionProductos />;
     }

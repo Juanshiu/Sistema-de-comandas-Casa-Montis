@@ -15,6 +15,20 @@ export const apiService = {
     return response.data;
   },
 
+  async createMesa(mesa: { numero: string; capacidad: number; salon_id?: number }): Promise<Mesa> {
+    const response = await api.post('/mesas', mesa);
+    return response.data;
+  },
+
+  async updateMesa(id: number, mesa: { numero: string; capacidad: number; salon_id?: number }): Promise<Mesa> {
+    const response = await api.put(`/mesas/${id}`, mesa);
+    return response.data;
+  },
+
+  async deleteMesa(id: number): Promise<void> {
+    await api.delete(`/mesas/${id}`);
+  },
+
   async updateMesaEstado(mesaId: number, ocupada: boolean): Promise<Mesa> {
     const response = await api.patch(`/mesas/${mesaId}`, { ocupada });
     return response.data;
@@ -22,6 +36,31 @@ export const apiService = {
 
   async liberarMesa(mesaId: number): Promise<Mesa> {
     const response = await api.patch(`/mesas/${mesaId}/liberar`);
+    return response.data;
+  },
+
+  // Salones
+  async getSalones(): Promise<any[]> {
+    const response = await api.get('/salones');
+    return response.data;
+  },
+
+  async createSalon(salon: { nombre: string; descripcion?: string }): Promise<any> {
+    const response = await api.post('/salones', salon);
+    return response.data;
+  },
+
+  async updateSalon(id: number, salon: { nombre: string; descripcion?: string; activo: boolean }): Promise<any> {
+    const response = await api.put(`/salones/${id}`, salon);
+    return response.data;
+  },
+
+  async deleteSalon(id: number): Promise<void> {
+    await api.delete(`/salones/${id}`);
+  },
+
+  async getMesasBySalon(salonId: number): Promise<Mesa[]> {
+    const response = await api.get(`/salones/${salonId}/mesas`);
     return response.data;
   },
 

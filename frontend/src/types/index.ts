@@ -3,7 +3,17 @@ export interface Mesa {
   numero: string;
   capacidad: number;
   salon: string;
+  salon_id?: number;
   ocupada: boolean;
+}
+
+export interface Salon {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  activo: boolean;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Producto {

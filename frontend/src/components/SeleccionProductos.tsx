@@ -379,15 +379,26 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
 
       {/* Modal de personalización */}
       {itemPersonalizando && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div 
+          className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50"
+          onClick={(e) => {
+            // Cerrar modal al hacer click fuera del contenido
+            if (e.target === e.currentTarget) {
+              setItemPersonalizando(null);
+            }
+          }}
+        >
+          <div 
+            className="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto"
+            onClick={(e) => e.stopPropagation()} // Evitar que se cierre al hacer click dentro
+          >
             <div className="flex justify-between items-center mb-4">
               <h3 className="text-lg font-semibold text-secondary-800">
                 Personalizar Producto
               </h3>
               <button
                 onClick={() => setItemPersonalizando(null)}
-                className="text-secondary-400 hover:text-secondary-600"
+                className="text-secondary-400 hover:text-secondary-600 p-1"
               >
                 ✕
               </button>
@@ -399,21 +410,75 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
               
               if (item.producto.categoria === 'desayuno') {
                 return (
-                  <PersonalizacionDesayuno
-                    onPersonalizacionChange={(personalizacion) => 
-                      guardarPersonalizacion(itemPersonalizando, personalizacion)
-                    }
-                    personalizacionInicial={item.personalizacion}
-                  />
+                  <div>
+                    <PersonalizacionDesayuno
+                      onPersonalizacionChange={(personalizacion) => {
+                        // Actualizar temporalmente sin cerrar el modal
+                        const nuevosItems = items.map(i => {
+                          if (i.id === itemPersonalizando) {
+                            return {
+                              ...i,
+                              personalizacion,
+                              subtotal: calcularSubtotalConPersonalizacion(i.cantidad, i.precio_unitario, personalizacion)
+                            };
+                          }
+                          return i;
+                        });
+                        onItemsChange(nuevosItems);
+                      }}
+                      personalizacionInicial={item.personalizacion}
+                    />
+                    <div className="flex gap-2 mt-6 pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => setItemPersonalizando(null)}
+                        className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => setItemPersonalizando(null)}
+                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
+                  </div>
                 );
               } else if (item.producto.categoria === 'almuerzo') {
                 return (
-                  <PersonalizacionAlmuerzo
-                    onPersonalizacionChange={(personalizacion) => 
-                      guardarPersonalizacion(itemPersonalizando, personalizacion)
-                    }
-                    personalizacionInicial={item.personalizacion}
-                  />
+                  <div>
+                    <PersonalizacionAlmuerzo
+                      onPersonalizacionChange={(personalizacion) => {
+                        // Actualizar temporalmente sin cerrar el modal
+                        const nuevosItems = items.map(i => {
+                          if (i.id === itemPersonalizando) {
+                            return {
+                              ...i,
+                              personalizacion,
+                              subtotal: calcularSubtotalConPersonalizacion(i.cantidad, i.precio_unitario, personalizacion)
+                            };
+                          }
+                          return i;
+                        });
+                        onItemsChange(nuevosItems);
+                      }}
+                      personalizacionInicial={item.personalizacion}
+                    />
+                    <div className="flex gap-2 mt-6 pt-4 border-t border-gray-200">
+                      <button
+                        onClick={() => setItemPersonalizando(null)}
+                        className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={() => setItemPersonalizando(null)}
+                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                      >
+                        Confirmar
+                      </button>
+                    </div>
+                  </div>
                 );
               }
               return null;

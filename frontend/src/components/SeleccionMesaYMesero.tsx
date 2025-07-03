@@ -59,7 +59,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
       const mesasData = await apiService.getMesas();
       setMesas(mesasData);
       
-      // Agrupar mesas por salón
+      // Agrupar mesas por salón y ordenar cada grupo
       const agrupadas = mesasData.reduce((acc: MesasPorSalon, mesa) => {
         if (!acc[mesa.salon]) {
           acc[mesa.salon] = [];
@@ -67,6 +67,27 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
         acc[mesa.salon].push(mesa);
         return acc;
       }, {});
+      
+      // Ordenar las mesas dentro de cada salón
+      Object.keys(agrupadas).forEach(salon => {
+        agrupadas[salon].sort((a, b) => {
+          // Intentar ordenar numéricamente primero
+          const numA = parseInt(a.numero);
+          const numB = parseInt(b.numero);
+          
+          // Si ambos son números válidos, ordenar numéricamente
+          if (!isNaN(numA) && !isNaN(numB)) {
+            return numA - numB;
+          }
+          
+          // Si uno es número y otro no, el número va primero
+          if (!isNaN(numA) && isNaN(numB)) return -1;
+          if (isNaN(numA) && !isNaN(numB)) return 1;
+          
+          // Si ninguno es número, ordenar alfabéticamente
+          return a.numero.localeCompare(b.numero);
+        });
+      });
       
       setMesasPorSalon(agrupadas);
       setError(null);
