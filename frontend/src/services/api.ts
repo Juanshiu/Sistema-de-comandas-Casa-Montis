@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Comanda, Mesa, Producto, CategoriaProducto, Factura, EstadoComanda, ReporteVentas } from '@/types';
+import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -75,8 +75,13 @@ export const apiService = {
     return response.data;
   },
 
-  async getProductosByCategoria(categoria: CategoriaProducto): Promise<Producto[]> {
+  async getProductosByCategoria(categoria: string): Promise<Producto[]> {
     const response = await api.get(`/productos/categoria/${categoria}`);
+    return response.data;
+  },
+
+  async getCategorias(): Promise<string[]> {
+    const response = await api.get('/productos/categorias');
     return response.data;
   },
 
@@ -127,6 +132,14 @@ export const apiService = {
 
   async deleteComanda(comandaId: string): Promise<void> {
     await api.delete(`/comandas/${comandaId}`);
+  },
+
+  async editarComanda(comandaId: string, nuevosItems: ItemComanda[], observaciones_generales?: string): Promise<any> {
+    const response = await api.patch(`/comandas/${comandaId}/editar`, { 
+      nuevosItems, 
+      observaciones_generales 
+    });
+    return response.data;
   },
 
   // Impresión

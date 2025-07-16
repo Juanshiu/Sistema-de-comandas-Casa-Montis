@@ -20,7 +20,7 @@ export interface Producto {
   id: number;
   nombre: string;
   precio: number;
-  categoria: CategoriaProducto;
+  categoria: string; // Cambiado de CategoriaProducto a string para permitir categorías dinámicas
   disponible: boolean;
   descripcion?: string;
 }
