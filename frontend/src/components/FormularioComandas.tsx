@@ -1,15 +1,17 @@
 'use client';
 
 import { useState } from 'react';
-import { Mesa, FormularioComanda, ItemComanda, PasoComanda } from '@/types';
+import { Mesa, FormularioComanda, ItemComanda, PasoComanda, Comanda } from '@/types';
 import SeleccionMesaYMesero from './SeleccionMesaYMesero';
 import SeleccionTipoServicio from './SeleccionTipoServicio';
 import SeleccionProductos from './SeleccionProductos';
 import ResumenComanda from './ResumenComanda';
-import { ChevronLeft, ChevronRight, Check } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Check, Edit, X } from 'lucide-react';
 
 export default function FormularioComandas() {
   const [pasoActual, setPasoActual] = useState(0);
+  const [modoEdicion, setModoEdicion] = useState(false);
+  const [comandaEditando, setComandaEditando] = useState<Comanda | null>(null);
   const [formulario, setFormulario] = useState<FormularioComanda>({
     mesas: [],
     items: [],
@@ -22,6 +24,30 @@ export default function FormularioComandas() {
     { paso: 2, titulo: 'Seleccionar Productos', completado: formulario.items.length > 0 },
     { paso: 3, titulo: 'Resumen y Envío', completado: false }
   ];
+
+  const handleEditarComanda = (comanda: Comanda) => {
+    setModoEdicion(true);
+    setComandaEditando(comanda);
+    setFormulario({
+      mesas: comanda.mesas,
+      items: comanda.items,
+      mesero: comanda.mesero,
+      tipo_servicio: 'otros', // Valor por defecto para edición
+      observaciones_generales: comanda.observaciones_generales
+    });
+    setPasoActual(2); // Ir directo a la selección de productos
+  };
+
+  const cancelarEdicion = () => {
+    setModoEdicion(false);
+    setComandaEditando(null);
+    setFormulario({
+      mesas: [],
+      items: [],
+      mesero: ''
+    });
+    setPasoActual(0);
+  };
 
   const handleMesasSelect = (mesas: Mesa[]) => {
     setFormulario(prev => ({ ...prev, mesas }));
@@ -74,6 +100,7 @@ export default function FormularioComandas() {
             onMesasChange={handleMesasSelect}
             mesero={formulario.mesero}
             onMeseroChange={handleMeseroChange}
+            onEditarComanda={handleEditarComanda}
           />
         );
       case 1:
@@ -96,6 +123,8 @@ export default function FormularioComandas() {
           <ResumenComanda
             formulario={formulario}
             onObservacionesChange={handleObservacionesChange}
+            modoEdicion={modoEdicion}
+            comandaId={comandaEditando?.id}
           />
         );
       default:
@@ -112,8 +141,32 @@ export default function FormularioComandas() {
             Casa Montis - Sistema de Comandas
           </h1>
           <p className="text-secondary-600">
-            Complete los pasos para crear una nueva comanda
+            {modoEdicion ? 'Editando comanda existente' : 'Complete los pasos para crear una nueva comanda'}
           </p>
+          {modoEdicion && comandaEditando && (
+            <div className="mt-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center">
+                  <Edit className="mr-2 text-blue-600" size={20} />
+                  <div className="text-left">
+                    <p className="font-semibold text-blue-800">
+                      Editando comanda: {comandaEditando.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                    </p>
+                    <p className="text-sm text-blue-600">
+                      Estado: {comandaEditando.estado} | Mesero: {comandaEditando.mesero}
+                    </p>
+                  </div>
+                </div>
+                <button
+                  onClick={cancelarEdicion}
+                  className="btn-secondary flex items-center"
+                >
+                  <X className="mr-1" size={16} />
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Indicador de pasos */}

@@ -1,32 +1,44 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Mesa } from '@/types';
+import { Mesa, Comanda } from '@/types';
 import { apiService } from '@/services/api';
-import { Users, Check, X, User } from 'lucide-react';
+import { Users, Check, X, User, Edit, Clock, AlertCircle } from 'lucide-react';
 
 interface SeleccionMesaProps {
   mesasSeleccionadas: Mesa[];
   onMesasChange: (mesas: Mesa[]) => void;
   mesero: string;
   onMeseroChange: (mesero: string) => void;
+  onEditarComanda?: (comanda: Comanda) => void;
 }
 
 interface MesasPorSalon {
   [salon: string]: Mesa[];
 }
 
-export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange, mesero, onMeseroChange }: SeleccionMesaProps) {
+export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange, mesero, onMeseroChange, onEditarComanda }: SeleccionMesaProps) {
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [mesasPorSalon, setMesasPorSalon] = useState<MesasPorSalon>({});
+  const [comandasActivas, setComandasActivas] = useState<Comanda[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     cargarMesas();
+    cargarComandasActivas();
     // Cargar el nombre del mesero guardado al inicializar
     cargarMeseroGuardado();
   }, []);
+
+  const cargarComandasActivas = async () => {
+    try {
+      const comandas = await apiService.getComandasActivas();
+      setComandasActivas(comandas);
+    } catch (err) {
+      console.error('Error al cargar comandas activas:', err);
+    }
+  };
 
   const cargarMeseroGuardado = () => {
     try {
@@ -147,6 +159,54 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
 
   return (
     <div className="space-y-6">
+      {/* Comandas Activas para Editar */}
+      {comandasActivas.length > 0 && onEditarComanda && (
+        <div className="card">
+          <h2 className="text-xl font-semibold text-secondary-800 mb-4 flex items-center">
+            <Edit className="mr-2" size={20} />
+            Comandas Activas para Editar
+          </h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {comandasActivas.map((comanda) => (
+              <div
+                key={comanda.id}
+                className="border rounded-lg p-4 bg-white hover:bg-secondary-25 transition-colors cursor-pointer"
+                onClick={() => onEditarComanda(comanda)}
+              >
+                <div className="flex justify-between items-start mb-2">
+                  <div>
+                    <h3 className="font-semibold text-secondary-800">
+                      {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                    </h3>
+                    <p className="text-sm text-secondary-600">
+                      Mesero: {comanda.mesero}
+                    </p>
+                  </div>
+                  <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${
+                    comanda.estado === 'preparando' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
+                  }`}>
+                    {comanda.estado === 'preparando' ? <AlertCircle size={12} /> : <Check size={12} />}
+                    <span className="capitalize">{comanda.estado}</span>
+                  </div>
+                </div>
+                <div className="text-sm text-secondary-600 mb-2">
+                  {comanda.items?.length || 0} item(s)
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-lg font-bold text-primary-600">
+                    ${comanda.total.toLocaleString()}
+                  </span>
+                  <button className="text-blue-600 hover:text-blue-800 text-sm flex items-center">
+                    <Edit size={14} className="mr-1" />
+                    Editar
+                  </button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* Campo de Mesero */}
       <div className="card">
         <h2 className="text-xl font-semibold text-secondary-800 mb-4 flex items-center">
