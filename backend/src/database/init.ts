@@ -48,19 +48,30 @@ export const initDatabase = async (): Promise<void> => {
         )
       `);
 
-      // Tabla Comandas
+      // Tabla Comandas (estructura actualizada - sin mesa_id)
       db.run(`
         CREATE TABLE IF NOT EXISTS comandas (
           id TEXT PRIMARY KEY,
-          mesa_id INTEGER NOT NULL,
           mesero TEXT NOT NULL,
           subtotal REAL NOT NULL,
           total REAL NOT NULL,
           estado TEXT DEFAULT 'pendiente',
           observaciones_generales TEXT,
           fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-          fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-          FOREIGN KEY (mesa_id) REFERENCES mesas (id)
+          fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
+      // Tabla de relación Comandas-Mesas
+      db.run(`
+        CREATE TABLE IF NOT EXISTS comanda_mesas (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          comanda_id TEXT NOT NULL,
+          mesa_id INTEGER NOT NULL,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (comanda_id) REFERENCES comandas (id) ON DELETE CASCADE,
+          FOREIGN KEY (mesa_id) REFERENCES mesas (id),
+          UNIQUE(comanda_id, mesa_id)
         )
       `);
 
