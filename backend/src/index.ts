@@ -10,6 +10,8 @@ import { updateDatabaseWithProducts } from './database/update';
 import { crearTablasPersonalizaciones } from './database/migration-personalizaciones';
 import { migrarSalonesYMesas } from './database/migration-salones';
 import { initMigrationControl, migracionSalones_v1 } from './database/migration-control';
+import { migrarMultiplesMesas } from './database/migration-multiples-mesas';
+import { arreglarEstructuraComandas } from './database/migration-arreglar-comandas';
 import mesasRoutes from './routes/mesas';
 import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
@@ -90,6 +92,10 @@ async function startServer() {
     // Ejecutar migración de salones (solo una vez)
     await migracionSalones_v1();
     console.log('✅ Migración de salones verificada');
+    
+    // Asegurar estructura correcta de comandas y múltiples mesas
+    await migrarMultiplesMesas();
+    console.log('✅ Migración de múltiples mesas verificada');
     
     // Actualizar con productos y mesas reales
     await updateDatabaseWithProducts();
