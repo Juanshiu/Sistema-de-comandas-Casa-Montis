@@ -40,38 +40,54 @@ export const migrarMultiplesMesas = async (): Promise<void> => {
             if (row.count > 0) {
               console.log(`Migrando ${row.count} comandas existentes...`);
               
-              // Migrar comandas existentes
-              db.all("SELECT id, mesa_id FROM comandas WHERE mesa_id IS NOT NULL", (err, comandas: any[]) => {
+              // Verificar si la columna mesa_id existe antes de migrar
+              db.all("PRAGMA table_info(comandas)", (err, columns: any[]) => {
                 if (err) {
                   reject(err);
                   return;
                 }
                 
-                if (comandas.length === 0) {
-                  console.log('No hay comandas con mesa_id para migrar');
+                const mesaIdColumn = columns.find((col: any) => col.name === 'mesa_id');
+                if (!mesaIdColumn) {
+                  console.log('La columna mesa_id no existe, migración ya completada');
                   db.close();
                   resolve();
                   return;
                 }
                 
-                const stmt = db.prepare("INSERT OR IGNORE INTO comanda_mesas (comanda_id, mesa_id) VALUES (?, ?)");
-                let migrated = 0;
-                
-                comandas.forEach((comanda, index) => {
-                  stmt.run([comanda.id, comanda.mesa_id], (err) => {
-                    if (err) {
-                      console.error(`Error migrando comanda ${comanda.id}:`, err);
-                    } else {
-                      migrated++;
-                    }
-                    
-                    if (index === comandas.length - 1) {
-                      stmt.finalize(() => {
-                        console.log(`${migrated} comandas migradas exitosamente`);
-                        db.close();
-                        resolve();
-                      });
-                    }
+                // Migrar comandas existentes
+                db.all("SELECT id, mesa_id FROM comandas WHERE mesa_id IS NOT NULL", (err, comandas: any[]) => {
+                  if (err) {
+                    reject(err);
+                    return;
+                  }
+                  
+                  if (comandas.length === 0) {
+                    console.log('No hay comandas con mesa_id para migrar');
+                    db.close();
+                    resolve();
+                    return;
+                  }
+                  
+                  const stmt = db.prepare("INSERT OR IGNORE INTO comanda_mesas (comanda_id, mesa_id) VALUES (?, ?)");
+                  let migrated = 0;
+                  
+                  comandas.forEach((comanda, index) => {
+                    stmt.run([comanda.id, comanda.mesa_id], (err) => {
+                      if (err) {
+                        console.error(`Error migrando comanda ${comanda.id}:`, err);
+                      } else {
+                        migrated++;
+                      }
+                      
+                      if (index === comandas.length - 1) {
+                        stmt.finalize(() => {
+                          console.log(`${migrated} comandas migradas exitosamente`);
+                          db.close();
+                          resolve();
+                        });
+                      }
+                    });
                   });
                 });
               });
