@@ -2,9 +2,67 @@ import { Router, Request, Response } from 'express';
 import { db } from '../database/init';
 import { Comanda, ComandaItem, CreateComandaRequest, Mesa } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { imprimirComanda } from '../services/printer-nuevo';
+import { imprimirComanda, probarImpresora } from '../services/printer';
 
 const router = Router();
+
+// Endpoint para probar la impresora
+router.get('/test-printer', async (req: Request, res: Response) => {
+  try {
+    const isConnected = await probarImpresora();
+    res.json({ 
+      success: true, 
+      connected: isConnected, 
+      message: isConnected ? 'Impresora conectada y funcionando' : 'Impresora no conectada'
+    });
+  } catch (error) {
+    console.error('Error al probar impresora:', error);
+    res.status(500).json({ 
+      success: false, 
+      connected: false, 
+      message: 'Error al probar la impresora',
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    });
+  }
+});
+
+// Endpoint para listar impresoras disponibles
+router.get('/list-printers', async (req: Request, res: Response) => {
+  try {
+    // Ejecutar comando de Windows para listar impresoras
+    const { exec } = require('child_process');
+    
+    exec('wmic printer get name', (error: any, stdout: string, stderr: string) => {
+      if (error) {
+        console.error('Error al listar impresoras:', error);
+        return res.status(500).json({ 
+          success: false, 
+          message: 'Error al listar impresoras',
+          error: error.message
+        });
+      }
+      
+      const printers = stdout
+        .split('\n')
+        .map(line => line.trim())
+        .filter(line => line && line !== 'Name')
+        .filter(line => line.length > 0);
+      
+      res.json({ 
+        success: true, 
+        printers: printers,
+        message: `Se encontraron ${printers.length} impresoras`
+      });
+    });
+  } catch (error) {
+    console.error('Error al ejecutar comando:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Error al ejecutar comando de listado',
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    });
+  }
+});
 
 // Obtener todas las comandas
 router.get('/', (req: Request, res: Response) => {
@@ -109,25 +167,64 @@ router.get('/activas', (req: Request, res: Response) => {
             return;
           }
           
-          const comanda: Comanda = {
-            id: row.id,
-            mesas: mesasRows.map(mesa => ({
-              id: mesa.id,
-              numero: mesa.numero,
-              capacidad: mesa.capacidad,
-              salon: mesa.salon,
-              ocupada: mesa.ocupada
-            })),
-            mesero: row.mesero,
-            subtotal: row.subtotal,
-            total: row.total,
-            estado: row.estado,
-            observaciones_generales: row.observaciones_generales,
-            fecha_creacion: new Date(row.fecha_creacion),
-            fecha_actualizacion: new Date(row.fecha_actualizacion)
-          };
+          // Obtener los items de la comanda
+          const itemsQuery = `
+            SELECT 
+              ci.*,
+              p.nombre as producto_nombre,
+              p.precio as producto_precio,
+              p.categoria as producto_categoria
+            FROM comanda_items ci
+            JOIN productos p ON ci.producto_id = p.id
+            WHERE ci.comanda_id = ?
+          `;
           
-          resolve(comanda);
+          db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            
+            const items = itemsRows.map(itemRow => ({
+              id: itemRow.id,
+              comanda_id: itemRow.comanda_id,
+              producto_id: itemRow.producto_id,
+              cantidad: itemRow.cantidad,
+              precio_unitario: itemRow.precio_unitario,
+              subtotal: itemRow.subtotal,
+              observaciones: itemRow.observaciones,
+              personalizacion: itemRow.personalizacion ? JSON.parse(itemRow.personalizacion) : null,
+              created_at: new Date(itemRow.created_at),
+              producto: {
+                id: itemRow.producto_id,
+                nombre: itemRow.producto_nombre,
+                precio: itemRow.producto_precio,
+                categoria: itemRow.producto_categoria,
+                disponible: true
+              }
+            }));
+            
+            const comanda: Comanda = {
+              id: row.id,
+              mesas: mesasRows.map(mesa => ({
+                id: mesa.id,
+                numero: mesa.numero,
+                capacidad: mesa.capacidad,
+                salon: mesa.salon,
+                ocupada: mesa.ocupada
+              })),
+              mesero: row.mesero,
+              subtotal: row.subtotal,
+              total: row.total,
+              estado: row.estado,
+              observaciones_generales: row.observaciones_generales,
+              fecha_creacion: new Date(row.fecha_creacion),
+              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              items
+            };
+            
+            resolve(comanda);
+          });
         });
       });
     });
@@ -413,19 +510,97 @@ router.patch('/:id/estado', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Estado inválido' });
   }
   
-  const query = 'UPDATE comandas SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?';
-  
-  db.run(query, [estado, id], function(err: any) {
-    if (err) {
-      console.error('Error al actualizar estado de comanda:', err);
-      return res.status(500).json({ error: 'Error al actualizar el estado de la comanda' });
-    }
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
     
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Comanda no encontrada' });
-    }
+    const query = 'UPDATE comandas SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?';
     
-    res.json({ message: 'Estado de comanda actualizado exitosamente' });
+    db.run(query, [estado, id], function(err: any) {
+      if (err) {
+        console.error('Error al actualizar estado de comanda:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: 'Error al actualizar el estado de la comanda' });
+      }
+      
+      if (this.changes === 0) {
+        db.run('ROLLBACK');
+        return res.status(404).json({ error: 'Comanda no encontrada' });
+      }
+      
+      // Si el estado es 'entregada', liberar las mesas automáticamente
+      if (estado === 'entregada') {
+        const getMesasQuery = `
+          SELECT mesa_id 
+          FROM comanda_mesas 
+          WHERE comanda_id = ?
+        `;
+        
+        db.all(getMesasQuery, [id], (err: any, mesaRows: any[]) => {
+          if (err) {
+            console.error('Error al obtener mesas de comanda:', err);
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Error al liberar las mesas' });
+          }
+          
+          if (mesaRows.length > 0) {
+            const liberarMesaQuery = 'UPDATE mesas SET ocupada = 0 WHERE id = ?';
+            let mesasLiberadas = 0;
+            let erroresLiberacion = 0;
+            
+            mesaRows.forEach((mesaRow) => {
+              db.run(liberarMesaQuery, [mesaRow.mesa_id], (err: any) => {
+                if (err) {
+                  console.error('Error al liberar mesa:', err);
+                  erroresLiberacion++;
+                } else {
+                  mesasLiberadas++;
+                }
+                
+                if (mesasLiberadas + erroresLiberacion === mesaRows.length) {
+                  if (erroresLiberacion > 0) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: 'Error al liberar las mesas' });
+                  }
+                  
+                  db.run('COMMIT', (err: any) => {
+                    if (err) {
+                      console.error('Error al hacer commit:', err);
+                      return res.status(500).json({ error: 'Error al actualizar el estado y liberar mesas' });
+                    }
+                    
+                    res.json({ 
+                      message: 'Estado de comanda actualizado exitosamente y mesas liberadas',
+                      estado: estado,
+                      mesasLiberadas: mesasLiberadas
+                    });
+                  });
+                }
+              });
+            });
+          } else {
+            // No hay mesas que liberar
+            db.run('COMMIT', (err: any) => {
+              if (err) {
+                console.error('Error al hacer commit:', err);
+                return res.status(500).json({ error: 'Error al actualizar el estado' });
+              }
+              
+              res.json({ message: 'Estado de comanda actualizado exitosamente' });
+            });
+          }
+        });
+      } else {
+        // Para otros estados, solo hacer commit
+        db.run('COMMIT', (err: any) => {
+          if (err) {
+            console.error('Error al hacer commit:', err);
+            return res.status(500).json({ error: 'Error al actualizar el estado' });
+          }
+          
+          res.json({ message: 'Estado de comanda actualizado exitosamente' });
+        });
+      }
+    });
   });
 });
 
@@ -524,6 +699,112 @@ router.delete('/:id', (req: Request, res: Response) => {
           });
         });
       }
+    });
+  });
+});
+
+// Editar comanda existente (agregar items)
+router.patch('/:id/editar', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { nuevosItems, observaciones_generales } = req.body;
+  
+  if (!nuevosItems || nuevosItems.length === 0) {
+    return res.status(400).json({ error: 'Se requieren items para agregar' });
+  }
+  
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+    
+    // Verificar que la comanda existe y no está cancelada
+    const verificarComandaQuery = 'SELECT * FROM comandas WHERE id = ? AND estado != "cancelada"';
+    
+    db.get(verificarComandaQuery, [id], (err: any, comandaRow: any) => {
+      if (err) {
+        console.error('Error al verificar comanda:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: 'Error al verificar la comanda' });
+      }
+      
+      if (!comandaRow) {
+        db.run('ROLLBACK');
+        return res.status(404).json({ error: 'Comanda no encontrada o cancelada' });
+      }
+      
+      // Calcular nuevos totales
+      let nuevoSubtotal = parseFloat(comandaRow.subtotal);
+      let nuevoTotal = parseFloat(comandaRow.total);
+      
+      nuevosItems.forEach((item: any) => {
+        nuevoSubtotal += item.subtotal;
+        nuevoTotal += item.subtotal;
+      });
+      
+      // Insertar nuevos items
+      const insertItemQuery = `
+        INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `;
+      
+      let itemsInserted = 0;
+      let itemsErrors = 0;
+      
+      nuevosItems.forEach((item: any) => {
+        const itemId = require('uuid').v4();
+        const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
+        
+        db.run(insertItemQuery, [
+          itemId,
+          id,
+          item.producto.id,
+          item.cantidad,
+          item.precio_unitario,
+          item.subtotal,
+          item.observaciones || null,
+          personalizacionStr
+        ], (err: any) => {
+          if (err) {
+            console.error('Error al insertar nuevo item:', err);
+            itemsErrors++;
+          } else {
+            itemsInserted++;
+          }
+          
+          if (itemsInserted + itemsErrors === nuevosItems.length) {
+            if (itemsErrors > 0) {
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: 'Error al agregar algunos items' });
+            }
+            
+            // Actualizar totales de la comanda
+            const updateComandaQuery = `
+              UPDATE comandas 
+              SET subtotal = ?, total = ?, observaciones_generales = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
+              WHERE id = ?
+            `;
+            
+            db.run(updateComandaQuery, [nuevoSubtotal, nuevoTotal, observaciones_generales || comandaRow.observaciones_generales, id], (err: any) => {
+              if (err) {
+                console.error('Error al actualizar totales de comanda:', err);
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Error al actualizar la comanda' });
+              }
+              
+              db.run('COMMIT', (err: any) => {
+                if (err) {
+                  console.error('Error al hacer commit:', err);
+                  return res.status(500).json({ error: 'Error al guardar los cambios' });
+                }
+                
+                res.json({ 
+                  message: 'Comanda actualizada exitosamente',
+                  itemsAgregados: itemsInserted,
+                  nuevoTotal: nuevoTotal
+                });
+              });
+            });
+          }
+        });
+      });
     });
   });
 });

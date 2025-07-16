@@ -4,22 +4,18 @@ import { Producto } from '../models';
 
 const router = Router();
 
-// Obtener todos los productos
-router.get('/', (req: Request, res: Response) => {
-  const query = 'SELECT * FROM productos WHERE disponible = 1 ORDER BY categoria, nombre';
+// Obtener todas las categorías únicas
+router.get('/categorias', (req: Request, res: Response) => {
+  const query = 'SELECT DISTINCT categoria FROM productos WHERE categoria IS NOT NULL AND categoria != "" ORDER BY categoria';
   
-  db.all(query, [], (err: any, rows: Producto[]) => {
+  db.all(query, [], (err: any, rows: any[]) => {
     if (err) {
-      console.error('Error al obtener productos:', err);
-      return res.status(500).json({ error: 'Error al obtener los productos' });
+      console.error('Error al obtener categorías:', err);
+      return res.status(500).json({ error: 'Error al obtener las categorías' });
     }
     
-    const productos = rows.map(producto => ({
-      ...producto,
-      disponible: Boolean(producto.disponible)
-    }));
-    
-    res.json(productos);
+    const categorias = rows.map(row => row.categoria);
+    res.json(categorias);
   });
 });
 
@@ -50,6 +46,25 @@ router.get('/categoria/:categoria', (req: Request, res: Response) => {
   db.all(query, [categoria], (err: any, rows: Producto[]) => {
     if (err) {
       console.error('Error al obtener productos por categoría:', err);
+      return res.status(500).json({ error: 'Error al obtener los productos' });
+    }
+    
+    const productos = rows.map(producto => ({
+      ...producto,
+      disponible: Boolean(producto.disponible)
+    }));
+    
+    res.json(productos);
+  });
+});
+
+// Obtener todos los productos
+router.get('/', (req: Request, res: Response) => {
+  const query = 'SELECT * FROM productos WHERE disponible = 1 ORDER BY categoria, nombre';
+  
+  db.all(query, [], (err: any, rows: Producto[]) => {
+    if (err) {
+      console.error('Error al obtener productos:', err);
       return res.status(500).json({ error: 'Error al obtener los productos' });
     }
     
