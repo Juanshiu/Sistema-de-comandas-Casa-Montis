@@ -65,10 +65,37 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       
     } catch (err) {
       console.error('Error al procesar factura:', err);
-      alert('Error al procesar la factura. Intente nuevamente.');
+      const errorMessage = err instanceof Error ? err.message : 'Error desconocido';
+      alert(`Error al procesar la factura: ${errorMessage}`);
     } finally {
       setProcesandoPago(false);
     }
+  };
+
+  const vistaPrevia = () => {
+    if (!comandaSeleccionada) return;
+    
+    const facturaContent = `
+=====================================
+           CASA MONTIS
+             FACTURA
+=====================================
+Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+Fecha: ${new Date().toLocaleString()}
+Mesero: ${comandaSeleccionada.mesero}
+ID: ${comandaSeleccionada.id.substring(0, 8)}
+
+PRODUCTOS:
+${comandaSeleccionada.items.map(item => 
+  `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString()}`
+).join('\n')}
+
+TOTAL: $${comandaSeleccionada.total.toLocaleString()}
+Método de pago: ${metodoPago}
+=====================================
+    `;
+    
+    alert(facturaContent);
   };
 
   const actualizarEstadoComanda = async (comandaId: string, nuevoEstado: EstadoComanda) => {
@@ -191,7 +218,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
                   </div>
                   
                   <div className="text-sm text-secondary-600 mb-2">
-                    {comanda.items.length} item(s) - Mesero: {comanda.mesero}
+                    {comanda.items?.length || 0} item(s) - Mesero: {comanda.mesero}
                   </div>
                   
                   <div className="flex justify-between items-center">
@@ -231,19 +258,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
                           }}
                           className="text-green-600 hover:text-green-800 text-xs px-2 py-1 border border-green-600 rounded"
                         >
-                          Lista
-                        </button>
-                      )}
-                      
-                      {comanda.estado === 'lista' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            actualizarEstadoComanda(comanda.id, 'entregada');
-                          }}
-                          className="text-blue-600 hover:text-blue-800 text-xs px-2 py-1 border border-blue-600 rounded"
-                        >
-                          Entregada
+                          Marcar Lista
                         </button>
                       )}
                     </div>
@@ -360,24 +375,32 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
                   </div>
                 </div>
 
-                <button
-                  onClick={procesarFactura}
-                  disabled={procesandoPago || comandaSeleccionada.estado !== 'entregada'}
-                  className="w-full btn-primary disabled:opacity-50 disabled:cursor-not-allowed"
-                >
-                  {procesandoPago ? (
-                    <div className="flex items-center justify-center space-x-2">
-                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
-                      <span>Procesando...</span>
-                    </div>
-                  ) : (
-                    'Procesar Pago y Liberar Mesa'
-                  )}
-                </button>
+                <div className="flex space-x-2">
+                  <button
+                    onClick={vistaPrevia}
+                    className="btn-secondary flex-1"
+                  >
+                    Vista Previa
+                  </button>
+                  <button
+                    onClick={procesarFactura}
+                    disabled={procesandoPago || comandaSeleccionada.estado !== 'lista'}
+                    className="btn-primary flex-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {procesandoPago ? (
+                      <div className="flex items-center justify-center space-x-2">
+                        <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+                        <span>Procesando...</span>
+                      </div>
+                    ) : (
+                      'Procesar Pago y Liberar Mesa'
+                    )}
+                  </button>
+                </div>
 
-                {comandaSeleccionada.estado !== 'entregada' && (
+                {comandaSeleccionada.estado !== 'lista' && (
                   <p className="text-sm text-yellow-600 mt-2 text-center">
-                    La comanda debe estar marcada como "entregada" para procesar el pago
+                    La comanda debe estar "lista" para procesar el pago
                   </p>
                 )}
               </div>

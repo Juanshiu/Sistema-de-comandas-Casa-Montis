@@ -8,9 +8,11 @@ import { Printer, Send, AlertCircle } from 'lucide-react';
 interface ResumenComandaProps {
   formulario: FormularioComanda;
   onObservacionesChange: (observaciones: string) => void;
+  modoEdicion?: boolean;
+  comandaId?: string;
 }
 
-export default function ResumenComanda({ formulario, onObservacionesChange }: ResumenComandaProps) {
+export default function ResumenComanda({ formulario, onObservacionesChange, modoEdicion = false, comandaId }: ResumenComandaProps) {
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -48,17 +50,25 @@ export default function ResumenComanda({ formulario, onObservacionesChange }: Re
         observaciones_generales: formulario.observaciones_generales
       };
 
-      const response = await apiService.createComanda(comandaData);
-      
-      setSuccess(true);
-      setTimeout(() => {
-        // Aquí podrías redirigir o limpiar el formulario
-        window.location.reload();
-      }, 2000);
+      if (modoEdicion && comandaId) {
+        // Editar comanda existente
+        await apiService.editarComanda(comandaId, comandaData.items);
+        setSuccess(true);
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      } else {
+        // Crear nueva comanda
+        const response = await apiService.createComanda(comandaData);
+        setSuccess(true);
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      }
 
     } catch (error) {
-      console.error('Error al enviar comanda:', error);
-      setError('Error al enviar la comanda. Intente nuevamente.');
+      console.error('Error al procesar comanda:', error);
+      setError(`Error al ${modoEdicion ? 'actualizar' : 'crear'} la comanda. Intente nuevamente.`);
     } finally {
       setEnviando(false);
     }
@@ -245,12 +255,12 @@ TOTAL: $${calcularTotal().toLocaleString('es-CO')}
             {enviando ? (
               <>
                 <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
-                Enviando...
+                {modoEdicion ? 'Actualizando...' : 'Enviando...'}
               </>
             ) : (
               <>
                 <Send size={20} className="mr-2" />
-                Enviar Comanda
+                {modoEdicion ? 'Actualizar Comanda' : 'Enviar Comanda'}
               </>
             )}
           </button>
