@@ -9,12 +9,15 @@ interface ProductoForm {
   nombre: string;
   descripcion: string;
   precio: number;
-  categoria: CategoriaProducto;
+  categoria: string;
   disponible: boolean;
 }
 
 export default function GestionProductos() {
   const [productos, setProductos] = useState<Producto[]>([]);
+  const [productosFiltrados, setProductosFiltrados] = useState<Producto[]>([]);
+  const [filtroCategoria, setFiltroCategoria] = useState<string | 'todas'>('todas');
+  const [categoriasDisponibles, setCategoriasDisponibles] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -27,25 +30,28 @@ export default function GestionProductos() {
     disponible: true
   });
 
-  const categorias: { value: CategoriaProducto; label: string }[] = [
-    { value: 'desayuno', label: 'Desayuno' },
-    { value: 'almuerzo', label: 'Almuerzo' },
-    { value: 'almuerzo_especial', label: 'Almuerzo Especial' },
-    { value: 'carta_pechuga', label: 'Carta - Pechuga' },
-    { value: 'carta_carne', label: 'Carta - Carne' },
-    { value: 'carta_pasta', label: 'Carta - Pasta' },
-    { value: 'carta_pescado', label: 'Carta - Pescado' },
-    { value: 'carta_arroz', label: 'Carta - Arroz' },
-    { value: 'sopa', label: 'Sopa' },
-    { value: 'bebida', label: 'Bebida' },
-    { value: 'cafeteria', label: 'Cafetería' },
-    { value: 'porciones', label: 'Porciones' },
-    { value: 'otros', label: 'Otros' }
-  ];
-
   useEffect(() => {
     cargarProductos();
+    cargarCategorias();
   }, []);
+
+  useEffect(() => {
+    // Filtrar productos cuando cambien los productos o el filtro
+    if (filtroCategoria === 'todas') {
+      setProductosFiltrados(productos);
+    } else {
+      setProductosFiltrados(productos.filter(producto => producto.categoria === filtroCategoria));
+    }
+  }, [productos, filtroCategoria]);
+
+  const cargarCategorias = async () => {
+    try {
+      const response = await apiService.getCategorias();
+      setCategoriasDisponibles(response);
+    } catch (err) {
+      console.error('Error al cargar categorías:', err);
+    }
+  };
 
   const cargarProductos = async () => {
     try {
@@ -162,6 +168,30 @@ export default function GestionProductos() {
         </button>
       </div>
 
+      {/* Filtro por categoría */}
+      <div className="card">
+        <div className="flex items-center space-x-4">
+          <label className="text-sm font-medium text-secondary-700">
+            Filtrar por categoría:
+          </label>
+          <select
+            value={filtroCategoria}
+            onChange={(e) => setFiltroCategoria(e.target.value as string | 'todas')}
+            className="input-field w-auto min-w-[200px]"
+          >
+            <option value="todas">Todas las categorías</option>
+            {categoriasDisponibles.map(categoria => (
+              <option key={categoria} value={categoria}>
+                {categoria.charAt(0).toUpperCase() + categoria.slice(1).replace(/_/g, ' ')}
+              </option>
+            ))}
+          </select>
+          <span className="text-sm text-secondary-500">
+            {productosFiltrados.length} producto(s)
+          </span>
+        </div>
+      </div>
+
       {/* Formulario de creación/edición */}
       {(creandoNuevo || editandoId !== null) && (
         <div className="card">
@@ -204,12 +234,12 @@ export default function GestionProductos() {
               </label>
               <select
                 value={formulario.categoria}
-                onChange={(e) => setFormulario(prev => ({ ...prev, categoria: e.target.value as CategoriaProducto }))}
+                onChange={(e) => setFormulario(prev => ({ ...prev, categoria: e.target.value }))}
                 className="input-field"
               >
-                {categorias.map(categoria => (
-                  <option key={categoria.value} value={categoria.value}>
-                    {categoria.label}
+                {categoriasDisponibles.map(categoria => (
+                  <option key={categoria} value={categoria}>
+                    {categoria.charAt(0).toUpperCase() + categoria.slice(1).replace(/_/g, ' ')}
                   </option>
                 ))}
               </select>
@@ -302,7 +332,7 @@ export default function GestionProductos() {
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-secondary-200">
-                {productos.map((producto) => (
+                {productosFiltrados.map((producto) => (
                   <tr key={producto.id}>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
@@ -318,7 +348,7 @@ export default function GestionProductos() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {categorias.find(c => c.value === producto.categoria)?.label || producto.categoria}
+                        {producto.categoria.charAt(0).toUpperCase() + producto.categoria.slice(1).replace(/_/g, ' ')}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
