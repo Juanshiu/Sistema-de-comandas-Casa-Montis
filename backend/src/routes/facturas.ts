@@ -23,11 +23,11 @@ router.post('/', (req: Request, res: Response) => {
     });
   }
 
-  // Verificar que la comanda existe y está entregada
+  // Verificar que la comanda existe y está lista
   const verificarComandaQuery = `
     SELECT c.*
     FROM comandas c
-    WHERE c.id = ? AND c.estado = 'entregada'
+    WHERE c.id = ? AND c.estado = 'lista'
   `;
 
   db.get(verificarComandaQuery, [comanda_id], (err: any, comanda: any) => {
@@ -38,7 +38,7 @@ router.post('/', (req: Request, res: Response) => {
 
     if (!comanda) {
       return res.status(404).json({ 
-        error: 'Comanda no encontrada o no está en estado entregada' 
+        error: 'Comanda no encontrada o no está en estado lista' 
       });
     }
 
