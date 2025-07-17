@@ -1,7 +1,7 @@
 import axios from 'axios';
-import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda } from '@/types';
+import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.18.210:3001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
@@ -133,13 +133,16 @@ export const apiService = {
   async deleteComanda(comandaId: string): Promise<void> {
     await api.delete(`/comandas/${comandaId}`);
   },
-
-  async editarComanda(comandaId: string, nuevosItems: ItemComanda[], observaciones_generales?: string): Promise<any> {
-    const response = await api.patch(`/comandas/${comandaId}/editar`, { 
-      nuevosItems, 
-      observaciones_generales 
+  async editarComanda(comandaId: string, items: ItemComanda[], observaciones_generales?: string): Promise<any> {
+    const response = await api.put(`/comandas/${comandaId}/editar`, {
+      items,
+      observaciones_generales
     });
     return response.data;
+  },
+
+  async imprimirNuevosItems(comandaId: string, nuevosItems: ItemComanda[]): Promise<void> {
+    await api.post(`/comandas/${comandaId}/imprimir-nuevos`, { nuevosItems });
   },
 
   // Impresión
@@ -251,7 +254,13 @@ export const apiService = {
 
   async deleteBebida(id: string): Promise<void> {
     await api.delete(`/personalizaciones/bebidas/${id}`);
-  }
+  },
+
+  async getHistorialComandas(fecha?: string): Promise<ComandaHistorial[]> {
+    const params = fecha ? `?fecha=${fecha}` : '';
+    const response = await api.get(`/comandas/historial${params}`);
+    return response.data;
+  },
 };
 
 export default apiService;

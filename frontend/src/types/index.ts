@@ -169,3 +169,25 @@ export interface FormularioComanda {
   observaciones_generales?: string;
   mesero: string;
 }
+
+export interface ComandaHistorial {
+  id: string;
+  fecha: string;
+  mesero: string;
+  subtotal: number;
+  total: number;
+  estado: string;
+  observaciones_generales?: string;
+  mesas: string; // Viene como string del GROUP_CONCAT
+  items: ItemComandaHistorial[];
+}
+
+export interface ItemComandaHistorial {
+  id: string;
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  observaciones?: string;
+  producto_nombre: string; // Desde el JOIN con productos
+  personalizacion?: PersonalizacionItem;
+}
