@@ -5,9 +5,10 @@ import FormularioComandas from '@/components/FormularioComandas';
 import InterfazCaja from '@/components/InterfazCaja';
 import Reportes from '@/components/Reportes';
 import Administracion from '@/components/Administracion';
-import { ShoppingCart, Calculator, BarChart3, Settings, Menu, X } from 'lucide-react';
+import HistorialComandas from '@/components/HistorialComandas';
+import { ShoppingCart, Calculator, BarChart3, Settings, Menu, X, History } from 'lucide-react';
 
-type Vista = 'comandas' | 'caja' | 'reportes' | 'admin';
+type Vista = 'comandas' | 'caja' | 'reportes' | 'admin' | 'historial';
 
 export default function SistemaPrincipal() {
   const [vistaActual, setVistaActual] = useState<Vista>('comandas');
@@ -25,6 +26,12 @@ export default function SistemaPrincipal() {
       nombre: 'Caja',
       icon: Calculator,
       descripcion: 'Procesar pagos y liberar mesas'
+    },
+    {
+      id: 'historial' as Vista,
+      nombre: 'Historial',
+      icon: History,
+      descripcion: 'Ver historial de comandas'
     },
     {
       id: 'reportes' as Vista,
@@ -46,6 +53,8 @@ export default function SistemaPrincipal() {
         return <FormularioComandas />;
       case 'caja':
         return <InterfazCaja />;
+      case 'historial':
+        return <HistorialComandas />;
       case 'reportes':
         return <Reportes />;
       case 'admin':
