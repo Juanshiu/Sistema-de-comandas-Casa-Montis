@@ -52,7 +52,14 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
 
       if (modoEdicion && comandaId) {
         // Editar comanda existente
-        await apiService.editarComanda(comandaId, comandaData.items);
+        await apiService.editarComanda(comandaId, comandaData.items, comandaData.observaciones_generales);
+        
+        // Imprimir solo los nuevos items
+        const nuevosItems = formulario.items.filter(item => item.id.startsWith('temp_'));
+        if (nuevosItems.length > 0) {
+          await apiService.imprimirNuevosItems(comandaId, nuevosItems);
+        }
+        
         setSuccess(true);
         setTimeout(() => {
           window.location.reload();
@@ -75,15 +82,22 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   };
 
   const mostrarVistaPrevia = () => {
+    // En modo edición, filtrar solo los nuevos items
+    const itemsParaPrevia = modoEdicion ? 
+      formulario.items.filter(item => item.id.startsWith('temp_')) : 
+      formulario.items;
+    
     const comandaInfo = `
-CASA MONTIS - VISTA PREVIA COMANDA
+CASA MONTIS - VISTA PREVIA ${modoEdicion ? 'ITEMS ADICIONALES' : 'COMANDA'}
 =======================================
 Mesero: ${formulario.mesero}
 Mesa(s): ${formulario.mesas?.map(m => `${m.salon} - ${m.numero}`).join(', ')}
 Capacidad total: ${formulario.mesas?.reduce((sum, mesa) => sum + mesa.capacidad, 0)} personas
+${modoEdicion ? '\n⚠️  ESTOS SON ITEMS ADICIONALES' : ''}
+${modoEdicion ? '⚠️  PARA COMANDA EXISTENTE\n' : ''}
 
 PRODUCTOS:
-${formulario.items.map(item => {
+${itemsParaPrevia.map(item => {
   let itemText = `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString('es-CO')}`;
   if (item.personalizacion) {
     const personalizaciones = [];
@@ -103,8 +117,8 @@ ${formulario.items.map(item => {
 
 ${formulario.observaciones_generales ? `\nObservaciones: ${formulario.observaciones_generales}` : ''}
 
-SUBTOTAL: $${calcularSubtotal().toLocaleString('es-CO')}
-TOTAL: $${calcularTotal().toLocaleString('es-CO')}
+${modoEdicion ? 'TOTAL ADICIONAL' : 'SUBTOTAL'}: $${itemsParaPrevia.reduce((sum, item) => sum + item.subtotal, 0).toLocaleString('es-CO')}
+${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
 =======================================
     `.trim();
 
@@ -114,10 +128,11 @@ TOTAL: $${calcularTotal().toLocaleString('es-CO')}
       nuevaVentana.document.write(`
         <html>
           <head>
-            <title>Vista Previa - Comanda</title>
+            <title>Vista Previa - ${modoEdicion ? 'Items Adicionales' : 'Comanda'}</title>
             <style>
               body { font-family: monospace; padding: 20px; white-space: pre-line; }
               .print-btn { margin-top: 20px; padding: 10px 20px; background: #007bff; color: white; border: none; cursor: pointer; }
+              .warning { color: #dc2626; font-weight: bold; }
             </style>
           </head>
           <body>

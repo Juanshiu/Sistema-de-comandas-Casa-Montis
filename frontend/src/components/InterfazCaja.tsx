@@ -19,8 +19,8 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
 
   useEffect(() => {
     cargarComandasActivas();
-    // Actualizar cada 30 segundos
-    const interval = setInterval(cargarComandasActivas, 30000);
+    // Actualizar cada 5 segundos para tiempo real
+    const interval = setInterval(cargarComandasActivas, 5000);
     return () => clearInterval(interval);
   }, []);
 
@@ -86,16 +86,112 @@ Mesero: ${comandaSeleccionada.mesero}
 ID: ${comandaSeleccionada.id.substring(0, 8)}
 
 PRODUCTOS:
-${comandaSeleccionada.items.map(item => 
-  `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString()}`
-).join('\n')}
+${comandaSeleccionada.items.map(item => {
+  let itemText = `${item.cantidad}x ${item.producto.nombre}
+   $${item.precio_unitario.toLocaleString()} c/u
+   Subtotal: $${item.subtotal.toLocaleString()}`;
+  
+  // Agregar personalización si existe
+  if (item.personalizacion) {
+    const personalizaciones = [];
+    if (item.personalizacion.caldo) personalizaciones.push(`Caldo: ${item.personalizacion.caldo.nombre}`);
+    if (item.personalizacion.principio) personalizaciones.push(`Principio: ${item.personalizacion.principio.nombre}`);
+    if (item.personalizacion.proteina) personalizaciones.push(`Proteína: ${item.personalizacion.proteina.nombre}`);
+    if (item.personalizacion.bebida) personalizaciones.push(`Bebida: ${item.personalizacion.bebida.nombre}`);
+    
+    if (personalizaciones.length > 0) {
+      itemText += `\n   PERSONALIZACIÓN: ${personalizaciones.join(' | ')}`;
+    }
+  }
+  
+  if (item.observaciones) {
+    itemText += `\n   Obs: ${item.observaciones}`;
+  }
+  
+  return itemText;
+}).join('\n\n')}
 
+${comandaSeleccionada.observaciones_generales ? `\nObservaciones generales:\n${comandaSeleccionada.observaciones_generales}\n` : ''}
+=====================================
+SUBTOTAL: $${comandaSeleccionada.subtotal.toLocaleString()}
 TOTAL: $${comandaSeleccionada.total.toLocaleString()}
-Método de pago: ${metodoPago}
+Método de pago: ${metodoPago.toUpperCase()}
+=====================================
+           GRACIAS POR SU VISITA
+             Vuelva pronto
 =====================================
     `;
     
-    alert(facturaContent);
+    // Mostrar en una ventana emergente
+    const nuevaVentana = window.open('', '_blank', 'width=600,height=700');
+    if (nuevaVentana) {
+      nuevaVentana.document.write(`
+        <html>
+          <head>
+            <title>Vista Previa - Factura</title>
+            <style>
+              body {
+                font-family: 'Courier New', monospace;
+                margin: 20px;
+                background-color: #f5f5f5;
+              }
+              .factura {
+                background-color: white;
+                padding: 20px;
+                border-radius: 8px;
+                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+                max-width: 500px;
+                margin: 0 auto;
+              }
+              .contenido {
+                white-space: pre-wrap;
+                font-size: 12px;
+                line-height: 1.4;
+              }
+              .botones {
+                margin-top: 20px;
+                text-align: center;
+                display: flex;
+                gap: 10px;
+                justify-content: center;
+              }
+              button {
+                padding: 10px 20px;
+                font-size: 14px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+                font-family: Arial, sans-serif;
+              }
+              .btn-imprimir {
+                background-color: #3b82f6;
+                color: white;
+              }
+              .btn-cerrar {
+                background-color: #6b7280;
+                color: white;
+              }
+              .btn-imprimir:hover {
+                background-color: #2563eb;
+              }
+              .btn-cerrar:hover {
+                background-color: #4b5563;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="factura">
+              <div class="contenido">${facturaContent}</div>
+              <div class="botones">
+                <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir</button>
+                <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
+              </div>
+            </div>
+          </body>
+        </html>
+      `);
+      nuevaVentana.document.close();
+    }
   };
 
   const actualizarEstadoComanda = async (comandaId: string, nuevoEstado: EstadoComanda) => {
