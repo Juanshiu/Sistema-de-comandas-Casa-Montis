@@ -32,10 +32,10 @@ export default function FormularioComandas() {
       mesas: comanda.mesas,
       items: comanda.items,
       mesero: comanda.mesero,
-      tipo_servicio: 'otros', // Valor por defecto para edición
+      tipo_servicio: 'desayuno', // Empezar con desayuno en edición
       observaciones_generales: comanda.observaciones_generales
     });
-    setPasoActual(2); // Ir directo a la selección de productos
+    setPasoActual(1); // Ir a la selección de tipo de servicio primero
   };
 
   const cancelarEdicion = () => {

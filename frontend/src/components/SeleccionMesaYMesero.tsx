@@ -29,6 +29,14 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
     cargarComandasActivas();
     // Cargar el nombre del mesero guardado al inicializar
     cargarMeseroGuardado();
+    
+    // Actualizar cada 5 segundos para tiempo real
+    const interval = setInterval(() => {
+      cargarMesas();
+      cargarComandasActivas();
+    }, 5000);
+    
+    return () => clearInterval(interval);
   }, []);
 
   const cargarComandasActivas = async () => {
