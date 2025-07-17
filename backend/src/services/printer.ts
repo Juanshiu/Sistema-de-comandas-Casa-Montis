@@ -4,8 +4,15 @@ import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
+import * as dotenv from 'dotenv';
+
+dotenv.config();
 
 const execAsync = promisify(exec);
+
+// Obtener nombre de impresora desde variables de entorno
+const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'POS-58';
+const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'POS-80';
 
 // Función para crear un archivo de texto con formato de comanda
 const crearArchivoComanda = (comanda: Comanda): string => {
@@ -178,9 +185,7 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
     
     // Intentar imprimir con diferentes métodos
     const metodosImpresion = [
-      'POS-58',
-      'Xprinter USB Printer Port',
-      'POS58'
+      PRINTER_COCINA_NAME, // Usar variable de entorno principal
     ];
     
     let impresionExitosa = false;
@@ -342,9 +347,7 @@ export const probarImpresora = async (): Promise<boolean> => {
     console.log('� Impresoras disponibles:', impresoras);
     
     const metodosImpresion = [
-      'POS-58',
-      'Xprinter USB Printer Port',
-      'POS58'
+      PRINTER_COCINA_NAME,
     ];
     
     let impresionExitosa = false;
