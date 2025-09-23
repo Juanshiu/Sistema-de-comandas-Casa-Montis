@@ -51,14 +51,8 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       };
 
       if (modoEdicion && comandaId) {
-        // Editar comanda existente
+        // Editar comanda existente - la impresión automática se maneja en el backend
         await apiService.editarComanda(comandaId, comandaData.items, comandaData.observaciones_generales);
-        
-        // Imprimir solo los nuevos items
-        const nuevosItems = formulario.items.filter(item => item.id.startsWith('temp_'));
-        if (nuevosItems.length > 0) {
-          await apiService.imprimirNuevosItems(comandaId, nuevosItems);
-        }
         
         setSuccess(true);
         setTimeout(() => {

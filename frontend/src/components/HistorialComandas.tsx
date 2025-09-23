@@ -44,12 +44,16 @@ export default function HistorialComandas() {
   };
 
   const formatearFecha = (fecha: string) => {
-    return new Date(fecha).toLocaleDateString('es-CO', {
+    // Crear fecha directamente sin manipulación de zona horaria
+    const fechaObj = new Date(fecha);
+    
+    return fechaObj.toLocaleDateString('es-CO', {
       year: 'numeric',
       month: 'long',
       day: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'America/Bogota'
     });
   };
 

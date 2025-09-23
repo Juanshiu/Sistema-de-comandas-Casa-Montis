@@ -14,6 +14,79 @@ const execAsync = promisify(exec);
 const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'POS-58';
 const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'POS-80';
 
+// Función para crear un archivo de texto con formato de ITEMS ADICIONALES
+const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
+  const contenido = `
+
+================================
+           CASA MONTIS
+        COMANDA DE COCINA
+================================
+
+    MESA ${comanda.mesas && comanda.mesas.length > 0 ? 
+      comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ') : 'N/A'}
+
+================================
+Fecha: ${comanda.fecha_creacion?.toLocaleString('es-CO', {
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit'
+})}
+Empleado: ${comanda.mesero}
+================================
+
+    PRODUCTOS ADICIONALES 
+
+${comanda.items && comanda.items.length > 0 ? comanda.items.map((item, index) => {
+  let texto = ` ${item.cantidad}x ${item.producto?.nombre || 'Producto'}`;
+  
+  // Personalización
+  if (item.personalizacion) {
+    let personalizacion;
+    try {
+      personalizacion = typeof item.personalizacion === 'string' 
+        ? JSON.parse(item.personalizacion) 
+        : item.personalizacion;
+    } catch (e) {
+      personalizacion = item.personalizacion;
+    }
+    
+    if (personalizacion) {
+      const detalles = [];
+      if (personalizacion.caldo) detalles.push(`Caldo: ${personalizacion.caldo.nombre}`);
+      if (personalizacion.principio) detalles.push(`Principio: ${personalizacion.principio.nombre}`);
+      if (personalizacion.proteina) detalles.push(`Proteína: ${personalizacion.proteina.nombre}`);
+      if (personalizacion.bebida) detalles.push(`Bebida: ${personalizacion.bebida.nombre}`);
+      
+      if (detalles.length > 0) {
+        texto += `
+   🔸 ${detalles.join(' | ')}`;
+      }
+    }
+  }
+  
+  // Observaciones
+  if (item.observaciones && item.observaciones.trim() !== '') {
+    texto += `
+   📝 ${item.observaciones}`;
+  }
+  
+  return texto;
+}).join('\n\n') : 'No hay productos'}
+
+================================
+            URGENTE
+      SOLO PRODUCTOS NUEVOS
+================================
+
+
+`;
+  
+  return contenido;
+};
+
 // Función para crear un archivo de texto con formato de comanda
 const crearArchivoComanda = (comanda: Comanda): string => {
   const contenido = `
@@ -172,6 +245,9 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
   let comandaCompleta = comanda;
   
   try {
+    console.log('🖨️  ===== FUNCIÓN IMPRIMIR COMANDA LLAMADA =====');
+    console.log('🖨️  ID Comanda:', comanda.id);
+    console.log('🖨️  Items en comanda:', comanda.items?.length || 0);
     console.log('🖨️  Intentando imprimir comanda...');
     
     // Obtener datos completos de la comanda si no los tiene
@@ -181,7 +257,16 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
     }
     
     // Crear contenido de la comanda
-    const contenidoComanda = crearArchivoComanda(comandaCompleta);
+    let contenidoComanda;
+    
+    // Si son items adicionales, usar formato especial
+    if (comandaCompleta.observaciones_generales && comandaCompleta.observaciones_generales.includes('ITEMS ADICIONALES')) {
+      console.log('📄 Generando formato para ITEMS ADICIONALES...');
+      contenidoComanda = crearArchivoItemsAdicionales(comandaCompleta);
+    } else {
+      console.log('📄 Generando formato de comanda completa...');
+      contenidoComanda = crearArchivoComanda(comandaCompleta);
+    }
     
     // Intentar imprimir con diferentes métodos
     const metodosImpresion = [
