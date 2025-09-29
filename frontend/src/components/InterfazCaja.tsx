@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Comanda, Factura, EstadoComanda } from '@/types';
 import { apiService } from '@/services/api';
-import { CreditCard, DollarSign, Receipt, CheckCircle, Clock, AlertCircle, Printer } from 'lucide-react';
+import { CreditCard, DollarSign, Receipt, CheckCircle, Clock, AlertCircle, ArrowRightLeft } from 'lucide-react';
 
 interface InterfazCajaProps {
   onMesaLiberada?: () => void;
@@ -16,6 +16,10 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [loading, setLoading] = useState(true);
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [mostrarModalRecibo, setMostrarModalRecibo] = useState(false);
+  const [facturaParaRecibo, setFacturaParaRecibo] = useState<any>(null);
+  const [montoPagado, setMontoPagado] = useState<string>('');
+  const [cambio, setCambio] = useState<number>(0);
 
   useEffect(() => {
     cargarComandasActivas();
@@ -23,6 +27,14 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     const interval = setInterval(cargarComandasActivas, 5000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (comandaSeleccionada && montoPagado) {
+      const pago = parseFloat(montoPagado) || 0;
+      const total = comandaSeleccionada.total;
+      setCambio(Math.max(0, pago - total));
+    }
+  }, [montoPagado, comandaSeleccionada]);
 
   const cargarComandasActivas = async () => {
     try {
@@ -41,6 +53,15 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const procesarFactura = async () => {
     if (!comandaSeleccionada) return;
 
+    // Validar monto pagado para efectivo
+    if (metodoPago === 'efectivo') {
+      const pago = parseFloat(montoPagado) || 0;
+      if (pago < comandaSeleccionada.total) {
+        alert('El monto pagado no puede ser menor al total de la cuenta');
+        return;
+      }
+    }
+
     try {
       setProcesandoPago(true);
       
@@ -55,13 +76,28 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       
       // Actualizar lista
       await cargarComandasActivas();
+      
+      // Preparar datos para el recibo
+      const montoPagadoFinal = metodoPago === 'efectivo' ? parseFloat(montoPagado) : comandaSeleccionada.total;
+      
+      setFacturaParaRecibo({
+        ...response,
+        comanda: comandaSeleccionada,
+        metodo_pago: metodoPago,
+        monto_pagado: montoPagadoFinal,
+        cambio: metodoPago === 'efectivo' ? cambio : 0
+      });
+      
       setComandaSeleccionada(null);
+      setMontoPagado('');
+      setCambio(0);
       
       if (onMesaLiberada) {
         onMesaLiberada();
       }
 
-      alert('Factura procesada correctamente');
+      // Mostrar modal para preguntar si quiere imprimir recibo
+      setMostrarModalRecibo(true);
       
     } catch (err) {
       console.error('Error al procesar factura:', err);
@@ -72,14 +108,18 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     }
   };
 
-  const vistaPrevia = () => {
+  const generarFactura = () => {
     if (!comandaSeleccionada) return;
     
     const facturaContent = `
-=====================================
-           CASA MONTIS
-             FACTURA
-=====================================
+======================================
+       CASA MONTIS RESTAURANTE
+         CC./NIT.: 26420708-2
+       NO RESPONSABLE DE IVA
+    CRA 9 # 11 07 - EDUARDO SANTOS
+         PALERMO - HUILA
+    TEL: 3132171025 - 3224588520
+======================================
 Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
 Fecha: ${new Date().toLocaleString()}
 Mesero: ${comandaSeleccionada.mesero}
@@ -88,8 +128,7 @@ ID: ${comandaSeleccionada.id.substring(0, 8)}
 PRODUCTOS:
 ${comandaSeleccionada.items.map(item => {
   let itemText = `${item.cantidad}x ${item.producto.nombre}
-   $${item.precio_unitario.toLocaleString()} c/u
-   Subtotal: $${item.subtotal.toLocaleString()}`;
+   $${item.precio_unitario.toLocaleString()}`;
   
   // Agregar personalización si existe
   if (item.personalizacion) {
@@ -115,11 +154,10 @@ ${comandaSeleccionada.observaciones_generales ? `\nObservaciones generales:\n${c
 =====================================
 SUBTOTAL: $${comandaSeleccionada.subtotal.toLocaleString()}
 TOTAL: $${comandaSeleccionada.total.toLocaleString()}
-Método de pago: ${metodoPago.toUpperCase()}
-=====================================
-           GRACIAS POR SU VISITA
-             Vuelva pronto
-=====================================
+======================================
+        GRACIAS POR SU COMPRA
+          VUELVA PRONTO
+======================================
     `;
     
     // Mostrar en una ventana emergente
@@ -128,7 +166,7 @@ Método de pago: ${metodoPago.toUpperCase()}
       nuevaVentana.document.write(`
         <html>
           <head>
-            <title>Vista Previa - Factura</title>
+            <title>Factura - Casa Montis</title>
             <style>
               body {
                 font-family: 'Courier New', monospace;
@@ -194,6 +232,119 @@ Método de pago: ${metodoPago.toUpperCase()}
     }
   };
 
+  const generarRecibo = (factura: any) => {
+    const fechaActual = new Date();
+    const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
+    
+    const reciboContent = `
+======================================
+       CASA MONTIS RESTAURANTE
+         CC./NIT.: 26420708-2
+       NO RESPONSABLE DE IVA
+    CRA 9 # 11 07 - EDUARDO SANTOS
+         PALERMO - HUILA
+    TEL: 3132171025 - 3224588520
+======================================
+           CUENTA DE COBRO
+No. ${numeroFactura}
+CAJA 01
+SALON - MESA ${factura.comanda.mesas.map((m: any) => m.numero).join(', ')}
+FECHA EXPEDICION: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO')}
+FORMA DE PAGO: ${factura.metodo_pago.toUpperCase()}
+============DETALLE============
+CANT|ARTICULO              | TOTAL
+--------------------------------------
+${factura.comanda.items.map((item: any, index: number) => 
+  ` ${item.cantidad.toString().padStart(3, ' ')} ${item.producto.nombre.padEnd(20, ' ')} ${item.subtotal.toLocaleString('es-CO').padStart(8, ' ')}`
+).join('\n')}
+--------------------------------------
+VLR TOTAL                     ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
+==============MEDIO DE PAGO==============
+${factura.metodo_pago.toUpperCase()}                    ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
+======================================
+
+      TOTAL CONSUMO         ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
+        TOTAL               ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
+        PAGO                ${factura.monto_pagado.toLocaleString('es-CO').padStart(8, ' ')}
+        CAMBIO              ${factura.cambio.toLocaleString('es-CO').padStart(8, ' ')}
+======================================
+        GRACIAS POR SU COMPRA
+          VUELVA PRONTO
+======================================
+    `;
+
+    // Abrir en nueva ventana para imprimir
+    const ventanaRecibo = window.open('', '_blank', 'width=400,height=600');
+    if (ventanaRecibo) {
+      ventanaRecibo.document.write(`
+        <html>
+          <head>
+            <title>Recibo - Casa Montis</title>
+            <style>
+              @media print {
+                body { margin: 0; }
+                .no-print { display: none; }
+              }
+              body {
+                font-family: 'Courier New', monospace;
+                font-size: 11px;
+                line-height: 1.3;
+                margin: 10px;
+                background-color: white;
+              }
+              .recibo {
+                width: 100%;
+                max-width: 300px;
+                margin: 0 auto;
+              }
+              .contenido {
+                white-space: pre-line;
+              }
+              .botones {
+                margin-top: 20px;
+                text-align: center;
+                gap: 10px;
+              }
+              button {
+                padding: 8px 16px;
+                margin: 5px;
+                border: none;
+                border-radius: 4px;
+                cursor: pointer;
+              }
+              .btn-imprimir {
+                background-color: #3b82f6;
+                color: white;
+              }
+              .btn-cerrar {
+                background-color: #6b7280;
+                color: white;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="recibo">
+              <div class="contenido">${reciboContent}</div>
+              <div class="botones no-print">
+                <button class="btn-imprimir" onclick="window.print(); window.close();">🖨️ Imprimir</button>
+                <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
+              </div>
+            </div>
+            <script>
+              // Auto-abrir diálogo de impresión después de cargar
+              window.onload = function() {
+                setTimeout(function() {
+                  window.print();
+                }, 500);
+              }
+            </script>
+          </body>
+        </html>
+      `);
+      ventanaRecibo.document.close();
+    }
+  };
+
   const actualizarEstadoComanda = async (comandaId: string, nuevoEstado: EstadoComanda) => {
     try {
       await apiService.actualizarEstadoComanda(comandaId, nuevoEstado);
@@ -201,16 +352,6 @@ Método de pago: ${metodoPago.toUpperCase()}
     } catch (err) {
       console.error('Error al actualizar estado:', err);
       alert('Error al actualizar el estado de la comanda');
-    }
-  };
-
-  const imprimirComanda = async (comandaId: string) => {
-    try {
-      await apiService.imprimirComanda(comandaId);
-      alert('Comanda impresa correctamente');
-    } catch (err) {
-      console.error('Error al imprimir:', err);
-      alert('Error al imprimir la comanda');
     }
   };
 
@@ -323,17 +464,6 @@ Método de pago: ${metodoPago.toUpperCase()}
                     </span>
                     
                     <div className="flex space-x-2">
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          imprimirComanda(comanda.id);
-                        }}
-                        className="text-blue-600 hover:text-blue-800 p-1"
-                        title="Imprimir comanda"
-                      >
-                        <Printer size={16} />
-                      </button>
-                      
                       {comanda.estado === 'pendiente' && (
                         <button
                           onClick={(e) => {
@@ -454,7 +584,7 @@ Método de pago: ${metodoPago.toUpperCase()}
                           : 'border-secondary-300 text-secondary-700'
                       }`}
                     >
-                      <Receipt size={20} />
+                      <ArrowRightLeft size={20} />
                       <span>Transferencia</span>
                     </button>
                     <button
@@ -471,16 +601,40 @@ Método de pago: ${metodoPago.toUpperCase()}
                   </div>
                 </div>
 
+                {metodoPago === 'efectivo' && (
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Monto Pagado:
+                    </label>
+                    <input
+                      type="number"
+                      value={montoPagado}
+                      onChange={(e) => setMontoPagado(e.target.value)}
+                      placeholder={`Mínimo: $${comandaSeleccionada.total.toLocaleString()}`}
+                      className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                    />
+                    {cambio > 0 && (
+                      <p className="text-sm text-green-600 mt-1">
+                        Cambio: ${cambio.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                )}
+
                 <div className="flex space-x-2">
                   <button
-                    onClick={vistaPrevia}
+                    onClick={generarFactura}
                     className="btn-secondary flex-1"
                   >
-                    Vista Previa
+                    📄 Generar Factura
                   </button>
                   <button
                     onClick={procesarFactura}
-                    disabled={procesandoPago || comandaSeleccionada.estado !== 'lista'}
+                    disabled={
+                      procesandoPago || 
+                      comandaSeleccionada.estado !== 'lista' || 
+                      (metodoPago === 'efectivo' && (!montoPagado || parseFloat(montoPagado) < comandaSeleccionada.total))
+                    }
                     className="btn-primary flex-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     {procesandoPago ? (
@@ -499,11 +653,52 @@ Método de pago: ${metodoPago.toUpperCase()}
                     La comanda debe estar "lista" para procesar el pago
                   </p>
                 )}
+
+                {metodoPago === 'efectivo' && montoPagado && parseFloat(montoPagado) < comandaSeleccionada.total && (
+                  <p className="text-sm text-red-600 mt-2 text-center">
+                    El monto pagado debe ser mayor o igual al total
+                  </p>
+                )}
               </div>
             </div>
           )}
         </div>
       </div>
+
+      {/* Modal de confirmación para imprimir recibo */}
+      {mostrarModalRecibo && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-secondary-800 mb-4">
+              ✅ Pago Procesado Exitosamente
+            </h3>
+            <p className="text-secondary-600 mb-6">
+              ¿Desea imprimir el recibo para entregar al cliente?
+            </p>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  generarRecibo(facturaParaRecibo);
+                  setMostrarModalRecibo(false);
+                  setFacturaParaRecibo(null);
+                }}
+                className="btn-primary flex-1"
+              >
+                🖨️ Sí, imprimir recibo
+              </button>
+              <button
+                onClick={() => {
+                  setMostrarModalRecibo(false);
+                  setFacturaParaRecibo(null);
+                }}
+                className="btn-secondary flex-1"
+              >
+                No, continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
