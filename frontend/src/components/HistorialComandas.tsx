@@ -58,15 +58,21 @@ export default function HistorialComandas() {
   };
 
   const getEstadoColor = (estado: string) => {
-    switch (estado) {
-      case 'activa':
-        return 'bg-green-100 text-green-800';
-      case 'pagada':
-        return 'bg-blue-100 text-blue-800';
+    switch (estado.toLowerCase()) {
+      case 'pendiente':
+        return 'bg-yellow-50 border border-yellow-400 text-yellow-700';
+      case 'preparando':
+        return 'bg-orange-50 border border-orange-400 text-orange-700';
+      case 'lista':
+        return 'bg-green-50 border border-green-500 text-green-700';
+      case 'entregada':
+        return 'bg-teal-50 border border-teal-400 text-teal-700';
+      case 'facturada':
+        return 'bg-blue-50 border border-blue-500 text-blue-700';
       case 'cancelada':
-        return 'bg-red-100 text-red-800';
+        return 'bg-red-50 border border-red-500 text-red-700';
       default:
-        return 'bg-gray-100 text-gray-800';
+        return 'bg-gray-50 border border-gray-400 text-gray-700';
     }
   };
 
@@ -159,7 +165,7 @@ export default function HistorialComandas() {
               <p className="text-gray-500">No hay comandas para mostrar</p>
             </div>
           ) : (
-            comandas.map((comanda) => (
+            comandas.map((comanda, index) => (
               <div key={comanda.id} className="bg-white rounded-lg shadow border overflow-hidden">
                 <div
                   className="p-4 cursor-pointer hover:bg-gray-50"
@@ -168,9 +174,9 @@ export default function HistorialComandas() {
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">#{comanda.id}</span>
-                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${getEstadoColor(comanda.estado)}`}>
-                          {comanda.estado}
+                        <span className="font-medium text-gray-900">#{comandas.length - index}</span>
+                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstadoColor(comanda.estado)}`}>
+                          {comanda.estado.charAt(0).toUpperCase() + comanda.estado.slice(1)}
                         </span>
                       </div>
                       
