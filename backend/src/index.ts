@@ -19,6 +19,7 @@ import comandasRoutes from './routes/comandas';
 import facturasRoutes from './routes/facturas';
 import reportesRoutes from './routes/reportes';
 import personalizacionesRoutes from './routes/personalizaciones';
+import sistemaRoutes from './routes/sistema';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -50,6 +51,7 @@ app.use('/api/comandas', comandasRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/reportes', reportesRoutes);
 app.use('/api/personalizaciones', personalizacionesRoutes);
+app.use('/api/sistema', sistemaRoutes);
 
 // Ruta de salud
 app.get('/health', (req, res) => {
