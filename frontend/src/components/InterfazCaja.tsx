@@ -112,18 +112,17 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     if (!comandaSeleccionada) return;
     
     const facturaContent = `
-======================================
-       CASA MONTIS RESTAURANTE
-         CC./NIT.: 26420708-2
-       NO RESPONSABLE DE IVA
-    CRA 9 # 11 07 - EDUARDO SANTOS
-         PALERMO - HUILA
-    TEL: 3132171025 - 3224588520
-======================================
-Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
-Fecha: ${new Date().toLocaleString()}
+================================
+    CASA MONTIS RESTAURANTE
+      CC./NIT.: 26420708-2
+    NO RESPONSABLE DE IVA
+CRA 9 # 11 07 - EDUARDO SANTOS
+      PALERMO - HUILA
+TEL: 3132171025 - 3224588520
+================================
+Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}
+Fecha: ${new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
 Mesero: ${comandaSeleccionada.mesero}
-ID: ${comandaSeleccionada.id.substring(0, 8)}
 
 PRODUCTOS:
 ${comandaSeleccionada.items.map(item => {
@@ -150,86 +149,19 @@ ${comandaSeleccionada.items.map(item => {
   return itemText;
 }).join('\n\n')}
 
-${comandaSeleccionada.observaciones_generales ? `\nObservaciones generales:\n${comandaSeleccionada.observaciones_generales}\n` : ''}
-=====================================
-SUBTOTAL: $${comandaSeleccionada.subtotal.toLocaleString()}
-TOTAL: $${comandaSeleccionada.total.toLocaleString()}
-======================================
-        GRACIAS POR SU COMPRA
-          VUELVA PRONTO
-======================================
+${comandaSeleccionada.observaciones_generales ? `\nObs. generales:\n${comandaSeleccionada.observaciones_generales}\n` : ''}
+================================
+SUBTOTAL: $${comandaSeleccionada.subtotal.toLocaleString('es-CO')}
+TOTAL: $${comandaSeleccionada.total.toLocaleString('es-CO')}
+================================
+    GRACIAS POR SU COMPRA
+       VUELVA PRONTO
+================================
     `;
     
-    // Mostrar en una ventana emergente
-    const nuevaVentana = window.open('', '_blank', 'width=600,height=700');
-    if (nuevaVentana) {
-      nuevaVentana.document.write(`
-        <html>
-          <head>
-            <title>Factura - Casa Montis</title>
-            <style>
-              body {
-                font-family: 'Courier New', monospace;
-                margin: 20px;
-                background-color: #f5f5f5;
-              }
-              .factura {
-                background-color: white;
-                padding: 20px;
-                border-radius: 8px;
-                box-shadow: 0 2px 10px rgba(0,0,0,0.1);
-                max-width: 500px;
-                margin: 0 auto;
-              }
-              .contenido {
-                white-space: pre-wrap;
-                font-size: 12px;
-                line-height: 1.4;
-              }
-              .botones {
-                margin-top: 20px;
-                text-align: center;
-                display: flex;
-                gap: 10px;
-                justify-content: center;
-              }
-              button {
-                padding: 10px 20px;
-                font-size: 14px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-                font-family: Arial, sans-serif;
-              }
-              .btn-imprimir {
-                background-color: #3b82f6;
-                color: white;
-              }
-              .btn-cerrar {
-                background-color: #6b7280;
-                color: white;
-              }
-              .btn-imprimir:hover {
-                background-color: #2563eb;
-              }
-              .btn-cerrar:hover {
-                background-color: #4b5563;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="factura">
-              <div class="contenido">${facturaContent}</div>
-              <div class="botones">
-                <button class="btn-imprimir" onclick="window.print()">🖨️ Imprimir</button>
-                <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
-              </div>
-            </div>
-          </body>
-        </html>
-      `);
-      nuevaVentana.document.close();
-    }
+    // Navegar a la página de factura con los datos
+    const facturaData = encodeURIComponent(facturaContent);
+    window.open(`/factura?data=${facturaData}`, '_blank');
   };
 
   const generarRecibo = (factura: any) => {
@@ -237,112 +169,46 @@ TOTAL: $${comandaSeleccionada.total.toLocaleString()}
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
     
     const reciboContent = `
-======================================
-       CASA MONTIS RESTAURANTE
-         CC./NIT.: 26420708-2
-       NO RESPONSABLE DE IVA
-    CRA 9 # 11 07 - EDUARDO SANTOS
-         PALERMO - HUILA
-    TEL: 3132171025 - 3224588520
-======================================
-           CUENTA DE COBRO
+================================
+  CASA MONTIS RESTAURANTE
+    CC./NIT.: 26420708-2
+  NO RESPONSABLE DE IVA
+CRA 9 # 11 07 - EDUARDO SANTOS
+      PALERMO - HUILA
+TEL: 3132171025 - 3224588520
+================================
+      CUENTA DE COBRO
 No. ${numeroFactura}
 CAJA 01
-SALON - MESA ${factura.comanda.mesas.map((m: any) => m.numero).join(', ')}
-FECHA EXPEDICION: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO')}
-FORMA DE PAGO: ${factura.metodo_pago.toUpperCase()}
-============DETALLE============
-CANT|ARTICULO              | TOTAL
---------------------------------------
-${factura.comanda.items.map((item: any, index: number) => 
-  ` ${item.cantidad.toString().padStart(3, ' ')} ${item.producto.nombre.padEnd(20, ' ')} ${item.subtotal.toLocaleString('es-CO').padStart(8, ' ')}`
-).join('\n')}
---------------------------------------
-VLR TOTAL                     ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
-==============MEDIO DE PAGO==============
-${factura.metodo_pago.toUpperCase()}                    ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
-======================================
+MESA: ${factura.comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}
+FECHA: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+PAGO: ${factura.metodo_pago.toUpperCase()}
+================================
+CANT ARTICULO          TOTAL
+--------------------------------
+${factura.comanda.items.map((item: any) => {
+  const nombre = item.producto.nombre.length > 16 ? item.producto.nombre.substring(0, 16) : item.producto.nombre.padEnd(16);
+  return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+}).join('\n')}
+--------------------------------
+VLR TOTAL              ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
+================================
+PAGO: ${factura.metodo_pago.toUpperCase()}
+                       ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
 
-      TOTAL CONSUMO         ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
-        TOTAL               ${factura.comanda.total.toLocaleString('es-CO').padStart(8, ' ')}
-        PAGO                ${factura.monto_pagado.toLocaleString('es-CO').padStart(8, ' ')}
-        CAMBIO              ${factura.cambio.toLocaleString('es-CO').padStart(8, ' ')}
-======================================
-        GRACIAS POR SU COMPRA
-          VUELVA PRONTO
-======================================
+TOTAL CONSUMO          ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
+TOTAL                  ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
+PAGO                   ${factura.monto_pagado.toLocaleString('es-CO').padStart(7, ' ')}
+CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')}
+================================
+   GRACIAS POR SU COMPRA
+      VUELVA PRONTO
+================================
     `;
 
-    // Abrir en nueva ventana para imprimir
-    const ventanaRecibo = window.open('', '_blank', 'width=400,height=600');
-    if (ventanaRecibo) {
-      ventanaRecibo.document.write(`
-        <html>
-          <head>
-            <title>Recibo - Casa Montis</title>
-            <style>
-              @media print {
-                body { margin: 0; }
-                .no-print { display: none; }
-              }
-              body {
-                font-family: 'Courier New', monospace;
-                font-size: 11px;
-                line-height: 1.3;
-                margin: 10px;
-                background-color: white;
-              }
-              .recibo {
-                width: 100%;
-                max-width: 300px;
-                margin: 0 auto;
-              }
-              .contenido {
-                white-space: pre-line;
-              }
-              .botones {
-                margin-top: 20px;
-                text-align: center;
-                gap: 10px;
-              }
-              button {
-                padding: 8px 16px;
-                margin: 5px;
-                border: none;
-                border-radius: 4px;
-                cursor: pointer;
-              }
-              .btn-imprimir {
-                background-color: #3b82f6;
-                color: white;
-              }
-              .btn-cerrar {
-                background-color: #6b7280;
-                color: white;
-              }
-            </style>
-          </head>
-          <body>
-            <div class="recibo">
-              <div class="contenido">${reciboContent}</div>
-              <div class="botones no-print">
-                <button class="btn-imprimir" onclick="window.print(); window.close();">🖨️ Imprimir</button>
-                <button class="btn-cerrar" onclick="window.close()">✕ Cerrar</button>
-              </div>
-            </div>
-            <script>
-              // Auto-abrir diálogo de impresión después de cargar
-              window.onload = function() {
-                setTimeout(function() {
-                  window.print();
-                }, 500);
-              }
-            </script>
-          </body>
-        </html>
-      `);
-      ventanaRecibo.document.close();
-    }
+    // Navegar a la página de recibo con los datos
+    const reciboData = encodeURIComponent(reciboContent);
+    window.open(`/recibo?data=${reciboData}`, '_blank');
   };
 
   const actualizarEstadoComanda = async (comandaId: string, nuevoEstado: EstadoComanda) => {
@@ -606,13 +472,23 @@ ${factura.metodo_pago.toUpperCase()}                    ${factura.comanda.total.
                     <label className="block text-sm font-medium text-secondary-700 mb-2">
                       Monto Pagado:
                     </label>
-                    <input
-                      type="number"
-                      value={montoPagado}
-                      onChange={(e) => setMontoPagado(e.target.value)}
-                      placeholder={`Mínimo: $${comandaSeleccionada.total.toLocaleString()}`}
-                      className="w-full px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
-                    />
+                    <div className="flex gap-2">
+                      <input
+                        type="number"
+                        value={montoPagado}
+                        onChange={(e) => setMontoPagado(e.target.value)}
+                        placeholder={`Mínimo: $${comandaSeleccionada.total.toLocaleString()}`}
+                        className="flex-1 px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setMontoPagado(comandaSeleccionada.total.toString())}
+                        className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors whitespace-nowrap"
+                        title="Pago exacto"
+                      >
+                        💰 Exacto
+                      </button>
+                    </div>
                     {cambio > 0 && (
                       <p className="text-sm text-green-600 mt-1">
                         Cambio: ${cambio.toLocaleString()}

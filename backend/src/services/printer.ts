@@ -14,154 +14,268 @@ const execAsync = promisify(exec);
 const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'POS-58';
 const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'POS-80';
 
-// Función para crear un archivo de texto con formato de ITEMS ADICIONALES
-const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
-  const contenido = `
 
-================================
-           CASA MONTIS
-        COMANDA DE COCINA
-================================
 
-    MESA ${comanda.mesas && comanda.mesas.length > 0 ? 
-      comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ') : 'N/A'}
-
-================================
-Fecha: ${comanda.fecha_creacion?.toLocaleString('es-CO', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})}
-Empleado: ${comanda.mesero}
-================================
-
-    PRODUCTOS ADICIONALES 
-
-${comanda.items && comanda.items.length > 0 ? comanda.items.map((item, index) => {
-  let texto = ` ${item.cantidad}x ${item.producto?.nombre || 'Producto'}`;
+// Función auxiliar para dividir texto largo en líneas de máximo 32 caracteres
+const dividirTexto = (texto: string, maxLength: number = 32): string[] => {
+  if (texto.length <= maxLength) return [texto];
   
-  // Personalización
-  if (item.personalizacion) {
-    let personalizacion;
-    try {
-      personalizacion = typeof item.personalizacion === 'string' 
-        ? JSON.parse(item.personalizacion) 
-        : item.personalizacion;
-    } catch (e) {
-      personalizacion = item.personalizacion;
+  const palabras = texto.split(' ');
+  const lineas: string[] = [];
+  let lineaActual = '';
+  
+  palabras.forEach(palabra => {
+    if ((lineaActual + ' ' + palabra).trim().length <= maxLength) {
+      lineaActual = lineaActual ? lineaActual + ' ' + palabra : palabra;
+    } else {
+      if (lineaActual) lineas.push(lineaActual);
+      lineaActual = palabra;
+    }
+  });
+  
+  if (lineaActual) lineas.push(lineaActual);
+  return lineas;
+};
+
+// Función para crear un archivo de texto con formato de ITEMS ADICIONALES para 58mm
+const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
+  const lineas: string[] = [];
+  
+  // Encabezado
+  lineas.push('================================');
+  lineas.push('        CASA MONTIS');
+  lineas.push('     COMANDA DE COCINA');
+  lineas.push('================================');
+  lineas.push('');
+  
+  // Mesa
+  const mesasTexto = comanda.mesas && comanda.mesas.length > 0 ? 
+    comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ') : 'N/A';
+  lineas.push(`MESA: ${mesasTexto}`);
+  lineas.push('');
+  
+  // Fecha y mesero
+  const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : new Date();
+  lineas.push(`${fecha.toLocaleDateString('es-CO')}`);
+  lineas.push(`${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
+  lineas.push(`Mesero: ${comanda.mesero}`);
+  lineas.push('================================');
+  lineas.push('');
+  lineas.push('  ** PRODUCTOS ADICIONALES **');
+  lineas.push('');
+  
+  // Items
+  if (comanda.items && comanda.items.length > 0) {
+    comanda.items.forEach((item, index) => {
+      if (index > 0) {
+        lineas.push('--------------------------------');
+      }
+      
+      // Nombre del producto con cantidad
+      const nombreProducto = item.producto?.nombre || 'Producto';
+      lineas.push(`${item.cantidad}x ${nombreProducto}`);
+      
+      // Personalización
+      if (item.personalizacion) {
+        let personalizacion;
+        try {
+          personalizacion = typeof item.personalizacion === 'string' 
+            ? JSON.parse(item.personalizacion) 
+            : item.personalizacion;
+        } catch (e) {
+          personalizacion = item.personalizacion;
+        }
+        
+        if (personalizacion) {
+          if (personalizacion.caldo) {
+            lineas.push(`  Caldo: ${personalizacion.caldo.nombre}`);
+          }
+          if (personalizacion.principio) {
+            const principioLineas = dividirTexto(`Principio: ${personalizacion.principio.nombre}`, 30);
+            principioLineas.forEach(l => lineas.push(`  ${l}`));
+          }
+          if (personalizacion.proteina) {
+            lineas.push(`  Proteina: ${personalizacion.proteina.nombre}`);
+          }
+          if (personalizacion.bebida) {
+            lineas.push(`  Bebida: ${personalizacion.bebida.nombre}`);
+          }
+        }
+      }
+      
+      // Observaciones
+      if (item.observaciones && item.observaciones.trim() !== '') {
+        const obsLineas = dividirTexto(item.observaciones, 28);
+        lineas.push(`  Obs:`);
+        obsLineas.forEach(l => lineas.push(`  ${l}`));
+      }
+    });
+  } else {
+    lineas.push('No hay productos');
+  }
+  
+  lineas.push('');
+  lineas.push('================================');
+  lineas.push('         *** URGENTE ***');
+  lineas.push('    SOLO PRODUCTOS NUEVOS');
+  lineas.push('================================');
+  lineas.push('');
+  lineas.push('');
+  lineas.push('');
+  
+  return lineas.join('\n');
+};
+
+
+// COMANDA INICIAL optimizada para 58mm (32 caracteres)
+const crearArchivoComanda = (comanda: Comanda): string => {
+  const lineas: string[] = [];
+  const ANCHO_LINEA = 32;
+  const separador = '================================';
+  const separadorCorto = '--------------------------------';
+  
+  // Encabezado
+  lineas.push(separador);
+  lineas.push('        CASA MONTIS');
+  lineas.push('     COMANDA DE COCINA');
+  lineas.push(separador);
+  lineas.push('');
+  
+  // Fecha
+  const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : new Date();
+  lineas.push(`Fecha: ${fecha.toLocaleDateString('es-CO')}`);
+  lineas.push(`Hora:  ${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
+  lineas.push('');
+  
+  // Mesero
+  const meseroTexto = `Mesero: ${comanda.mesero}`;
+  if (meseroTexto.length <= ANCHO_LINEA) {
+    lineas.push(meseroTexto);
+  } else {
+    lineas.push('Mesero:');
+    lineas.push(`  ${comanda.mesero}`);
+  }
+  
+  // Mesas
+  if (comanda.mesas && comanda.mesas.length > 0) {
+    const mesasTexto = comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ');
+    if (mesasTexto.length <= 24) {
+      lineas.push(`Mesa(s): ${mesasTexto}`);
+    } else {
+      lineas.push('Mesa(s):');
+      const mesasLineas = dividirTexto(mesasTexto, ANCHO_LINEA - 2);
+      mesasLineas.forEach(l => lineas.push(`  ${l}`));
     }
     
-    if (personalizacion) {
-      const detalles = [];
-      if (personalizacion.caldo) detalles.push(`Caldo: ${personalizacion.caldo.nombre}`);
-      if (personalizacion.principio) detalles.push(`Principio: ${personalizacion.principio.nombre}`);
-      if (personalizacion.proteina) detalles.push(`Proteína: ${personalizacion.proteina.nombre}`);
-      if (personalizacion.bebida) detalles.push(`Bebida: ${personalizacion.bebida.nombre}`);
-      
-      if (detalles.length > 0) {
-        texto += `
-   🔸 ${detalles.join(' | ')}`;
+    const capacidadTotal = comanda.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0);
+    lineas.push(`Capacidad: ${capacidadTotal} pers.`);
+  }
+  
+  lineas.push('');
+  lineas.push(separador);
+  lineas.push('          PRODUCTOS');
+  lineas.push(separador);
+  lineas.push('');
+  
+  // Items
+  if (comanda.items && comanda.items.length > 0) {
+    comanda.items.forEach((item, index) => {
+      if (index > 0) {
+        lineas.push(separadorCorto);
       }
-    }
+      
+      // Nombre del producto con cantidad
+      const nombreProducto = item.producto?.nombre || 'Producto';
+      const cantidadTexto = `${item.cantidad}x`;
+      const productoCompleto = `${cantidadTexto} ${nombreProducto}`;
+      
+      // Si el nombre es muy largo, dividirlo
+      if (productoCompleto.length > ANCHO_LINEA) {
+        lineas.push(`${cantidadTexto}`);
+        lineas.push(`  ${nombreProducto}`);
+      } else {
+        lineas.push(productoCompleto);
+      }
+      
+      // Personalización
+      if (item.personalizacion) {
+        let personalizacion;
+        try {
+          personalizacion = typeof item.personalizacion === 'string' 
+            ? JSON.parse(item.personalizacion) 
+            : item.personalizacion;
+        } catch (e) {
+          personalizacion = item.personalizacion;
+        }
+        
+        if (personalizacion) {
+          lineas.push('');
+          lineas.push('  PERSONALIZACION:');
+          
+          if (personalizacion.caldo) {
+            const caldoLineas = dividirTexto(`Caldo: ${personalizacion.caldo.nombre}`, ANCHO_LINEA - 4);
+            caldoLineas.forEach(l => lineas.push(`    ${l}`));
+          }
+          
+          if (personalizacion.principio) {
+            const principioLineas = dividirTexto(`Principio: ${personalizacion.principio.nombre}`, ANCHO_LINEA - 4);
+            principioLineas.forEach(l => lineas.push(`    ${l}`));
+          }
+          
+          if (personalizacion.proteina) {
+            const proteinaLineas = dividirTexto(`Proteina: ${personalizacion.proteina.nombre}`, ANCHO_LINEA - 4);
+            proteinaLineas.forEach(l => lineas.push(`    ${l}`));
+          }
+          
+          if (personalizacion.bebida) {
+            const bebidaLineas = dividirTexto(`Bebida: ${personalizacion.bebida.nombre}`, ANCHO_LINEA - 4);
+            bebidaLineas.forEach(l => lineas.push(`    ${l}`));
+          }
+          
+          if (personalizacion.acompanamiento) {
+            const acompLineas = dividirTexto(`Acomp: ${personalizacion.acompanamiento.nombre}`, ANCHO_LINEA - 4);
+            acompLineas.forEach(l => lineas.push(`    ${l}`));
+          }
+        }
+      }
+      
+      // Observaciones del item
+      if (item.observaciones && item.observaciones.trim() !== '') {
+        lineas.push('');
+        lineas.push('  OBSERVACIONES:');
+        const obsLineas = dividirTexto(item.observaciones, ANCHO_LINEA - 4);
+        obsLineas.forEach(l => lineas.push(`    ${l}`));
+      }
+    });
+  } else {
+    lineas.push('No hay items');
   }
   
-  // Observaciones
-  if (item.observaciones && item.observaciones.trim() !== '') {
-    texto += `
-   📝 ${item.observaciones}`;
+  lineas.push('');
+  lineas.push(separador);
+  // const totalTexto = `TOTAL: $${comanda.total.toLocaleString('es-CO')}`;
+  // lineas.push(totalTexto);
+  lineas.push(separador);
+  
+  // Observaciones generales
+  if (comanda.observaciones_generales && comanda.observaciones_generales.trim() !== '') {
+    lineas.push('');
+    lineas.push('OBSERVACIONES GENERALES:');
+    const obsLineas = dividirTexto(comanda.observaciones_generales, ANCHO_LINEA);
+    obsLineas.forEach(l => lineas.push(l));
+    lineas.push(separador);
   }
   
-  return texto;
-}).join('\n\n') : 'No hay productos'}
-
-================================
-            URGENTE
-      SOLO PRODUCTOS NUEVOS
-================================
-
-
-`;
+  lineas.push('');
+  lineas.push('     ENVIADO A COCINA');
+  lineas.push(separador);
+  lineas.push('');
+  lineas.push('');
+  lineas.push('');
   
-  return contenido;
+  return lineas.join('\n');
 };
 
-// Función para crear un archivo de texto con formato de comanda
-const crearArchivoComanda = (comanda: Comanda): string => {
-  const contenido = `
-=====================================
-           CASA MONTIS
-         COMANDA DE COCINA
-=====================================
-ID: ${comanda.id.substring(0, 8)}
-Fecha: ${comanda.fecha_creacion?.toLocaleString('es-CO', {
-  year: 'numeric',
-  month: '2-digit',
-  day: '2-digit',
-  hour: '2-digit',
-  minute: '2-digit'
-})}
-Mesero: ${comanda.mesero}
-${comanda.mesas && comanda.mesas.length > 0 ? `Mesa(s): ${comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}` : ''}
-${comanda.mesas && comanda.mesas.length > 0 ? `Capacidad: ${comanda.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0)} personas` : ''}
-=====================================
-               PRODUCTOS
-=====================================
-
-${comanda.items && comanda.items.length > 0 ? comanda.items.map((item, index) => {
-  let texto = `${item.cantidad}x ${item.producto?.nombre || 'Producto'}
-   $${item.precio_unitario.toLocaleString('es-CO')} c/u
-   Subtotal: $${item.subtotal.toLocaleString('es-CO')}`;
-  
-  // Personalización
-  if (item.personalizacion) {
-    let personalizacion;
-    try {
-      personalizacion = typeof item.personalizacion === 'string' 
-        ? JSON.parse(item.personalizacion) 
-        : item.personalizacion;
-    } catch (e) {
-      personalizacion = item.personalizacion;
-    }
-      
-    if (personalizacion) {
-      texto += `\n   PERSONALIZACION:`;
-      if (personalizacion.caldo) {
-        texto += `\n     Caldo: ${personalizacion.caldo.nombre}`;
-      }
-      if (personalizacion.principio) {
-        texto += `\n     Principio: ${personalizacion.principio.nombre}`;
-      }
-      if (personalizacion.proteina) {
-        texto += `\n     Proteina: ${personalizacion.proteina.nombre}`;
-      }
-      if (personalizacion.bebida) {
-        texto += `\n     Bebida: ${personalizacion.bebida.nombre}`;
-      }
-    }
-  }
-  
-  // Observaciones del item
-  if (item.observaciones) {
-    texto += `\n   OBS: ${item.observaciones}`;
-  }
-  
-  return texto;
-}).join('\n\n') : 'No hay items'}
-
-=====================================
-TOTAL: $${comanda.total.toLocaleString('es-CO')}
-=====================================
-${comanda.observaciones_generales ? `\nObservaciones generales:\n${comanda.observaciones_generales}\n` : ''}
-=====================================
-         ENVIADO A COCINA
-     ${new Date().toLocaleTimeString('es-CO')}
-=====================================
-  `.trim();
-  
-  return contenido;
-};
 
 // Función para obtener datos completos de una comanda
 const obtenerComandaCompleta = (comandaId: string): Promise<any> => {
@@ -215,10 +329,19 @@ const obtenerComandaCompleta = (comandaId: string): Promise<any> => {
             return;
           }
           
+          // Formatear items para que tengan la estructura esperada
+          const itemsFormateados = itemsRows.map((item: any) => ({
+            ...item,
+            producto: {
+              nombre: item.producto_nombre,
+              categoria: item.producto_categoria
+            }
+          }));
+          
           const comanda = {
             ...comandaRow,
             mesas: mesasRows,
-            items: itemsRows
+            items: itemsFormateados
           };
           
           resolve(comanda);
@@ -271,6 +394,8 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
     // Intentar imprimir con diferentes métodos
     const metodosImpresion = [
       PRINTER_COCINA_NAME, // Usar variable de entorno principal
+      'POS-58', // Intentar con nombre exacto
+      'pos58',  // Intentar con minúsculas
     ];
     
     let impresionExitosa = false;
@@ -279,31 +404,62 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
       try {
         console.log(`🖨️  Intentando imprimir con: ${nombreImpresora}`);
         
-        // Crear archivo temporal
+        // Crear archivo temporal con codificación adecuada
         const tempDir = path.join(process.cwd(), 'temp');
         if (!fs.existsSync(tempDir)) {
           fs.mkdirSync(tempDir, { recursive: true });
         }
         
         const tempFile = path.join(tempDir, `comanda_${Date.now()}.txt`);
-        fs.writeFileSync(tempFile, contenidoComanda, 'utf8');
         
-        // Intentar imprimir usando PowerShell
-        const comando = `powershell -Command "Get-Content '${tempFile}' | Out-Printer -Name '${nombreImpresora}'"`;
+        // Escribir con BOM UTF-8 para mejor compatibilidad
+        const BOM = '\uFEFF';
+        fs.writeFileSync(tempFile, BOM + contenidoComanda, 'utf8');
         
-        await execAsync(comando, { timeout: 10000 });
+        console.log(`📄 Archivo temporal creado: ${tempFile}`);
         
-        console.log(`✅ Comanda impresa exitosamente con ${nombreImpresora}`);
-        impresionExitosa = true;
+        // Métodos múltiples de impresión
+        const comandos = [
+          // Método 1: PowerShell con Out-Printer
+          `powershell -Command "$content = Get-Content -Path '${tempFile}' -Raw -Encoding UTF8; $content | Out-Printer -Name '${nombreImpresora}'"`,
+          // Método 2: type + copy (Windows clásico)
+          `cmd /c "type \\"${tempFile}\\" > \\"\\\\\\\\%COMPUTERNAME%\\\\${nombreImpresora}\\"" 2>nul`,
+          // Método 3: print (Windows)
+          `cmd /c "print /D:\\"${nombreImpresora}\\" \\"${tempFile}\\"" 2>nul`
+        ];
         
-        // Limpiar archivo temporal
-        try {
-          fs.unlinkSync(tempFile);
-        } catch (e) {
-          console.log('⚠️  No se pudo eliminar archivo temporal');
+        let comandoExitoso = false;
+        
+        for (const comando of comandos) {
+          try {
+            console.log(`🔄 Probando método de impresión...`);
+            await execAsync(comando, { timeout: 15000 });
+            comandoExitoso = true;
+            console.log(`✅ Impresión exitosa con: ${nombreImpresora}`);
+            break;
+          } catch (cmdError) {
+            console.log(`⚠️  Método falló, probando siguiente...`);
+            continue;
+          }
         }
         
-        break;
+        if (comandoExitoso) {
+          impresionExitosa = true;
+          
+          // Limpiar archivo temporal después de un pequeño delay
+          setTimeout(() => {
+            try {
+              if (fs.existsSync(tempFile)) {
+                fs.unlinkSync(tempFile);
+              }
+            } catch (e) {
+              console.log('⚠️  No se pudo eliminar archivo temporal');
+            }
+          }, 2000);
+          
+          break;
+        }
+        
       } catch (error) {
         console.log(`❌ Error con ${nombreImpresora}:`, error instanceof Error ? error.message : 'Error desconocido');
       }
