@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Package, Utensils, Coffee, Users, Home, Tags } from 'lucide-react';
+import { Settings, Package, Tags, Utensils, Users, Home, Shield } from 'lucide-react';
 import GestionProductos from './admin/GestionProductos';
 import GestionCategorias from './admin/GestionCategorias';
 import GestionPersonalizaciones from './admin/GestionPersonalizaciones';
 import GestionMesas from './admin/GestionMesas';
 import GestionSalones from './admin/GestionSalones';
+import ConfiguracionSistema from './admin/ConfiguracionSistema';
 
-type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones';
+type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema';
 
 export default function Administracion() {
   const [seccionActiva, setSeccionActiva] = useState<SeccionAdmin>('productos');
@@ -43,6 +44,12 @@ export default function Administracion() {
       nombre: 'Gestión de Salones',
       icon: Home,
       descripcion: 'Crear, editar y eliminar salones del restaurante'
+    },
+    {
+      id: 'sistema' as SeccionAdmin,
+      nombre: 'Configuración del Sistema',
+      icon: Shield,
+      descripcion: 'Herramientas avanzadas y configuración del sistema'
     }
   ];
 
@@ -58,6 +65,8 @@ export default function Administracion() {
         return <GestionMesas />;
       case 'salones':
         return <GestionSalones />;
+      case 'sistema':
+        return <ConfiguracionSistema />;
       default:
         return <GestionProductos />;
     }
@@ -85,6 +94,7 @@ export default function Administracion() {
           <nav className="flex space-x-8">
             {secciones.map((seccion) => {
               const Icon = seccion.icon;
+              const isSystem = seccion.id === 'sistema';
               return (
                 <button
                   key={seccion.id}
@@ -92,8 +102,12 @@ export default function Administracion() {
                   className={`
                     flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors
                     ${seccionActiva === seccion.id
-                      ? 'border-primary-500 text-primary-600'
-                      : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                      ? isSystem 
+                        ? 'border-red-500 text-red-600'
+                        : 'border-primary-500 text-primary-600'
+                      : isSystem
+                        ? 'border-transparent text-red-400 hover:text-red-600 hover:border-red-300'
+                        : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
                     }
                   `}
                 >
