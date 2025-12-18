@@ -5,57 +5,102 @@ import { OpcionCaldo, OpcionPrincipio, OpcionProteina, OpcionBebida } from '@/ty
 import { apiService } from '@/services/api';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
 
-type TipoPersonalizacion = 'caldos' | 'principios' | 'proteinas' | 'bebidas';
+type TipoPersonalizacion = 'categorias' | 'caldos' | 'principios' | 'proteinas' | 'bebidas';
 
 interface PersonalizacionForm {
   nombre: string;
   precio_adicional: number;
 }
 
+interface CategoriaForm {
+  nombre: string;
+  descripcion: string;
+  orden: number;
+}
+
 export default function GestionPersonalizaciones() {
-  const [tipoActivo, setTipoActivo] = useState<TipoPersonalizacion>('caldos');
+  const [tipoActivo, setTipoActivo] = useState<TipoPersonalizacion>('categorias');
   const [items, setItems] = useState<any[]>([]);
+  const [categorias, setCategorias] = useState<any[]>([]);
+  const [tipos, setTipos] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editandoId, setEditandoId] = useState<string | null>(null);
+  const [editandoId, setEditandoId] = useState<string | number | null>(null);
   const [creandoNuevo, setCreandoNuevo] = useState(false);
   const [formulario, setFormulario] = useState<PersonalizacionForm>({
     nombre: '',
     precio_adicional: 0
   });
+  const [formularioCategoria, setFormularioCategoria] = useState<CategoriaForm>({
+    nombre: '',
+    descripcion: '',
+    orden: 0
+  });
 
-  const tipos = [
-    { id: 'caldos' as TipoPersonalizacion, label: 'Caldos/Sopas', descripcion: 'Para almuerzos y desayunos' },
-    { id: 'principios' as TipoPersonalizacion, label: 'Principios', descripcion: 'Solo para almuerzos' },
-    { id: 'proteinas' as TipoPersonalizacion, label: 'Proteínas', descripcion: 'Para almuerzos y desayunos' },
-    { id: 'bebidas' as TipoPersonalizacion, label: 'Bebidas', descripcion: 'Solo para desayunos' }
-  ];
+  useEffect(() => {
+    cargarCategorias();
+  }, []);
 
   useEffect(() => {
     cargarItems();
   }, [tipoActivo]);
+
+  const cargarCategorias = async () => {
+    try {
+      const response = await apiService.getCategoriasPersonalizacion();
+      setCategorias(response || []);
+      
+      // Construir tabs dinámicamente
+      const tiposDinamicos = [
+        { id: 'categorias' as TipoPersonalizacion, label: 'Categorías', descripcion: 'Gestionar tipos de personalización' }
+      ];
+      
+      // Agregar tabs para cada categoría activa
+      response.forEach((cat: any) => {
+        if (cat.activo) {
+          tiposDinamicos.push({
+            id: cat.nombre.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '-') as TipoPersonalizacion,
+            label: cat.nombre,
+            descripcion: cat.descripcion || '',
+            categoria_id: cat.id
+          });
+        }
+      });
+      
+      setTipos(tiposDinamicos);
+    } catch (error) {
+      console.error('Error al cargar categorías:', error);
+    }
+  };
 
   const cargarItems = async () => {
     try {
       setLoading(true);
       let response;
       
-      switch (tipoActivo) {
-        case 'caldos':
+      if (tipoActivo === 'categorias') {
+        response = await apiService.getCategoriasPersonalizacion();
+        setCategorias(response || []);
+        setItems([]);
+      } else {
+        // Cargar items según el tipo activo
+        // Mapear nombres de categorías a las rutas API correspondientes
+        if (tipoActivo.includes('caldo') || tipoActivo === 'caldos-sopas') {
           response = await apiService.getCaldos();
-          break;
-        case 'principios':
+        } else if (tipoActivo.includes('principio')) {
           response = await apiService.getPrincipios();
-          break;
-        case 'proteinas':
+        } else if (tipoActivo.includes('prote')) {
           response = await apiService.getProteinas();
-          break;
-        case 'bebidas':
+        } else if (tipoActivo.includes('bebida')) {
           response = await apiService.getBebidas();
-          break;
+        } else {
+          // Para categorías nuevas, por defecto cargar array vacío
+          response = [];
+        }
+        
+        setItems(response || []);
       }
       
-      setItems(response || []);
       setError(null);
     } catch (err) {
       setError(`Error al cargar ${tipoActivo}`);
@@ -174,6 +219,79 @@ export default function GestionPersonalizaciones() {
     }
   };
 
+  // Funciones para manejar categorías
+  const iniciarCreacionCategoria = () => {
+    setCreandoNuevo(true);
+    setEditandoId(null);
+    setFormularioCategoria({
+      nombre: '',
+      descripcion: '',
+      orden: categorias.length
+    });
+  };
+
+  const iniciarEdicionCategoria = (categoria: any) => {
+    setEditandoId(categoria.id);
+    setCreandoNuevo(false);
+    setFormularioCategoria({
+      nombre: categoria.nombre,
+      descripcion: categoria.descripcion || '',
+      orden: categoria.orden
+    });
+  };
+
+  const cancelarEdicionCategoria = () => {
+    setEditandoId(null);
+    setCreandoNuevo(false);
+    setFormularioCategoria({
+      nombre: '',
+      descripcion: '',
+      orden: 0
+    });
+  };
+
+  const guardarCategoria = async () => {
+    if (!formularioCategoria.nombre.trim()) {
+      setError('El nombre de la categoría es obligatorio');
+      return;
+    }
+
+    try {
+      setError(null);
+      
+      if (creandoNuevo) {
+        await apiService.createCategoriaPersonalizacion(formularioCategoria);
+      } else if (editandoId) {
+        await apiService.updateCategoriaPersonalizacion(Number(editandoId), {
+          ...formularioCategoria,
+          activo: true
+        });
+      }
+
+      await cargarCategorias();
+      await cargarItems();
+      cancelarEdicionCategoria();
+    } catch (err) {
+      setError('Error al guardar la categoría');
+      console.error('Error:', err);
+    }
+  };
+
+  const eliminarCategoria = async (id: number) => {
+    if (!confirm('¿Está seguro de que desea eliminar esta categoría? Las personalizaciones asociadas no se eliminarán, pero la categoría ya no estará disponible.')) {
+      return;
+    }
+
+    try {
+      await apiService.deleteCategoriaPersonalizacion(id);
+      await cargarCategorias();
+      await cargarItems();
+    } catch (err) {
+      setError('Error al eliminar la categoría');
+      console.error('Error:', err);
+    }
+  };
+
   const tipoActual = tipos.find(t => t.id === tipoActivo);
 
   return (
@@ -219,20 +337,88 @@ export default function GestionPersonalizaciones() {
       {/* Botón crear */}
       <div className="flex justify-between items-center">
         <h3 className="text-lg font-semibold text-secondary-800">
-          {tipoActual?.label} ({items.length})
+          {tipoActual?.label} ({tipoActivo === 'categorias' ? categorias.length : items.length})
         </h3>
         <button
-          onClick={iniciarCreacion}
+          onClick={tipoActivo === 'categorias' ? iniciarCreacionCategoria : iniciarCreacion}
           className="btn-primary flex items-center"
           disabled={creandoNuevo || editandoId !== null}
         >
           <Plus size={16} className="mr-2" />
-          Agregar {tipoActual?.label.slice(0, -1)}
+          Agregar {tipoActivo === 'categorias' ? 'Categoría' : tipoActual?.label.slice(0, -1)}
         </button>
       </div>
 
       {/* Formulario de creación/edición */}
-      {(creandoNuevo || editandoId !== null) && (
+      {(creandoNuevo || editandoId !== null) && tipoActivo === 'categorias' && (
+        <div className="card">
+          <h4 className="text-lg font-semibold text-secondary-800 mb-4">
+            {creandoNuevo ? 'Agregar Categoría' : 'Editar Categoría'}
+          </h4>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Nombre *
+              </label>
+              <input
+                type="text"
+                value={formularioCategoria.nombre}
+                onChange={(e) => setFormularioCategoria(prev => ({ ...prev, nombre: e.target.value }))}
+                className="input-field"
+                placeholder="Ej: Carnes, Guarniciones, Salsas"
+              />
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Orden
+              </label>
+              <input
+                type="number"
+                value={formularioCategoria.orden}
+                onChange={(e) => setFormularioCategoria(prev => ({ ...prev, orden: Number(e.target.value) }))}
+                className="input-field"
+                placeholder="0"
+                min="0"
+              />
+            </div>
+
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                Descripción
+              </label>
+              <textarea
+                value={formularioCategoria.descripcion}
+                onChange={(e) => setFormularioCategoria(prev => ({ ...prev, descripcion: e.target.value }))}
+                className="input-field"
+                rows={2}
+                placeholder="Descripción opcional de la categoría"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end space-x-3 mt-6">
+            <button
+              onClick={cancelarEdicionCategoria}
+              className="btn-secondary flex items-center"
+            >
+              <X size={16} className="mr-2" />
+              Cancelar
+            </button>
+            <button
+              onClick={guardarCategoria}
+              className="btn-primary flex items-center"
+            >
+              <Save size={16} className="mr-2" />
+              Guardar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Formulario de creación/edición para personalizaciones */}
+      {(creandoNuevo || editandoId !== null) && tipoActivo !== 'categorias' && (
         <div className="card">
           <h4 className="text-lg font-semibold text-secondary-800 mb-4">
             {creandoNuevo ? `Agregar ${tipoActual?.label.slice(0, -1)}` : `Editar ${tipoActual?.label.slice(0, -1)}`}
@@ -294,73 +480,150 @@ export default function GestionPersonalizaciones() {
         </div>
       )}
 
-      {/* Lista de items */}
-      <div className="card">
-        {loading ? (
-          <div className="flex justify-center items-center py-8">
-            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
-          </div>
-        ) : items.length === 0 ? (
-          <p className="text-secondary-600 text-center py-8">
-            No hay {tipoActual?.label.toLowerCase()} registrados
-          </p>
-        ) : (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-secondary-200">
-              <thead className="bg-secondary-50">
-                <tr>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                    Nombre
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                    Precio Adicional
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
-                    Acciones
-                  </th>
-                </tr>
-              </thead>
-              <tbody className="bg-white divide-y divide-secondary-200">
-                {items.map((item) => (
-                  <tr key={item.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm font-medium text-secondary-900">
-                        {item.nombre}
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div className="text-sm text-secondary-900">
-                        {item.precio_adicional > 0 
-                          ? `+$${item.precio_adicional.toLocaleString()}`
-                          : 'Sin costo adicional'
-                        }
-                      </div>
-                    </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <div className="flex space-x-2">
-                        <button
-                          onClick={() => iniciarEdicion(item)}
-                          disabled={creandoNuevo || editandoId !== null}
-                          className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
-                        >
-                          <Edit2 size={16} />
-                        </button>
-                        <button
-                          onClick={() => eliminarItem(item.id)}
-                          disabled={creandoNuevo || editandoId !== null}
-                          className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                        >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </td>
+      {/* Lista de categorías */}
+      {tipoActivo === 'categorias' && (
+        <div className="card">
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : categorias.length === 0 ? (
+            <p className="text-secondary-600 text-center py-8">
+              No hay categorías de personalización registradas
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-secondary-200">
+                <thead className="bg-secondary-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Nombre
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Descripción
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Orden
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Acciones
+                    </th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </div>
+                </thead>
+                <tbody className="bg-white divide-y divide-secondary-200">
+                  {categorias.map((categoria) => (
+                    <tr key={categoria.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-secondary-900">
+                          {categoria.nombre}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="text-sm text-secondary-600">
+                          {categoria.descripcion || '-'}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-secondary-900">
+                          {categoria.orden}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => iniciarEdicionCategoria(categoria)}
+                            disabled={creandoNuevo || editandoId !== null}
+                            className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => eliminarCategoria(categoria.id)}
+                            disabled={creandoNuevo || editandoId !== null}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Lista de items de personalización */}
+      {tipoActivo !== 'categorias' && (
+        <div className="card">
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
+            </div>
+          ) : items.length === 0 ? (
+            <p className="text-secondary-600 text-center py-8">
+              No hay {tipoActual?.label.toLowerCase()} registrados
+            </p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="min-w-full divide-y divide-secondary-200">
+                <thead className="bg-secondary-50">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Nombre
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Precio Adicional
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Acciones
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-secondary-200">
+                  {items.map((item) => (
+                    <tr key={item.id}>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm font-medium text-secondary-900">
+                          {item.nombre}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <div className="text-sm text-secondary-900">
+                          {item.precio_adicional > 0 
+                            ? `+$${item.precio_adicional.toLocaleString()}`
+                            : 'Sin costo adicional'
+                          }
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                        <div className="flex space-x-2">
+                          <button
+                            onClick={() => iniciarEdicion(item)}
+                            disabled={creandoNuevo || editandoId !== null}
+                            className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                          >
+                            <Edit2 size={16} />
+                          </button>
+                          <button
+                            onClick={() => eliminarItem(item.id)}
+                            disabled={creandoNuevo || editandoId !== null}
+                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -179,6 +179,26 @@ export const apiService = {
     return response.data;
   },
 
+  // Categorías de Personalización
+  async getCategoriasPersonalizacion(): Promise<any[]> {
+    const response = await api.get('/personalizaciones/categorias');
+    return response.data;
+  },
+
+  async createCategoriaPersonalizacion(categoria: any): Promise<any> {
+    const response = await api.post('/personalizaciones/categorias', categoria);
+    return response.data;
+  },
+
+  async updateCategoriaPersonalizacion(id: number, categoria: any): Promise<any> {
+    const response = await api.put(`/personalizaciones/categorias/${id}`, categoria);
+    return response.data;
+  },
+
+  async deleteCategoriaPersonalizacion(id: number): Promise<void> {
+    await api.delete(`/personalizaciones/categorias/${id}`);
+  },
+
   // Personalizaciones
   async getCaldos(): Promise<any[]> {
     const response = await api.get('/personalizaciones/caldos');

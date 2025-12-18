@@ -11,6 +11,8 @@ interface ProductoForm {
   precio: number;
   categoria: string;
   disponible: boolean;
+  tiene_personalizacion: boolean;
+  personalizaciones_habilitadas: string[];
 }
 
 export default function GestionProductos() {
@@ -18,6 +20,7 @@ export default function GestionProductos() {
   const [productosFiltrados, setProductosFiltrados] = useState<Producto[]>([]);
   const [filtroCategoria, setFiltroCategoria] = useState<string | 'todas'>('todas');
   const [categoriasDisponibles, setCategoriasDisponibles] = useState<string[]>([]);
+  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -27,12 +30,15 @@ export default function GestionProductos() {
     descripcion: '',
     precio: 0,
     categoria: 'otros',
-    disponible: true
+    disponible: true,
+    tiene_personalizacion: false,
+    personalizaciones_habilitadas: []
   });
 
   useEffect(() => {
     cargarProductos();
     cargarCategorias();
+    cargarCategoriasPersonalizacion();
   }, []);
 
   useEffect(() => {
@@ -50,6 +56,15 @@ export default function GestionProductos() {
       setCategoriasDisponibles(response);
     } catch (err) {
       console.error('Error al cargar categorías:', err);
+    }
+  };
+
+  const cargarCategoriasPersonalizacion = async () => {
+    try {
+      const response = await apiService.getCategoriasPersonalizacion();
+      setCategoriasPersonalizacion(response);
+    } catch (err) {
+      console.error('Error al cargar categorías de personalización:', err);
     }
   };
 
@@ -75,7 +90,9 @@ export default function GestionProductos() {
       descripcion: '',
       precio: 0,
       categoria: 'otros',
-      disponible: true
+      disponible: true,
+      tiene_personalizacion: false,
+      personalizaciones_habilitadas: []
     });
   };
 
@@ -87,7 +104,9 @@ export default function GestionProductos() {
       descripcion: producto.descripcion || '',
       precio: producto.precio,
       categoria: producto.categoria,
-      disponible: producto.disponible
+      disponible: producto.disponible,
+      tiene_personalizacion: producto.tiene_personalizacion || false,
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas || []
     });
   };
 
@@ -99,8 +118,33 @@ export default function GestionProductos() {
       descripcion: '',
       precio: 0,
       categoria: 'otros',
-      disponible: true
+      disponible: true,
+      tiene_personalizacion: false,
+      personalizaciones_habilitadas: []
     });
+  };
+
+  const togglePersonalizacion = (nombreCategoria: string) => {
+    setFormulario(prev => {
+      const yaHabilitada = prev.personalizaciones_habilitadas.includes(nombreCategoria);
+      const nuevasPersonalizaciones = yaHabilitada
+        ? prev.personalizaciones_habilitadas.filter(c => c !== nombreCategoria)
+        : [...prev.personalizaciones_habilitadas, nombreCategoria];
+      
+      return {
+        ...prev,
+        personalizaciones_habilitadas: nuevasPersonalizaciones,
+        tiene_personalizacion: nuevasPersonalizaciones.length > 0
+      };
+    });
+  };
+
+  const handleTogglePersonalizacionGeneral = (habilitada: boolean) => {
+    setFormulario(prev => ({
+      ...prev,
+      tiene_personalizacion: habilitada,
+      personalizaciones_habilitadas: habilitada ? prev.personalizaciones_habilitadas : []
+    }));
   };
 
   const guardarProducto = async () => {
@@ -271,6 +315,57 @@ export default function GestionProductos() {
                 placeholder="Descripción opcional del producto"
               />
             </div>
+          </div>
+
+          {/* Sección de Personalizaciones */}
+          <div className="mt-6 border-t pt-6">
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="tiene_personalizacion"
+                checked={formulario.tiene_personalizacion}
+                onChange={(e) => handleTogglePersonalizacionGeneral(e.target.checked)}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded cursor-pointer"
+              />
+              <label htmlFor="tiene_personalizacion" className="ml-2 block text-sm font-medium text-secondary-700 cursor-pointer">
+                Habilitar Personalizaciones para este producto
+              </label>
+            </div>
+
+            {formulario.tiene_personalizacion && (
+              <div className="ml-6 space-y-2">
+                <p className="text-sm text-secondary-600 mb-3">
+                  Selecciona qué tipos de personalización estarán disponibles para este producto:
+                </p>
+                {categoriasPersonalizacion.map((categoria) => (
+                  <div key={categoria.id} className="flex items-start">
+                    <input
+                      type="checkbox"
+                      id={`cat-${categoria.id}`}
+                      checked={formulario.personalizaciones_habilitadas.includes(categoria.nombre)}
+                      onChange={() => togglePersonalizacion(categoria.nombre)}
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded cursor-pointer mt-0.5"
+                    />
+                    <label htmlFor={`cat-${categoria.id}`} className="ml-2 cursor-pointer">
+                      <span className="text-sm font-medium text-secondary-700">
+                        {categoria.nombre}
+                      </span>
+                      {categoria.descripcion && (
+                        <span className="text-xs text-secondary-500 block">
+                          {categoria.descripcion}
+                        </span>
+                      )}
+                    </label>
+                  </div>
+                ))}
+                {categoriasPersonalizacion.length === 0 && (
+                  <p className="text-sm text-secondary-500 italic">
+                    No hay categorías de personalización disponibles. 
+                    Puedes crearlas en "Gestión de Personalizaciones".
+                  </p>
+                )}
+              </div>
+            )}
           </div>
 
           <div className="flex justify-end space-x-3 mt-6">

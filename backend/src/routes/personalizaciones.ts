@@ -4,6 +4,124 @@ import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
 
+// ========== CATEGORÍAS DE PERSONALIZACIÓN ==========
+
+// Obtener todas las categorías de personalización
+router.get('/categorias', (req: Request, res: Response) => {
+  const query = 'SELECT * FROM categorias_personalizacion WHERE activo = 1 ORDER BY orden, nombre';
+  
+  db.all(query, [], (err: any, rows: any[]) => {
+    if (err) {
+      console.error('Error al obtener categorías de personalización:', err);
+      return res.status(500).json({ error: 'Error al obtener las categorías' });
+    }
+    
+    const categorias = rows.map(cat => ({
+      ...cat,
+      activo: Boolean(cat.activo)
+    }));
+    
+    res.json(categorias);
+  });
+});
+
+// Crear nueva categoría de personalización
+router.post('/categorias', (req: Request, res: Response) => {
+  const { nombre, descripcion = '', orden = 0 } = req.body;
+  
+  if (!nombre) {
+    return res.status(400).json({ error: 'El nombre es requerido' });
+  }
+  
+  const query = 'INSERT INTO categorias_personalizacion (nombre, descripcion, orden, activo) VALUES (?, ?, ?, 1)';
+  
+  db.run(query, [nombre, descripcion, orden], function(err: any) {
+    if (err) {
+      console.error('Error al crear categoría:', err);
+      if (err.code === 'SQLITE_CONSTRAINT') {
+        return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
+      }
+      return res.status(500).json({ error: 'Error al crear la categoría' });
+    }
+    
+    db.get('SELECT * FROM categorias_personalizacion WHERE id = ?', [this.lastID], (err: any, row: any) => {
+      if (err) {
+        console.error('Error al obtener categoría creada:', err);
+        return res.status(500).json({ error: 'Error al obtener la categoría creada' });
+      }
+      
+      const categoria = {
+        ...row,
+        activo: Boolean(row.activo)
+      };
+      
+      res.status(201).json(categoria);
+    });
+  });
+});
+
+// Actualizar categoría de personalización
+router.put('/categorias/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { nombre, descripcion, orden, activo } = req.body;
+  
+  if (!nombre) {
+    return res.status(400).json({ error: 'El nombre es requerido' });
+  }
+  
+  const query = `
+    UPDATE categorias_personalizacion 
+    SET nombre = ?, descripcion = ?, orden = ?, activo = ?
+    WHERE id = ?
+  `;
+  
+  db.run(query, [nombre, descripcion || '', orden || 0, activo ? 1 : 0, id], function(err: any) {
+    if (err) {
+      console.error('Error al actualizar categoría:', err);
+      return res.status(500).json({ error: 'Error al actualizar la categoría' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Categoría no encontrada' });
+    }
+    
+    db.get('SELECT * FROM categorias_personalizacion WHERE id = ?', [id], (err: any, row: any) => {
+      if (err) {
+        console.error('Error al obtener categoría actualizada:', err);
+        return res.status(500).json({ error: 'Error al obtener la categoría actualizada' });
+      }
+      
+      const categoria = {
+        ...row,
+        activo: Boolean(row.activo)
+      };
+      
+      res.json(categoria);
+    });
+  });
+});
+
+// Eliminar categoría de personalización
+router.delete('/categorias/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  
+  // Solo desactivar, no eliminar físicamente
+  const query = 'UPDATE categorias_personalizacion SET activo = 0 WHERE id = ?';
+  
+  db.run(query, [id], function(err: any) {
+    if (err) {
+      console.error('Error al eliminar categoría:', err);
+      return res.status(500).json({ error: 'Error al eliminar la categoría' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Categoría no encontrada' });
+    }
+    
+    res.json({ mensaje: 'Categoría desactivada exitosamente' });
+  });
+});
+
 // ========== CALDOS ==========
 
 // Obtener todos los caldos

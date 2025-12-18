@@ -23,7 +23,7 @@ router.get('/categorias', (req: Request, res: Response) => {
 router.get('/all', (req: Request, res: Response) => {
   const query = 'SELECT * FROM productos ORDER BY categoria, nombre';
   
-  db.all(query, [], (err: any, rows: Producto[]) => {
+  db.all(query, [], (err: any, rows: any[]) => {
     if (err) {
       console.error('Error al obtener todos los productos:', err);
       return res.status(500).json({ error: 'Error al obtener los productos' });
@@ -31,7 +31,9 @@ router.get('/all', (req: Request, res: Response) => {
     
     const productos = rows.map(producto => ({
       ...producto,
-      disponible: Boolean(producto.disponible)
+      disponible: Boolean(producto.disponible),
+      tiene_personalizacion: Boolean(producto.tiene_personalizacion),
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas) : []
     }));
     
     res.json(productos);
@@ -82,7 +84,7 @@ router.get('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
   const query = 'SELECT * FROM productos WHERE id = ?';
   
-  db.get(query, [id], (err: any, row: Producto) => {
+  db.get(query, [id], (err: any, row: any) => {
     if (err) {
       console.error('Error al obtener producto:', err);
       return res.status(500).json({ error: 'Error al obtener el producto' });
@@ -94,7 +96,9 @@ router.get('/:id', (req: Request, res: Response) => {
     
     const producto = {
       ...row,
-      disponible: Boolean(row.disponible)
+      disponible: Boolean(row.disponible),
+      tiene_personalizacion: Boolean(row.tiene_personalizacion),
+      personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : []
     };
     
     res.json(producto);
@@ -103,7 +107,15 @@ router.get('/:id', (req: Request, res: Response) => {
 
 // Crear nuevo producto
 router.post('/', (req: Request, res: Response) => {
-  const { nombre, descripcion, precio, categoria, disponible = true } = req.body;
+  const { 
+    nombre, 
+    descripcion, 
+    precio, 
+    categoria, 
+    disponible = true,
+    tiene_personalizacion = false,
+    personalizaciones_habilitadas = []
+  } = req.body;
   
   if (!nombre || !precio || !categoria) {
     return res.status(400).json({ 
@@ -111,19 +123,29 @@ router.post('/', (req: Request, res: Response) => {
     });
   }
   
+  const personalizacionesJson = tiene_personalizacion ? JSON.stringify(personalizaciones_habilitadas) : null;
+  
   const query = `
-    INSERT INTO productos (nombre, descripcion, precio, categoria, disponible) 
-    VALUES (?, ?, ?, ?, ?)
+    INSERT INTO productos (nombre, descripcion, precio, categoria, disponible, tiene_personalizacion, personalizaciones_habilitadas) 
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
   
-  db.run(query, [nombre, descripcion, precio, categoria, disponible ? 1 : 0], function(err: any) {
+  db.run(query, [
+    nombre, 
+    descripcion, 
+    precio, 
+    categoria, 
+    disponible ? 1 : 0,
+    tiene_personalizacion ? 1 : 0,
+    personalizacionesJson
+  ], function(err: any) {
     if (err) {
       console.error('Error al crear producto:', err);
       return res.status(500).json({ error: 'Error al crear el producto' });
     }
     
     // Obtener el producto creado
-    db.get('SELECT * FROM productos WHERE id = ?', [this.lastID], (err: any, row: Producto) => {
+    db.get('SELECT * FROM productos WHERE id = ?', [this.lastID], (err: any, row: any) => {
       if (err) {
         console.error('Error al obtener producto creado:', err);
         return res.status(500).json({ error: 'Error al obtener el producto creado' });
@@ -131,7 +153,9 @@ router.post('/', (req: Request, res: Response) => {
       
       const producto = {
         ...row,
-        disponible: Boolean(row.disponible)
+        disponible: Boolean(row.disponible),
+        tiene_personalizacion: Boolean(row.tiene_personalizacion),
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : []
       };
       
       res.status(201).json(producto);
@@ -142,7 +166,15 @@ router.post('/', (req: Request, res: Response) => {
 // Actualizar producto
 router.put('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
-  const { nombre, descripcion, precio, categoria, disponible } = req.body;
+  const { 
+    nombre, 
+    descripcion, 
+    precio, 
+    categoria, 
+    disponible,
+    tiene_personalizacion = false,
+    personalizaciones_habilitadas = []
+  } = req.body;
   
   if (!nombre || !precio || !categoria) {
     return res.status(400).json({ 
@@ -150,13 +182,25 @@ router.put('/:id', (req: Request, res: Response) => {
     });
   }
   
+  const personalizacionesJson = tiene_personalizacion ? JSON.stringify(personalizaciones_habilitadas) : null;
+  
   const query = `
     UPDATE productos 
-    SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, disponible = ?, updated_at = CURRENT_TIMESTAMP
+    SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, disponible = ?, 
+        tiene_personalizacion = ?, personalizaciones_habilitadas = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
   
-  db.run(query, [nombre, descripcion, precio, categoria, disponible ? 1 : 0, id], function(err: any) {
+  db.run(query, [
+    nombre, 
+    descripcion, 
+    precio, 
+    categoria, 
+    disponible ? 1 : 0,
+    tiene_personalizacion ? 1 : 0,
+    personalizacionesJson,
+    id
+  ], function(err: any) {
     if (err) {
       console.error('Error al actualizar producto:', err);
       return res.status(500).json({ error: 'Error al actualizar el producto' });
@@ -167,7 +211,7 @@ router.put('/:id', (req: Request, res: Response) => {
     }
     
     // Obtener el producto actualizado
-    db.get('SELECT * FROM productos WHERE id = ?', [id], (err: any, row: Producto) => {
+    db.get('SELECT * FROM productos WHERE id = ?', [id], (err: any, row: any) => {
       if (err) {
         console.error('Error al obtener producto actualizado:', err);
         return res.status(500).json({ error: 'Error al obtener el producto actualizado' });
@@ -175,7 +219,9 @@ router.put('/:id', (req: Request, res: Response) => {
       
       const producto = {
         ...row,
-        disponible: Boolean(row.disponible)
+        disponible: Boolean(row.disponible),
+        tiene_personalizacion: Boolean(row.tiene_personalizacion),
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : []
       };
       
       res.json(producto);
