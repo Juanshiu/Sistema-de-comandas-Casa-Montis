@@ -173,7 +173,7 @@ export default function SistemaPrincipal() {
       <footer className="bg-white border-t mt-12">
         <div className="max-w-7xl mx-auto py-4 px-4 sm:px-6 lg:px-8">
           <div className="text-center text-sm text-secondary-500">
-            Casa Montis - Sistema de Comandas v1.0 © 2024
+            Casa Montis - Sistema de Comandas v1.0 © 2025
           </div>
         </div>
       </footer>
