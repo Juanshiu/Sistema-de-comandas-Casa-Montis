@@ -164,21 +164,41 @@ router.post('/resetear-base-datos', (req, res) => {
 
 // Liberar todas las mesas
 router.post('/liberar-mesas', (req, res) => {
-  const query = 'UPDATE mesas SET ocupada = 0';
+  console.log('🔓 Iniciando liberación de todas las mesas...');
   
-  db.run(query, function(err: any) {
-    if (err) {
-      console.error('Error al liberar mesas:', err);
-      return res.status(500).json({ 
-        error: 'Error al liberar mesas',
-        detalles: err.message 
-      });
-    }
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
     
-    res.json({ 
-      success: true, 
-      mensaje: 'Todas las mesas han sido liberadas',
-      mesasLiberadas: this.changes
+    const query = 'UPDATE mesas SET ocupada = 0 WHERE ocupada = 1';
+    
+    db.run(query, function(err: any) {
+      if (err) {
+        console.error('❌ Error al liberar mesas:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ 
+          error: 'Error al liberar mesas',
+          detalles: err.message 
+        });
+      }
+      
+      const mesasLiberadas = this.changes;
+      console.log(`✅ Mesas liberadas: ${mesasLiberadas}`);
+      
+      db.run('COMMIT', (commitErr: any) => {
+        if (commitErr) {
+          console.error('❌ Error al hacer commit:', commitErr);
+          return res.status(500).json({ 
+            error: 'Error al confirmar liberación',
+            detalles: commitErr.message 
+          });
+        }
+        
+        res.json({ 
+          success: true, 
+          mensaje: `${mesasLiberadas} mesa(s) liberada(s) exitosamente`,
+          mesasLiberadas: mesasLiberadas
+        });
+      });
     });
   });
 });
@@ -189,8 +209,10 @@ router.post('/limpiar-comandas-antiguas', (req, res) => {
   hace30Dias.setDate(hace30Dias.getDate() - 30);
   const fechaLimite = hace30Dias.toISOString().split('T')[0];
 
+  console.log(`🗑️  Limpiando comandas anteriores a: ${fechaLimite}`);
+
   // Primero eliminamos comandas antiguas
-  const queryComandas = 'DELETE FROM comandas WHERE fecha < ?';
+  const queryComandas = 'DELETE FROM comandas WHERE fecha_creacion < ?';
   
   db.run(queryComandas, [fechaLimite], function(errComandas: any) {
     if (errComandas) {
@@ -202,9 +224,10 @@ router.post('/limpiar-comandas-antiguas', (req, res) => {
     }
 
     const comandasEliminadas = this.changes;
+    console.log(`✅ Comandas eliminadas: ${comandasEliminadas}`);
 
     // Luego eliminamos facturas antiguas
-    const queryFacturas = 'DELETE FROM facturas WHERE fecha < ?';
+    const queryFacturas = 'DELETE FROM facturas WHERE fecha_creacion < ?';
     
     db.run(queryFacturas, [fechaLimite], function(errFacturas: any) {
       if (errFacturas) {
@@ -217,6 +240,8 @@ router.post('/limpiar-comandas-antiguas', (req, res) => {
 
       const facturasEliminadas = this.changes;
       const totalEliminadas = comandasEliminadas + facturasEliminadas;
+      console.log(`✅ Facturas eliminadas: ${facturasEliminadas}`);
+      console.log(`✅ Total registros eliminados: ${totalEliminadas}`);
 
       res.json({ 
         success: true, 

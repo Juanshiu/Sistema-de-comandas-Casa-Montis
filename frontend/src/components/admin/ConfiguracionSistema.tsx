@@ -50,10 +50,13 @@ export default function ConfiguracionSistema() {
         method: 'POST',
       });
 
+      const data = await response.json();
+
       if (response.ok) {
-        alert('✅ Todas las mesas han sido liberadas');
+        alert(`✅ ${data.mensaje}\n${data.mesasLiberadas} mesa(s) liberada(s)`);
+        window.location.reload();
       } else {
-        alert('❌ Error al liberar las mesas');
+        alert(`❌ Error al liberar las mesas: ${data.detalles || data.error}`);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -80,9 +83,9 @@ export default function ConfiguracionSistema() {
       const data = await response.json();
       
       if (response.ok) {
-        alert(`✅ Se eliminaron ${data.eliminadas} comandas con más de 30 días`);
+        alert(`✅ ${data.mensaje}\nComandas: ${data.comandas}\nFacturas: ${data.facturas}`);
       } else {
-        alert('❌ Error al limpiar comandas antiguas');
+        alert(`❌ Error al limpiar comandas antiguas: ${data.detalles || data.error}`);
       }
     } catch (error) {
       console.error('Error:', error);
