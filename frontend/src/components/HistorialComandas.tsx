@@ -10,6 +10,7 @@ export default function HistorialComandas() {
   const [filtroFecha, setFiltroFecha] = useState<string>('');
   const [cargando, setCargando] = useState(false);
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
+  const [comandasVisibles, setComandasVisibles] = useState(20);
 
   useEffect(() => {
     cargarHistorial();
@@ -30,7 +31,12 @@ export default function HistorialComandas() {
   const handleFiltroFecha = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fecha = e.target.value;
     setFiltroFecha(fecha);
+    setComandasVisibles(20); // Reiniciar a 20 cuando se filtra
     cargarHistorial(fecha);
+  };
+
+  const cargarMasComandas = () => {
+    setComandasVisibles(prev => prev + 20);
   };
 
   const toggleExpansion = (comandaId: string) => {
@@ -100,6 +106,7 @@ export default function HistorialComandas() {
             <button
               onClick={() => {
                 setFiltroFecha('');
+                setComandasVisibles(20);
                 cargarHistorial();
               }}
               className="text-sm text-blue-600 hover:text-blue-800"
@@ -165,7 +172,7 @@ export default function HistorialComandas() {
               <p className="text-gray-500">No hay comandas para mostrar</p>
             </div>
           ) : (
-            comandas.map((comanda, index) => (
+            comandas.slice(0, comandasVisibles).map((comanda, index) => (
               <div key={comanda.id} className="bg-white rounded-lg shadow border overflow-hidden">
                 <div
                   className="p-4 cursor-pointer hover:bg-gray-50"
@@ -296,6 +303,28 @@ export default function HistorialComandas() {
               </div>
             ))
           )}
+        </div>
+      )}
+
+      {/* Botón Ver más */}
+      {!cargando && comandas.length > comandasVisibles && (
+        <div className="mt-6 flex justify-center">
+          <button
+            onClick={cargarMasComandas}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow transition-colors flex items-center gap-2"
+          >
+            <ChevronDown className="w-5 h-5" />
+            Ver más comandas ({comandas.length - comandasVisibles} restantes)
+          </button>
+        </div>
+      )}
+
+      {/* Mensaje cuando se muestran todas */}
+      {!cargando && comandas.length > 0 && comandasVisibles >= comandas.length && (
+        <div className="mt-6 text-center">
+          <p className="text-sm text-gray-500">
+            Mostrando todas las comandas ({comandas.length})
+          </p>
         </div>
       )}
     </div>
