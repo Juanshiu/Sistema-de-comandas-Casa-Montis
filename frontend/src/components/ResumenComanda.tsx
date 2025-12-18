@@ -16,6 +16,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
+  const [mostrarDialogoImpresion, setMostrarDialogoImpresion] = useState(false);
 
   const calcularSubtotal = (): number => {
     return formulario.items.reduce((total, item) => total + item.subtotal, 0);
@@ -37,6 +38,17 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       return;
     }
 
+    // Si estamos editando, mostrar diálogo de confirmación para impresión
+    if (modoEdicion && comandaId) {
+      setMostrarDialogoImpresion(true);
+      return;
+    }
+
+    // Si no estamos editando, enviar normalmente
+    await procesarEnvioComanda();
+  };
+
+  const procesarEnvioComanda = async (imprimirAdicionales?: boolean) => {
     try {
       setEnviando(true);
       setError(null);
@@ -51,8 +63,13 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       };
 
       if (modoEdicion && comandaId) {
-        // Editar comanda existente - la impresión automática se maneja en el backend
-        await apiService.editarComanda(comandaId, comandaData.items, comandaData.observaciones_generales);
+        // Editar comanda existente - con opción de imprimir o no
+        await apiService.editarComanda(
+          comandaId, 
+          comandaData.items, 
+          comandaData.observaciones_generales, 
+          imprimirAdicionales
+        );
         
         setSuccess(true);
         setTimeout(() => {
@@ -72,6 +89,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       setError(`Error al ${modoEdicion ? 'actualizar' : 'crear'} la comanda. Intente nuevamente.`);
     } finally {
       setEnviando(false);
+      setMostrarDialogoImpresion(false);
     }
   };
 
@@ -285,9 +303,69 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
         </div>
         
         <div className="mt-4 text-sm text-secondary-600 text-center">
-          <p>Al enviar la comanda se imprimirá automáticamente en cocina</p>
+          <p>{modoEdicion ? 'Al actualizar se pueden agregar productos adicionales' : 'Al enviar la comanda se imprimirá automáticamente en cocina'}</p>
         </div>
       </div>
+
+      {/* Diálogo de confirmación de impresión para ediciones */}
+      {mostrarDialogoImpresion && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <Printer className="text-primary-600 mr-3" size={32} />
+              <h3 className="text-xl font-bold text-secondary-800">
+                ¿Imprimir productos adicionales?
+              </h3>
+            </div>
+            
+            <p className="text-secondary-700 mb-6">
+              Estás agregando productos a una comanda existente. ¿Deseas imprimir estos productos adicionales en cocina?
+            </p>
+
+            <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 mb-6">
+              <p className="text-sm text-amber-800">
+                <strong>💡 Sugerencia:</strong> Normalmente no se imprimen bebidas o postres que se piden al final de la comida.
+              </p>
+            </div>
+
+            <div className="flex flex-col sm:flex-row gap-3">
+              <button
+                onClick={() => procesarEnvioComanda(false)}
+                disabled={enviando}
+                className="flex-1 px-4 py-3 bg-secondary-100 hover:bg-secondary-200 text-secondary-800 font-semibold rounded-lg transition-colors"
+              >
+                No imprimir
+              </button>
+              <button
+                onClick={() => procesarEnvioComanda(true)}
+                disabled={enviando}
+                className="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center"
+              >
+                {enviando ? (
+                  <>
+                    <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                    Enviando...
+                  </>
+                ) : (
+                  <>
+                    <Printer size={18} className="mr-2" />
+                    Sí, imprimir
+                  </>
+                )}
+              </button>
+            </div>
+
+            {!enviando && (
+              <button
+                onClick={() => setMostrarDialogoImpresion(false)}
+                className="w-full mt-3 px-4 py-2 text-secondary-600 hover:text-secondary-800 text-sm transition-colors"
+              >
+                Cancelar
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

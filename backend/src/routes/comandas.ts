@@ -867,10 +867,11 @@ router.delete('/:id', (req: Request, res: Response) => {
 // Editar comanda existente (reemplazar items completamente)
 router.put('/:id/editar', (req: Request, res: Response) => {
   const { id } = req.params;
-  const { items, observaciones_generales } = req.body;
+  const { items, observaciones_generales, imprimir_adicionales } = req.body;
   
   console.log(`🔧 INICIANDO EDICIÓN DE COMANDA: ${id}`);
   console.log(`📦 Items recibidos: ${items ? items.length : 0}`);
+  console.log(`🖨️  Imprimir adicionales: ${imprimir_adicionales ? 'SÍ' : 'NO'}`);
   
   if (!items || items.length === 0) {
     return res.status(400).json({ error: 'Se requieren items para la comanda' });
@@ -1049,10 +1050,10 @@ router.put('/:id/editar', (req: Request, res: Response) => {
                   
                   console.log(`✅ Comanda ${id} actualizada exitosamente`);
                   console.log(`📊 Items totales: ${itemsInserted}`);
-                  console.log(`🖨️  INICIANDO IMPRESIÓN AUTOMÁTICA...`);
                   
-                  // Solo imprimir si hay items adicionales
-                  if (itemsAdicionales.length > 0) {
+                  // Solo imprimir si hay items adicionales Y se solicitó imprimirlos
+                  if (itemsAdicionales.length > 0 && imprimir_adicionales === true) {
+                    console.log(`🖨️  INICIANDO IMPRESIÓN AUTOMÁTICA...`);
                     console.log(`🖨️  Imprimiendo ${itemsAdicionales.length} items ADICIONALES...`);
                   
                   // Obtener información completa de la comanda para imprimir
@@ -1125,14 +1126,21 @@ router.put('/:id/editar', (req: Request, res: Response) => {
                       console.log('='.repeat(50));
                     }
                   });
+                  } else if (itemsAdicionales.length > 0 && imprimir_adicionales === false) {
+                    console.log(`ℹ️  Se agregaron ${itemsAdicionales.length} items adicionales pero NO se imprimieron (por solicitud del usuario)`);
                   } else {
                     console.log('ℹ️  No hay items adicionales para imprimir');
                   }
                   
+                  const mensajeRespuesta = itemsAdicionales.length > 0 && imprimir_adicionales === true
+                    ? 'Comanda actualizada exitosamente e impresa automáticamente'
+                    : 'Comanda actualizada exitosamente';
+                  
                   res.json({ 
-                    message: 'Comanda actualizada exitosamente e impresa automáticamente',
+                    message: mensajeRespuesta,
                     itemsAgregados: itemsInserted,
-                    itemsAdicionales: itemsAdicionales.length
+                    itemsAdicionales: itemsAdicionales.length,
+                    impreso: itemsAdicionales.length > 0 && imprimir_adicionales === true
                   });
                 });
               });

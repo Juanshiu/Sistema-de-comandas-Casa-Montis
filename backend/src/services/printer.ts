@@ -15,7 +15,7 @@ const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'POS-58';
 const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'POS-80';
 
 
-
+  // Impresion de comandas para productos adicionales 
 // Función auxiliar para dividir texto largo en líneas de máximo 32 caracteres
 const dividirTexto = (texto: string, maxLength: number = 32): string[] => {
   if (texto.length <= maxLength) return [texto];
