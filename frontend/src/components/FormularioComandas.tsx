@@ -6,6 +6,7 @@ import SeleccionMesaYMesero from './SeleccionMesaYMesero';
 import SeleccionTipoServicio from './SeleccionTipoServicio';
 import SeleccionProductos from './SeleccionProductos';
 import ResumenComanda from './ResumenComanda';
+import BuscadorProductos from './BuscadorProductos';
 import { ChevronLeft, ChevronRight, Check, Edit, X } from 'lucide-react';
 
 export default function FormularioComandas() {
@@ -72,7 +73,7 @@ export default function FormularioComandas() {
   const puedeAvanzar = () => {
     switch (pasoActual) {
       case 0: return formulario.mesas.length > 0 && formulario.mesero.trim() !== '';
-      case 1: return !!formulario.tipo_servicio;
+      case 1: return !!formulario.tipo_servicio || formulario.items.length > 0; // Permitir avanzar si hay tipo de servicio O productos agregados
       case 2: return formulario.items.length > 0;
       case 3: return false; // Último paso
       default: return false;
@@ -105,10 +106,21 @@ export default function FormularioComandas() {
         );
       case 1:
         return (
-          <SeleccionTipoServicio
-            onTipoSelect={handleTipoServicioSelect}
-            tipoSeleccionado={formulario.tipo_servicio}
-          />
+          <>
+            <BuscadorProductos
+              onAgregarProducto={(item) => {
+                setFormulario(prev => ({
+                  ...prev,
+                  items: [...prev.items, item]
+                }));
+              }}
+              productosEnCarrito={formulario.items.length}
+            />
+            <SeleccionTipoServicio
+              onTipoSelect={handleTipoServicioSelect}
+              tipoSeleccionado={formulario.tipo_servicio}
+            />
+          </>
         );
       case 2:
         return (

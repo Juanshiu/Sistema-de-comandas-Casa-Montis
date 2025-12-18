@@ -23,6 +23,8 @@ export interface Producto {
   categoria: string; // Cambiado de CategoriaProducto a string para permitir categorías dinámicas
   disponible: boolean;
   descripcion?: string;
+  tiene_personalizacion?: boolean;
+  personalizaciones_habilitadas?: string[]; // Array de nombres de categorías de personalización
 }
 
 export type CategoriaProducto = 
@@ -62,6 +64,7 @@ export interface ItemComanda {
   subtotal: number;
   observaciones?: string;
   personalizacion?: PersonalizacionItem;
+  personalizacion_pendiente?: boolean; // Indica que el producto requiere personalización pero aún no se ha configurado
 }
 
 export interface PersonalizacionItem {
@@ -95,6 +98,14 @@ export interface OpcionBebida {
   id: string;
   nombre: string;
   precio_adicional: number;
+}
+
+export interface CategoriaPersonalizacion {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  activo: boolean;
+  orden: number;
 }
 
 export interface Comanda {
