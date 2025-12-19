@@ -200,7 +200,27 @@ export const apiService = {
     await api.delete(`/personalizaciones/categorias/${id}`);
   },
 
-  // Personalizaciones
+  // Items de personalización genéricos (funciona con cualquier categoría)
+  async getItemsPersonalizacion(categoriaId: number): Promise<any[]> {
+    const response = await api.get(`/personalizaciones/categorias/${categoriaId}/items`);
+    return response.data;
+  },
+
+  async createItemPersonalizacion(categoriaId: number, item: any): Promise<any> {
+    const response = await api.post(`/personalizaciones/categorias/${categoriaId}/items`, item);
+    return response.data;
+  },
+
+  async updateItemPersonalizacion(categoriaId: number, itemId: number, item: any): Promise<any> {
+    const response = await api.put(`/personalizaciones/categorias/${categoriaId}/items/${itemId}`, item);
+    return response.data;
+  },
+
+  async deleteItemPersonalizacion(categoriaId: number, itemId: number): Promise<void> {
+    await api.delete(`/personalizaciones/categorias/${categoriaId}/items/${itemId}`);
+  },
+
+  // Personalizaciones (endpoints legacy - se mantienen por compatibilidad)
   async getCaldos(): Promise<any[]> {
     const response = await api.get('/personalizaciones/caldos');
     return response.data;

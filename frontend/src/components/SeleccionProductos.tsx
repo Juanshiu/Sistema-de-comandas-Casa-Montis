@@ -13,15 +13,34 @@ interface SeleccionProductosProps {
   onItemsChange: (items: ItemComanda[]) => void;
 }
 
+interface CategoriaPersonalizacion {
+  id: number;
+  nombre: string;
+  descripcion: string;
+  orden: number;
+  activo: boolean;
+}
+
 export default function SeleccionProductos({ tipoServicio, items, onItemsChange }: SeleccionProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [itemPersonalizando, setItemPersonalizando] = useState<string | null>(null);
+  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<CategoriaPersonalizacion[]>([]);
 
   useEffect(() => {
     cargarProductos();
+    cargarCategoriasPersonalizacion();
   }, [tipoServicio]);
+
+  const cargarCategoriasPersonalizacion = async () => {
+    try {
+      const categorias = await apiService.getCategoriasPersonalizacion();
+      setCategoriasPersonalizacion(categorias.filter((c: CategoriaPersonalizacion) => c.activo));
+    } catch (err) {
+      console.error('Error al cargar categorías de personalización:', err);
+    }
+  };
 
   const cargarProductos = async () => {
     try {
@@ -35,6 +54,29 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
     } finally {
       setLoading(false);
     }
+  };
+
+  const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
+    if (!personalizacion) return null;
+    
+    const nombreNormalizado = nombreCategoria.toLowerCase();
+    
+    // Buscar por nombre de categoría común
+    if (nombreNormalizado.includes('caldo') || nombreNormalizado.includes('sopa')) {
+      return personalizacion.caldo;
+    }
+    if (nombreNormalizado.includes('principio')) {
+      return personalizacion.principio;
+    }
+    if (nombreNormalizado.includes('proteína') || nombreNormalizado.includes('proteina')) {
+      return personalizacion.proteina;
+    }
+    if (nombreNormalizado.includes('bebida')) {
+      return personalizacion.bebida;
+    }
+    
+    // Si no coincide con ninguna categoría conocida, buscar por el nombre exacto en personalizacion
+    return personalizacion[nombreCategoria] || personalizacion[nombreNormalizado] || null;
   };
 
   const agregarProducto = (producto: Producto) => {
@@ -307,10 +349,16 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     
                     {item.personalizacion && (
                       <div className="text-xs text-secondary-500 mt-1">
-                        {item.personalizacion.caldo && `Caldo: ${item.personalizacion.caldo.nombre}`}
-                        {item.personalizacion.principio && ` | Principio: ${item.personalizacion.principio.nombre}`}
-                        {item.personalizacion.proteina && ` | Proteína: ${item.personalizacion.proteina.nombre}`}
-                        {item.personalizacion.bebida && ` | Bebida: ${item.personalizacion.bebida.nombre}`}
+                        {categoriasPersonalizacion.map((categoria, idx) => {
+                          const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
+                          if (!valor) return null;
+                          return (
+                            <span key={categoria.id}>
+                              {idx > 0 && ' | '}
+                              {categoria.nombre}: {valor.nombre}
+                            </span>
+                          );
+                        })}
                       </div>
                     )}
                   </div>

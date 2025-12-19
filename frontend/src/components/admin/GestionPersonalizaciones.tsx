@@ -61,9 +61,8 @@ export default function GestionPersonalizaciones() {
           tiposDinamicos.push({
             id: cat.nombre.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '-') as TipoPersonalizacion,
             label: cat.nombre,
-            descripcion: cat.descripcion || '',
-            categoria_id: cat.id
-          });
+            descripcion: cat.descripcion || ''
+          } as any);
         }
       });
       
@@ -83,21 +82,9 @@ export default function GestionPersonalizaciones() {
         setCategorias(response || []);
         setItems([]);
       } else {
-        // Cargar items según el tipo activo
-        // Mapear nombres de categorías a las rutas API correspondientes
-        if (tipoActivo.includes('caldo') || tipoActivo === 'caldos-sopas') {
-          response = await apiService.getCaldos();
-        } else if (tipoActivo.includes('principio')) {
-          response = await apiService.getPrincipios();
-        } else if (tipoActivo.includes('prote')) {
-          response = await apiService.getProteinas();
-        } else if (tipoActivo.includes('bebida')) {
-          response = await apiService.getBebidas();
-        } else {
-          // Para categorías nuevas, por defecto cargar array vacío
-          response = [];
-        }
-        
+        // Usar el endpoint genérico que funciona con cualquier categoría
+        const categoriaId = Number(tipoActivo);
+        response = await apiService.getItemsPersonalizacion(categoriaId);
         setItems(response || []);
       }
       
@@ -150,43 +137,18 @@ export default function GestionPersonalizaciones() {
 
     try {
       setError(null);
+      const categoriaId = Number(tipoActivo);
       
       if (creandoNuevo) {
-        switch (tipoActivo) {
-          case 'caldos':
-            await apiService.createCaldo(formulario);
-            break;
-          case 'principios':
-            await apiService.createPrincipio(formulario);
-            break;
-          case 'proteinas':
-            await apiService.createProteina(formulario);
-            break;
-          case 'bebidas':
-            await apiService.createBebida(formulario);
-            break;
-        }
+        await apiService.createItemPersonalizacion(categoriaId, formulario);
       } else if (editandoId) {
-        switch (tipoActivo) {
-          case 'caldos':
-            await apiService.updateCaldo(editandoId, formulario);
-            break;
-          case 'principios':
-            await apiService.updatePrincipio(editandoId, formulario);
-            break;
-          case 'proteinas':
-            await apiService.updateProteina(editandoId, formulario);
-            break;
-          case 'bebidas':
-            await apiService.updateBebida(editandoId, formulario);
-            break;
-        }
+        await apiService.updateItemPersonalizacion(categoriaId, Number(editandoId), formulario);
       }
 
       await cargarItems();
       cancelarEdicion();
-    } catch (err) {
-      setError('Error al guardar el item');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Error al guardar el item');
       console.error('Error:', err);
     }
   };
@@ -197,24 +159,11 @@ export default function GestionPersonalizaciones() {
     }
 
     try {
-      switch (tipoActivo) {
-        case 'caldos':
-          await apiService.deleteCaldo(id);
-          break;
-        case 'principios':
-          await apiService.deletePrincipio(id);
-          break;
-        case 'proteinas':
-          await apiService.deleteProteina(id);
-          break;
-        case 'bebidas':
-          await apiService.deleteBebida(id);
-          break;
-      }
-      
+      const categoriaId = Number(tipoActivo);
+      await apiService.deleteItemPersonalizacion(categoriaId, Number(id));
       await cargarItems();
-    } catch (err) {
-      setError('Error al eliminar el item');
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Error al eliminar el item');
       console.error('Error:', err);
     }
   };
@@ -256,6 +205,26 @@ export default function GestionPersonalizaciones() {
       return;
     }
 
+    // Validar que el nombre no exista (solo al crear)
+    if (creandoNuevo) {
+      const nombreExiste = categorias.some(
+        cat => cat.nombre.toLowerCase() === formularioCategoria.nombre.trim().toLowerCase()
+      );
+      if (nombreExiste) {
+        setError(`Ya existe una categoría con el nombre "${formularioCategoria.nombre}". Por favor usa un nombre diferente.`);
+        return;
+      }
+    } else if (editandoId) {
+      // Al editar, validar que no exista otro con el mismo nombre
+      const nombreExiste = categorias.some(
+        cat => cat.nombre.toLowerCase() === formularioCategoria.nombre.trim().toLowerCase() && cat.id !== editandoId
+      );
+      if (nombreExiste) {
+        setError(`Ya existe otra categoría con el nombre "${formularioCategoria.nombre}". Por favor usa un nombre diferente.`);
+        return;
+      }
+    }
+
     try {
       setError(null);
       
@@ -271,8 +240,12 @@ export default function GestionPersonalizaciones() {
       await cargarCategorias();
       await cargarItems();
       cancelarEdicionCategoria();
-    } catch (err) {
-      setError('Error al guardar la categoría');
+    } catch (err: any) {
+      if (err.response?.data?.detalles?.includes('UNIQUE constraint')) {
+        setError(`El nombre "${formularioCategoria.nombre}" ya está en uso. Por favor elige otro nombre.`);
+      } else {
+        setError('Error al guardar la categoría: ' + (err.response?.data?.error || err.message || 'Error desconocido'));
+      }
       console.error('Error:', err);
     }
   };
