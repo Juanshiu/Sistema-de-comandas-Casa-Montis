@@ -79,8 +79,8 @@ export default function Administracion() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center">
-              <Settings className="h-6 w-6 text-primary-600 mr-2" />
-              <h1 className="text-xl font-bold text-secondary-800">
+              <Settings className="h-5 w-5 md:h-6 md:w-6 text-primary-600 mr-2" />
+              <h1 className="text-sm md:text-xl font-bold text-secondary-800">
                 Administración - Casa Montis
               </h1>
             </div>
@@ -89,9 +89,9 @@ export default function Administracion() {
       </div>
 
       {/* Navigation */}
-      <div className="bg-white border-b">
+      <div className="bg-white border-b overflow-x-auto xl:overflow-hidden">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <nav className="flex space-x-8">
+          <nav className="flex space-x-2 lg:space-x-4 min-w-max">
             {secciones.map((seccion) => {
               const Icon = seccion.icon;
               const isSystem = seccion.id === 'sistema';
@@ -100,7 +100,7 @@ export default function Administracion() {
                   key={seccion.id}
                   onClick={() => setSeccionActiva(seccion.id)}
                   className={`
-                    flex items-center px-3 py-4 text-sm font-medium border-b-2 transition-colors
+                    flex items-center px-2 md:px-3 py-4 text-xs md:text-sm font-medium border-b-2 transition-colors text-justify
                     ${seccionActiva === seccion.id
                       ? isSystem 
                         ? 'border-red-500 text-red-600'
@@ -111,8 +111,9 @@ export default function Administracion() {
                     }
                   `}
                 >
-                  <Icon size={16} className="mr-2" />
-                  {seccion.nombre}
+                  <Icon size={14} className="mr-1 md:mr-2 flex-shrink-0" />
+                  <span className="hidden sm:inline">{seccion.nombre}</span>
+                  <span className="sm:hidden">{seccion.nombre.split(' ').pop()}</span>
                 </button>
               );
             })}

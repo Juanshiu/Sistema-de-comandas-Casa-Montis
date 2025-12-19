@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { FormularioComanda } from '@/types';
 import { apiService } from '@/services/api';
 import { Printer, Send, AlertCircle } from 'lucide-react';
@@ -17,6 +17,66 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [mostrarDialogoImpresion, setMostrarDialogoImpresion] = useState(false);
+  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
+
+  useEffect(() => {
+    cargarCategoriasPersonalizacion();
+  }, []);
+
+  const cargarCategoriasPersonalizacion = async () => {
+    try {
+      const categorias = await apiService.getCategoriasPersonalizacion();
+      setCategoriasPersonalizacion(categorias.filter((cat: any) => cat.activo));
+    } catch (error) {
+      console.error('Error al cargar categorías de personalización:', error);
+    }
+  };
+
+  // Función para obtener el icono según el nombre de la categoría
+  const getIconoCategoria = (nombreCategoria: string): string => {
+    const nombre = nombreCategoria.toLowerCase();
+    if (nombre.includes('caldo') || nombre.includes('sopa')) return '🥄';
+    if (nombre.includes('principio') || nombre.includes('guarnición')) return '🍽️';
+    if (nombre.includes('proteína') || nombre.includes('proteina') || nombre.includes('carne')) return '🥩';
+    if (nombre.includes('bebida') || nombre.includes('jugo') || nombre.includes('refresco')) return '☕';
+    if (nombre.includes('salsa')) return '🍯';
+    if (nombre.includes('postre')) return '🍰';
+    if (nombre.includes('entrada')) return '🥗';
+    if (nombre.includes('acompañamiento')) return '🥘';
+    return '🔹'; // Icono por defecto
+  };
+
+  // Función para obtener la clave de personalización de manera dinámica
+  const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
+    if (!personalizacion) return null;
+    
+    // Intentar buscar por nombre exacto en minúsculas
+    const nombreKey = nombreCategoria.toLowerCase().replace(/\s+/g, '_').replace(/\//g, '_');
+    
+    // Buscar en las claves del objeto de personalización
+    for (const key in personalizacion) {
+      if (key.toLowerCase().includes(nombreKey) || nombreKey.includes(key.toLowerCase())) {
+        return personalizacion[key];
+      }
+    }
+    
+    // También intentar con nombres comunes
+    const nombreNormalizado = nombreCategoria.toLowerCase();
+    if (nombreNormalizado.includes('caldo') || nombreNormalizado.includes('sopa')) {
+      return personalizacion.caldo;
+    }
+    if (nombreNormalizado.includes('principio')) {
+      return personalizacion.principio;
+    }
+    if (nombreNormalizado.includes('proteína') || nombreNormalizado.includes('proteina')) {
+      return personalizacion.proteina;
+    }
+    if (nombreNormalizado.includes('bebida')) {
+      return personalizacion.bebida;
+    }
+    
+    return null;
+  };
 
   const calcularSubtotal = (): number => {
     return formulario.items.reduce((total, item) => total + item.subtotal, 0);
@@ -112,11 +172,14 @@ PRODUCTOS:
 ${itemsParaPrevia.map(item => {
   let itemText = `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString('es-CO')}`;
   if (item.personalizacion) {
-    const personalizaciones = [];
-    if (item.personalizacion.caldo) personalizaciones.push(`Caldo: ${item.personalizacion.caldo.nombre}`);
-    if (item.personalizacion.principio) personalizaciones.push(`Principio: ${item.personalizacion.principio.nombre}`);
-    if (item.personalizacion.proteina) personalizaciones.push(`Proteína: ${item.personalizacion.proteina.nombre}`);
-    if (item.personalizacion.bebida) personalizaciones.push(`Bebida: ${item.personalizacion.bebida.nombre}`);
+    const personalizaciones: string[] = [];
+    // Recorrer todas las categorías dinámicamente
+    categoriasPersonalizacion.forEach(categoria => {
+      const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
+      if (valor) {
+        personalizaciones.push(`${categoria.nombre}: ${valor.nombre}`);
+      }
+    });
     if (personalizaciones.length > 0) {
       itemText += `\n   ${personalizaciones.join(' | ')}`;
     }
@@ -223,25 +286,63 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
         
         <div className="space-y-3">
           {formulario.items.map((item) => (
-            <div key={item.id} className="flex justify-between items-start p-3 bg-secondary-50 rounded-lg">
-              <div className="flex-1">
-                <div className="font-medium text-secondary-800">
-                  {item.producto.nombre}
+            <div key={item.id} className="p-4 bg-secondary-50 rounded-lg border-l-4 border-primary-500">
+              {/* Header con nombre del producto y precio */}
+              <div className="flex justify-between items-start mb-2">
+                <div className="font-medium text-secondary-800 text-lg">
+                  {item.cantidad}x {item.producto.nombre}
                 </div>
-                <div className="text-sm text-secondary-600">
-                  Cantidad: {item.cantidad} x ${item.precio_unitario.toLocaleString()}
-                </div>
-                {item.observaciones && (
-                  <div className="text-sm text-blue-600 mt-1">
-                    <strong>Obs:</strong> {item.observaciones}
-                  </div>
-                )}
-              </div>
-              <div className="text-right">
-                <div className="font-semibold text-secondary-800">
+                <div className="font-bold text-lg text-secondary-900 ml-4">
                   ${item.subtotal.toLocaleString()}
                 </div>
               </div>
+              
+              <div className="text-sm text-secondary-600">
+                ${item.precio_unitario.toLocaleString()} c/u
+              </div>
+              
+              {/* Personalización - DINÁMICA basada en categorías */}
+              {item.personalizacion && categoriasPersonalizacion.length > 0 && (
+                <div className="mt-3 p-3 bg-white rounded-lg border border-primary-200">
+                  <div className="text-xs font-semibold text-primary-700 uppercase mb-2">
+                    📋 Personalización
+                  </div>
+                  <div className="grid grid-cols-1 gap-2 text-sm">
+                    {categoriasPersonalizacion.map((categoria) => {
+                      const opcion = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
+                      if (!opcion) return null;
+                      
+                      return (
+                        <div key={categoria.id} className="flex items-start">
+                          <span className="text-secondary-600 mr-2">
+                            {getIconoCategoria(categoria.nombre)} {categoria.nombre}:
+                          </span>
+                          <span className="font-medium text-secondary-800">
+                            {opcion.nombre}
+                            {opcion.precio_adicional > 0 && (
+                              <span className="text-green-600 ml-1">
+                                (+${opcion.precio_adicional.toLocaleString()})
+                              </span>
+                            )}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+              
+              {/* Observaciones del item */}
+              {item.observaciones && (
+                <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                  <div className="text-xs font-semibold text-blue-700 uppercase mb-1">
+                    💬 Observaciones
+                  </div>
+                  <div className="text-sm text-blue-800">
+                    {item.observaciones}
+                  </div>
+                </div>
+              )}
             </div>
           ))}
         </div>

@@ -145,7 +145,7 @@ export default function FormularioComandas() {
   };
 
   return (
-    <div className="min-h-screen bg-secondary-50 p-4">
+    <div className="min-h-screen bg-secondary-50">
       <div className="max-w-6xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
