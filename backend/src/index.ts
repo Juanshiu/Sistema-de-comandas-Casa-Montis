@@ -26,15 +26,36 @@ import sistemaRoutes from './routes/sistema';
 dotenv.config();
 
 const app = express();
-const PORT = process.env.PORT || 3001;
+const PORT = parseInt(process.env.PORT || '3001', 10);
 
 // Middlewares
 app.use(helmet());
 app.use(compression());
+
+// Configuración de CORS para permitir acceso desde cualquier dispositivo en la red local
 app.use(cors({
-  origin: ['http://localhost:3000', 'http://192.168.18.210:3000'],
+  origin: (origin, callback) => {
+    // Permitir requests sin origin (como desde Postman o apps móviles)
+    if (!origin) return callback(null, true);
+    
+    // Permitir localhost en cualquier puerto
+    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+      return callback(null, true);
+    }
+    
+    // Permitir cualquier IP de red local (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
+    const localIpPattern = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
+    
+    if (localIpPattern.test(origin)) {
+      return callback(null, true);
+    }
+    
+    // Si no coincide con ninguno, rechazar
+    callback(new Error('Not allowed by CORS'));
+  },
   credentials: true
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -108,9 +129,27 @@ async function startServer() {
     await updateDatabaseWithProducts();
     console.log('✅ Datos actualizados');
     
-    app.listen(PORT, () => {
-      console.log(`🚀 Servidor ejecutándose en http://localhost:${PORT}`);
+    app.listen(PORT, '0.0.0.0', () => {
+      const os = require('os');
+      const networkInterfaces = os.networkInterfaces();
+      let localIP = 'localhost';
+      
+      // Obtener la IP local
+      Object.keys(networkInterfaces).forEach((interfaceName) => {
+        networkInterfaces[interfaceName].forEach((iface: any) => {
+          if (iface.family === 'IPv4' && !iface.internal) {
+            localIP = iface.address;
+          }
+        });
+      });
+      
+      console.log(`🚀 Servidor ejecutándose en:`);
+      console.log(`   - Local:   http://localhost:${PORT}`);
+      console.log(`   - Red:     http://${localIP}:${PORT}`);
       console.log(`🏥 Health check: http://localhost:${PORT}/health`);
+      console.log(`\n📱 Para acceder desde otros dispositivos:`);
+      console.log(`   1. Conecta los dispositivos a la misma red WiFi`);
+      console.log(`   2. En el frontend, usa: http://${localIP}:${PORT}`);
     });
   } catch (error) {
     console.error('❌ Error al inicializar el servidor:', error);
