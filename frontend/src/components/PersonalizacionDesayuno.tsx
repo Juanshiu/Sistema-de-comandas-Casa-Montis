@@ -1,39 +1,58 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PersonalizacionItem, OpcionCaldo, OpcionProteina, OpcionBebida } from '@/types';
+import { PersonalizacionItem, Producto, ItemPersonalizacion } from '@/types';
 import { apiService } from '@/services/api';
 
+interface CategoriaConItems {
+  id: number;
+  nombre: string;
+  items: ItemPersonalizacion[];
+}
+
 interface PersonalizacionDesayunoProps {
+  producto?: Producto;
   onPersonalizacionChange: (personalizacion: PersonalizacionItem) => void;
   personalizacionInicial?: PersonalizacionItem;
 }
 
-export default function PersonalizacionDesayuno({ onPersonalizacionChange, personalizacionInicial }: PersonalizacionDesayunoProps) {
+export default function PersonalizacionDesayuno({ producto, onPersonalizacionChange, personalizacionInicial }: PersonalizacionDesayunoProps) {
   const [personalizacion, setPersonalizacion] = useState<PersonalizacionItem>(
     personalizacionInicial || {}
   );
-  const [caldos, setCaldos] = useState<OpcionCaldo[]>([]);
-  const [proteinas, setProteinas] = useState<OpcionProteina[]>([]);
-  const [bebidas, setBebidas] = useState<OpcionBebida[]>([]);
+  const [categoriasConItems, setCategoriasConItems] = useState<CategoriaConItems[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    cargarOpciones();
-  }, []);
+    cargarOpcionesDinamicas();
+  }, [producto]);
 
-  const cargarOpciones = async () => {
+  const cargarOpcionesDinamicas = async () => {
     try {
       setLoading(true);
-      const [caldosData, proteinasData, bebidasData] = await Promise.all([
-        apiService.getCaldos(),
-        apiService.getProteinas(),
-        apiService.getBebidas()
-      ]);
       
-      setCaldos(caldosData);
-      setProteinas(proteinasData);
-      setBebidas(bebidasData);
+      // Obtener todas las categorías activas
+      const todasCategorias = await apiService.getCategoriasPersonalizacion();
+      
+      // Filtrar por las categorías habilitadas en el producto
+      const categoriasHabilitadas = producto?.personalizaciones_habilitadas || [];
+      const categoriasParaCargar = todasCategorias.filter(cat => 
+        categoriasHabilitadas.includes(cat.nombre)
+      );
+      
+      // Cargar items de cada categoría desde items_personalizacion
+      const categoriasCompletas = await Promise.all(
+        categoriasParaCargar.map(async (cat) => {
+          const items = await apiService.getItemsPersonalizacion(cat.id);
+          return {
+            id: cat.id,
+            nombre: cat.nombre,
+            items: items
+          };
+        })
+      );
+      
+      setCategoriasConItems(categoriasCompletas);
     } catch (error) {
       console.error('Error al cargar opciones de personalización:', error);
     } finally {
@@ -41,13 +60,16 @@ export default function PersonalizacionDesayuno({ onPersonalizacionChange, perso
     }
   };
 
-  const handleSeleccion = (tipo: 'caldo' | 'proteina' | 'bebida', opcion: any) => {
+  const handleSeleccion = (nombreCategoria: string, opcion: ItemPersonalizacion) => {
+    // Convertir nombre de categoría a clave dinámica
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
+    
     const nuevaPersonalizacion = {
       ...personalizacion,
-      [tipo]: opcion,
+      [clave]: opcion,
       precio_adicional: calcularPrecioAdicional({
         ...personalizacion,
-        [tipo]: opcion
+        [clave]: opcion
       })
     };
     
@@ -57,10 +79,18 @@ export default function PersonalizacionDesayuno({ onPersonalizacionChange, perso
 
   const calcularPrecioAdicional = (pers: PersonalizacionItem): number => {
     let total = 0;
-    if (pers.caldo) total += pers.caldo.precio_adicional;
-    if (pers.proteina) total += pers.proteina.precio_adicional;
-    if (pers.bebida) total += pers.bebida.precio_adicional;
+    // Sumar todos los precios adicionales de forma dinámica
+    Object.values(pers).forEach((valor: any) => {
+      if (valor && typeof valor === 'object' && 'precio_adicional' in valor) {
+        total += valor.precio_adicional || 0;
+      }
+    });
     return total;
+  };
+
+  const getSeleccionActual = (nombreCategoria: string): any => {
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
+    return personalizacion[clave];
   };
 
   if (loading) {
@@ -80,86 +110,42 @@ export default function PersonalizacionDesayuno({ onPersonalizacionChange, perso
         🌅 Personalizar Desayuno
       </h3>
 
-      {/* Selección de Caldo */}
-      <div>
-        <label className="block text-sm font-medium text-secondary-700 mb-2">
-          Seleccionar Caldo
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {caldos.map((caldo) => (
-            <button
-              key={caldo.id}
-              onClick={() => handleSeleccion('caldo', caldo)}
-              className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
-                personalizacion.caldo?.id === caldo.id
-                  ? 'border-orange-500 bg-orange-100 text-orange-800'
-                  : 'border-gray-300 bg-white hover:border-orange-300'
-              }`}
-            >
-              <div className="font-medium">{caldo.nombre}</div>
-              {caldo.precio_adicional > 0 && (
-                <div className="text-sm text-orange-600">
-                  +${caldo.precio_adicional.toLocaleString()}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selección de Proteína */}
-      <div>
-        <label className="block text-sm font-medium text-secondary-700 mb-2">
-          Seleccionar Proteína
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {proteinas.map((proteina) => (
-            <button
-              key={proteina.id}
-              onClick={() => handleSeleccion('proteina', proteina)}
-              className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
-                personalizacion.proteina?.id === proteina.id
-                  ? 'border-orange-500 bg-orange-100 text-orange-800'
-                  : 'border-gray-300 bg-white hover:border-orange-300'
-              }`}
-            >
-              <div className="font-medium">{proteina.nombre}</div>
-              {proteina.precio_adicional > 0 && (
-                <div className="text-sm text-orange-600">
-                  +${proteina.precio_adicional.toLocaleString()}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selección de Bebida */}
-      <div>
-        <label className="block text-sm font-medium text-secondary-700 mb-2">
-          Seleccionar Bebida
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {bebidas.map((bebida) => (
-            <button
-              key={bebida.id}
-              onClick={() => handleSeleccion('bebida', bebida)}
-              className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
-                personalizacion.bebida?.id === bebida.id
-                  ? 'border-orange-500 bg-orange-100 text-orange-800'
-                  : 'border-gray-300 bg-white hover:border-orange-300'
-              }`}
-            >
-              <div className="font-medium">{bebida.nombre}</div>
-              {bebida.precio_adicional > 0 && (
-                <div className="text-sm text-orange-600">
-                  +${bebida.precio_adicional.toLocaleString()}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      {categoriasConItems.length === 0 ? (
+        <p className="text-secondary-600 text-center py-4">
+          No hay opciones de personalización configuradas para este producto
+        </p>
+      ) : (
+        categoriasConItems.map((categoria) => (
+          <div key={categoria.id}>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">
+              Seleccionar {categoria.nombre}
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {categoria.items.map((item) => {
+                const seleccionado = getSeleccionActual(categoria.nombre);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSeleccion(categoria.nombre, item)}
+                    className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
+                      seleccionado?.id === item.id
+                        ? 'border-orange-500 bg-orange-100 text-orange-800'
+                        : 'border-gray-300 bg-white hover:border-orange-300'
+                    }`}
+                  >
+                    <div className="font-medium">{item.nombre}</div>
+                    {item.precio_adicional > 0 && (
+                      <div className="text-sm text-orange-600">
+                        +${item.precio_adicional.toLocaleString()}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* Resumen */}
       {personalizacion.precio_adicional && personalizacion.precio_adicional > 0 && (

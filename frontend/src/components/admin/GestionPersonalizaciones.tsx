@@ -52,16 +52,17 @@ export default function GestionPersonalizaciones() {
       
       // Construir tabs dinámicamente
       const tiposDinamicos = [
-        { id: 'categorias' as TipoPersonalizacion, label: 'Categorías', descripcion: 'Gestionar tipos de personalización' }
+        { id: 'categorias' as TipoPersonalizacion, label: 'Categorías', descripcion: 'Gestionar tipos de personalización', categoriaId: null }
       ];
       
       // Agregar tabs para cada categoría activa
       response.forEach((cat: any) => {
         if (cat.activo) {
           tiposDinamicos.push({
-            id: cat.nombre.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '-') as TipoPersonalizacion,
+            id: cat.id.toString() as TipoPersonalizacion,
             label: cat.nombre,
-            descripcion: cat.descripcion || ''
+            descripcion: cat.descripcion || '',
+            categoriaId: cat.id
           } as any);
         }
       });
@@ -82,10 +83,14 @@ export default function GestionPersonalizaciones() {
         setCategorias(response || []);
         setItems([]);
       } else {
-        // Usar el endpoint genérico que funciona con cualquier categoría
-        const categoriaId = Number(tipoActivo);
-        response = await apiService.getItemsPersonalizacion(categoriaId);
-        setItems(response || []);
+        // Buscar el ID de la categoría por el tipoActivo
+        const tipoEncontrado = tipos.find(t => t.id === tipoActivo);
+        if (tipoEncontrado && tipoEncontrado.categoriaId) {
+          response = await apiService.getItemsPersonalizacion(tipoEncontrado.categoriaId);
+          setItems(response || []);
+        } else {
+          setItems([]);
+        }
       }
       
       setError(null);
@@ -137,12 +142,16 @@ export default function GestionPersonalizaciones() {
 
     try {
       setError(null);
-      const categoriaId = Number(tipoActivo);
+      const tipoEncontrado = tipos.find(t => t.id === tipoActivo);
+      if (!tipoEncontrado || !tipoEncontrado.categoriaId) {
+        setError('No se pudo identificar la categoría');
+        return;
+      }
       
       if (creandoNuevo) {
-        await apiService.createItemPersonalizacion(categoriaId, formulario);
+        await apiService.createItemPersonalizacion(tipoEncontrado.categoriaId, formulario);
       } else if (editandoId) {
-        await apiService.updateItemPersonalizacion(categoriaId, Number(editandoId), formulario);
+        await apiService.updateItemPersonalizacion(tipoEncontrado.categoriaId, Number(editandoId), formulario);
       }
 
       await cargarItems();
@@ -159,8 +168,12 @@ export default function GestionPersonalizaciones() {
     }
 
     try {
-      const categoriaId = Number(tipoActivo);
-      await apiService.deleteItemPersonalizacion(categoriaId, Number(id));
+      const tipoEncontrado = tipos.find(t => t.id === tipoActivo);
+      if (!tipoEncontrado || !tipoEncontrado.categoriaId) {
+        setError('No se pudo identificar la categoría');
+        return;
+      }
+      await apiService.deleteItemPersonalizacion(tipoEncontrado.categoriaId, Number(id));
       await cargarItems();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al eliminar el item');

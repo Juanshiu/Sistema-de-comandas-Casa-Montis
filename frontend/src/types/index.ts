@@ -67,6 +67,15 @@ export interface ItemComanda {
   personalizacion_pendiente?: boolean; // Indica que el producto requiere personalización pero aún no se ha configurado
 }
 
+export interface ItemPersonalizacion {
+  id: number;
+  categoria_id: number;
+  nombre: string;
+  descripcion?: string;
+  precio_adicional: number;
+  activo: boolean;
+}
+
 export interface PersonalizacionItem {
   // Para desayunos y almuerzos
   caldo?: OpcionCaldo;
@@ -74,6 +83,8 @@ export interface PersonalizacionItem {
   proteina?: OpcionProteina;
   bebida?: OpcionBebida;
   precio_adicional?: number;
+  // Permitir propiedades dinámicas para categorías personalizadas
+  [key: string]: any;
 }
 
 export interface OpcionCaldo {

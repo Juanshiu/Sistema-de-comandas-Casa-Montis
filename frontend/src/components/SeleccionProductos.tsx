@@ -460,6 +460,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                 return (
                   <div>
                     <PersonalizacionDesayuno
+                      producto={item.producto}
                       onPersonalizacionChange={(personalizacion) => {
                         // Actualizar temporalmente sin cerrar el modal
                         const nuevosItems = items.map(i => {
@@ -496,6 +497,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                 return (
                   <div>
                     <PersonalizacionAlmuerzo
+                      producto={item.producto}
                       onPersonalizacionChange={(personalizacion) => {
                         // Actualizar temporalmente sin cerrar el modal
                         const nuevosItems = items.map(i => {

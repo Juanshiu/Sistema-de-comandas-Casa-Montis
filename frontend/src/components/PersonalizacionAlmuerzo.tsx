@@ -1,39 +1,57 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PersonalizacionItem, OpcionCaldo, OpcionPrincipio, OpcionProteina } from '@/types';
+import { PersonalizacionItem, Producto } from '@/types';
 import { apiService } from '@/services/api';
 
 interface PersonalizacionAlmuerzoProps {
   onPersonalizacionChange: (personalizacion: PersonalizacionItem) => void;
   personalizacionInicial?: PersonalizacionItem;
+  producto?: Producto;
 }
 
-export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, personalizacionInicial }: PersonalizacionAlmuerzoProps) {
+interface CategoriaConItems {
+  id: number;
+  nombre: string;
+  items: any[];
+}
+
+export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, personalizacionInicial, producto }: PersonalizacionAlmuerzoProps) {
   const [personalizacion, setPersonalizacion] = useState<PersonalizacionItem>(
     personalizacionInicial || {}
   );
-  const [caldos, setCaldos] = useState<OpcionCaldo[]>([]);
-  const [principios, setPrincipios] = useState<OpcionPrincipio[]>([]);
-  const [proteinas, setProteinas] = useState<OpcionProteina[]>([]);
+  const [categoriasConItems, setCategoriasConItems] = useState<CategoriaConItems[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    cargarOpciones();
-  }, []);
+    cargarOpcionesDinamicas();
+  }, [producto]);
 
-  const cargarOpciones = async () => {
+  const cargarOpcionesDinamicas = async () => {
     try {
       setLoading(true);
-      const [caldosData, principiosData, proteinasData] = await Promise.all([
-        apiService.getCaldos(),
-        apiService.getPrincipios(),
-        apiService.getProteinas()
-      ]);
       
-      setCaldos(caldosData);
-      setPrincipios(principiosData);
-      setProteinas(proteinasData);
+      // Cargar todas las categorías activas
+      const todasCategorias = await apiService.getCategoriasPersonalizacion();
+      
+      // Filtrar solo las categorías habilitadas para este producto
+      const categoriasHabilitadas = producto?.personalizaciones_habilitadas || [];
+      const categoriasParaCargar = todasCategorias.filter((cat: any) => 
+        categoriasHabilitadas.includes(cat.nombre)
+      );
+      
+      // Cargar los items de cada categoría habilitada
+      const categoriasConItemsPromises = categoriasParaCargar.map(async (cat: any) => {
+        const items = await apiService.getItemsPersonalizacion(cat.id);
+        return {
+          id: cat.id,
+          nombre: cat.nombre,
+          items: items || []
+        };
+      });
+      
+      const resultado = await Promise.all(categoriasConItemsPromises);
+      setCategoriasConItems(resultado);
     } catch (error) {
       console.error('Error al cargar opciones de personalización:', error);
     } finally {
@@ -41,13 +59,16 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
     }
   };
 
-  const handleSeleccion = (tipo: 'caldo' | 'principio' | 'proteina', opcion: any) => {
+  const handleSeleccion = (nombreCategoria: string, opcion: any) => {
+    // Convertir el nombre de la categoría a la clave correspondiente
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
+    
     const nuevaPersonalizacion = {
       ...personalizacion,
-      [tipo]: opcion,
+      [clave]: opcion,
       precio_adicional: calcularPrecioAdicional({
         ...personalizacion,
-        [tipo]: opcion
+        [clave]: opcion
       })
     };
     
@@ -57,10 +78,18 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
 
   const calcularPrecioAdicional = (pers: PersonalizacionItem): number => {
     let total = 0;
-    if (pers.caldo) total += pers.caldo.precio_adicional;
-    if (pers.principio) total += pers.principio.precio_adicional;
-    if (pers.proteina) total += pers.proteina.precio_adicional;
+    // Sumar todos los precios adicionales de cualquier personalización
+    Object.values(pers).forEach((valor: any) => {
+      if (valor && typeof valor === 'object' && valor.precio_adicional) {
+        total += valor.precio_adicional;
+      }
+    });
     return total;
+  };
+
+  const getSeleccionActual = (nombreCategoria: string): any => {
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
+    return personalizacion[clave];
   };
 
   if (loading) {
@@ -80,86 +109,42 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
         🍽️ Personalizar Almuerzo
       </h3>
 
-      {/* Selección de Sopa/Caldo */}
-      <div>
-        <label className="block text-sm font-medium text-secondary-700 mb-2">
-          Seleccionar Sopa o Caldo
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {caldos.map((caldo) => (
-            <button
-              key={caldo.id}
-              onClick={() => handleSeleccion('caldo', caldo)}
-              className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
-                personalizacion.caldo?.id === caldo.id
-                  ? 'border-blue-500 bg-blue-100 text-blue-800'
-                  : 'border-gray-300 bg-white hover:border-blue-300'
-              }`}
-            >
-              <div className="font-medium">{caldo.nombre}</div>
-              {caldo.precio_adicional > 0 && (
-                <div className="text-sm text-blue-600">
-                  +${caldo.precio_adicional.toLocaleString()}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selección de Principio */}
-      <div>
-        <label className="block text-sm font-medium text-secondary-700 mb-2">
-          Seleccionar Principio
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {principios.map((principio) => (
-            <button
-              key={principio.id}
-              onClick={() => handleSeleccion('principio', principio)}
-              className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
-                personalizacion.principio?.id === principio.id
-                  ? 'border-blue-500 bg-blue-100 text-blue-800'
-                  : 'border-gray-300 bg-white hover:border-blue-300'
-              }`}
-            >
-              <div className="font-medium">{principio.nombre}</div>
-              {principio.precio_adicional > 0 && (
-                <div className="text-sm text-blue-600">
-                  +${principio.precio_adicional.toLocaleString()}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Selección de Proteína */}
-      <div>
-        <label className="block text-sm font-medium text-secondary-700 mb-2">
-          Seleccionar Proteína
-        </label>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-          {proteinas.map((proteina) => (
-            <button
-              key={proteina.id}
-              onClick={() => handleSeleccion('proteina', proteina)}
-              className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
-                personalizacion.proteina?.id === proteina.id
-                  ? 'border-blue-500 bg-blue-100 text-blue-800'
-                  : 'border-gray-300 bg-white hover:border-blue-300'
-              }`}
-            >
-              <div className="font-medium">{proteina.nombre}</div>
-              {proteina.precio_adicional > 0 && (
-                <div className="text-sm text-blue-600">
-                  +${proteina.precio_adicional.toLocaleString()}
-                </div>
-              )}
-            </button>
-          ))}
-        </div>
-      </div>
+      {categoriasConItems.length === 0 ? (
+        <p className="text-secondary-600 text-center py-4">
+          No hay opciones de personalización configuradas para este producto
+        </p>
+      ) : (
+        categoriasConItems.map((categoria) => (
+          <div key={categoria.id}>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">
+              Seleccionar {categoria.nombre}
+            </label>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+              {categoria.items.map((item) => {
+                const seleccionado = getSeleccionActual(categoria.nombre);
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => handleSeleccion(categoria.nombre, item)}
+                    className={`p-3 rounded-lg border-2 text-left transition-all duration-200 ${
+                      seleccionado?.id === item.id
+                        ? 'border-blue-500 bg-blue-100 text-blue-800'
+                        : 'border-gray-300 bg-white hover:border-blue-300'
+                    }`}
+                  >
+                    <div className="font-medium">{item.nombre}</div>
+                    {item.precio_adicional > 0 && (
+                      <div className="text-sm text-blue-600">
+                        +${item.precio_adicional.toLocaleString()}
+                      </div>
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))
+      )}
 
       {/* Resumen */}
       {personalizacion.precio_adicional && personalizacion.precio_adicional > 0 && (
