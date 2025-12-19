@@ -203,8 +203,13 @@ router.put('/:id', (req: Request, res: Response) => {
 router.delete('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
   
-  // Verificar si la mesa tiene comandas asociadas
-  db.get('SELECT COUNT(*) as count FROM comandas WHERE mesa_id = ?', [id], (err: any, row: any) => {
+  // Verificar si la mesa tiene comandas asociadas (comandas activas)
+  db.get(`
+    SELECT COUNT(*) as count 
+    FROM comanda_mesas 
+    WHERE mesa_id = ? 
+    AND comanda_id IN (SELECT id FROM comandas WHERE estado != 'facturada')
+  `, [id], (err: any, row: any) => {
     if (err) {
       console.error('Error al verificar comandas:', err);
       return res.status(500).json({ error: 'Error al verificar comandas asociadas' });
@@ -212,7 +217,7 @@ router.delete('/:id', (req: Request, res: Response) => {
     
     if (row.count > 0) {
       return res.status(400).json({ 
-        error: 'No se puede eliminar la mesa porque tiene comandas asociadas' 
+        error: 'No se puede eliminar la mesa porque tiene comandas activas asociadas' 
       });
     }
     
