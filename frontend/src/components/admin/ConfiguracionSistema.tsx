@@ -53,7 +53,7 @@ export default function ConfiguracionSistema() {
       const data = await response.json();
 
       if (response.ok) {
-        alert(`✅ ${data.mensaje}\n${data.mesasLiberadas} mesa(s) liberada(s)`);
+        alert(`✅ ${data.mensaje}\n${data.mesasLiberadas} mesa(s) liberada(s)\n${data.comandasEliminadas} comanda(s) eliminada(s)`);
         window.location.reload();
       } else {
         alert(`❌ Error al liberar las mesas: ${data.detalles || data.error}`);
@@ -112,7 +112,7 @@ export default function ConfiguracionSistema() {
     {
       id: 'liberar-mesas',
       titulo: 'Liberar Todas las Mesas',
-      descripcion: 'Marca todas las mesas como disponibles. Útil para resetear el estado al inicio del día.',
+      descripcion: 'Marca todas las mesas como disponibles y elimina todas las comandas activas. Útil para resetear el estado al inicio del día.',
       icon: Coffee,
       color: 'blue',
       peligro: 'medio',
@@ -245,8 +245,7 @@ export default function ConfiguracionSistema() {
 
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
               <p className="text-yellow-800 text-sm">
-                Esta acción marcará todas las mesas como disponibles. 
-                Las comandas activas NO se eliminarán, pero las mesas quedarán liberadas.
+                Esta acción marcará todas las mesas como disponibles y eliminará todas las comandas activas (pendientes, en preparación, listas y entregadas).
               </p>
             </div>
 

@@ -169,37 +169,109 @@ router.post('/liberar-mesas', (req, res) => {
   db.serialize(() => {
     db.run('BEGIN TRANSACTION');
     
-    const query = 'UPDATE mesas SET ocupada = 0 WHERE ocupada = 1';
-    
-    db.run(query, function(err: any) {
+    // 1. Obtener IDs de comandas activas antes de eliminarlas
+    db.all(`
+      SELECT DISTINCT c.id 
+      FROM comandas c 
+      WHERE c.estado IN ('pendiente', 'preparando', 'lista', 'entregada')
+    `, [], (err: any, comandasActivas: any[]) => {
       if (err) {
-        console.error('❌ Error al liberar mesas:', err);
+        console.error('❌ Error al obtener comandas activas:', err);
         db.run('ROLLBACK');
         return res.status(500).json({ 
-          error: 'Error al liberar mesas',
+          error: 'Error al obtener comandas activas',
           detalles: err.message 
         });
       }
       
-      const mesasLiberadas = this.changes;
-      console.log(`✅ Mesas liberadas: ${mesasLiberadas}`);
+      const comandaIds = comandasActivas.map((c: any) => c.id);
       
-      db.run('COMMIT', (commitErr: any) => {
-        if (commitErr) {
-          console.error('❌ Error al hacer commit:', commitErr);
+      // 2. Eliminar registros relacionados de comandas activas
+      if (comandaIds.length > 0) {
+        const placeholders = comandaIds.map(() => '?').join(',');
+        
+        // Eliminar items de comandas
+        db.run(`DELETE FROM comanda_items WHERE comanda_id IN (${placeholders})`, comandaIds, (err: any) => {
+          if (err) {
+            console.error('❌ Error al eliminar items de comandas:', err);
+            db.run('ROLLBACK');
+            return res.status(500).json({ 
+              error: 'Error al eliminar items de comandas',
+              detalles: err.message 
+            });
+          }
+          
+          // Eliminar relación mesa-comanda
+          db.run(`DELETE FROM comanda_mesas WHERE comanda_id IN (${placeholders})`, comandaIds, (err: any) => {
+            if (err) {
+              console.error('❌ Error al eliminar relaciones mesa-comanda:', err);
+              db.run('ROLLBACK');
+              return res.status(500).json({ 
+                error: 'Error al eliminar relaciones mesa-comanda',
+                detalles: err.message 
+              });
+            }
+            
+            // Eliminar comandas
+            db.run(`DELETE FROM comandas WHERE id IN (${placeholders})`, comandaIds, function(err: any) {
+              if (err) {
+                console.error('❌ Error al eliminar comandas:', err);
+                db.run('ROLLBACK');
+                return res.status(500).json({ 
+                  error: 'Error al eliminar comandas',
+                  detalles: err.message 
+                });
+              }
+              
+              const comandasEliminadas = this.changes;
+              console.log(`✅ Comandas eliminadas: ${comandasEliminadas}`);
+              
+              // 3. Liberar las mesas
+              liberarMesas(comandasEliminadas, res);
+            });
+          });
+        });
+      } else {
+        // Si no hay comandas activas, solo liberar mesas
+        liberarMesas(0, res);
+      }
+    });
+    
+    // Función auxiliar para liberar mesas
+    function liberarMesas(comandasEliminadas: number, res: any) {
+      const query = 'UPDATE mesas SET ocupada = 0 WHERE ocupada = 1';
+      
+      db.run(query, function(err: any) {
+        if (err) {
+          console.error('❌ Error al liberar mesas:', err);
+          db.run('ROLLBACK');
           return res.status(500).json({ 
-            error: 'Error al confirmar liberación',
-            detalles: commitErr.message 
+            error: 'Error al liberar mesas',
+            detalles: err.message 
           });
         }
         
-        res.json({ 
-          success: true, 
-          mensaje: `${mesasLiberadas} mesa(s) liberada(s) exitosamente`,
-          mesasLiberadas: mesasLiberadas
+        const mesasLiberadas = this.changes;
+        console.log(`✅ Mesas liberadas: ${mesasLiberadas}`);
+        
+        db.run('COMMIT', (commitErr: any) => {
+          if (commitErr) {
+            console.error('❌ Error al hacer commit:', commitErr);
+            return res.status(500).json({ 
+              error: 'Error al confirmar liberación',
+              detalles: commitErr.message 
+            });
+          }
+          
+          res.json({ 
+            success: true, 
+            mensaje: `${mesasLiberadas} mesa(s) liberada(s) y ${comandasEliminadas} comanda(s) eliminada(s) exitosamente`,
+            mesasLiberadas: mesasLiberadas,
+            comandasEliminadas: comandasEliminadas
+          });
         });
       });
-    });
+    }
   });
 });
 
