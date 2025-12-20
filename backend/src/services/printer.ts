@@ -392,6 +392,10 @@ async function imprimirPorEscPos(
           argumentos: []
         },
         {
+          nombre: "EstablecerTamañoFuente",
+          argumentos: [1, 1]
+        },
+        {
           nombre: "TextoSegunPaginaDeCodigos",
           argumentos: [2, "CP850", contenido + "\n\n"]
         },
