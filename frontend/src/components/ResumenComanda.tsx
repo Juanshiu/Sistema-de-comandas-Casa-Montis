@@ -50,32 +50,11 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
     if (!personalizacion) return null;
     
-    // Intentar buscar por nombre exacto en minúsculas
-    const nombreKey = nombreCategoria.toLowerCase().replace(/\s+/g, '_').replace(/\//g, '_');
+    // Convertir el nombre de la categoría a la misma clave que usa PersonalizacionAlmuerzo/Desayuno
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
     
-    // Buscar en las claves del objeto de personalización
-    for (const key in personalizacion) {
-      if (key.toLowerCase().includes(nombreKey) || nombreKey.includes(key.toLowerCase())) {
-        return personalizacion[key];
-      }
-    }
-    
-    // También intentar con nombres comunes
-    const nombreNormalizado = nombreCategoria.toLowerCase();
-    if (nombreNormalizado.includes('caldo') || nombreNormalizado.includes('sopa')) {
-      return personalizacion.caldo;
-    }
-    if (nombreNormalizado.includes('principio')) {
-      return personalizacion.principio;
-    }
-    if (nombreNormalizado.includes('proteína') || nombreNormalizado.includes('proteina')) {
-      return personalizacion.proteina;
-    }
-    if (nombreNormalizado.includes('bebida')) {
-      return personalizacion.bebida;
-    }
-    
-    return null;
+    // Buscar directamente por la clave generada
+    return personalizacion[clave] || null;
   };
 
   const calcularSubtotal = (): number => {

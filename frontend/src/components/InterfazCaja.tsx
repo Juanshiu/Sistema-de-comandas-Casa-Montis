@@ -20,9 +20,11 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [facturaParaRecibo, setFacturaParaRecibo] = useState<any>(null);
   const [montoPagado, setMontoPagado] = useState<string>('');
   const [cambio, setCambio] = useState<number>(0);
+  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
 
   useEffect(() => {
     cargarComandasActivas();
+    cargarCategoriasPersonalizacion();
     // Actualizar cada 5 segundos para tiempo real
     const interval = setInterval(cargarComandasActivas, 5000);
     return () => clearInterval(interval);
@@ -35,6 +37,25 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       setCambio(Math.max(0, pago - total));
     }
   }, [montoPagado, comandaSeleccionada]);
+
+  const cargarCategoriasPersonalizacion = async () => {
+    try {
+      const categorias = await apiService.getCategoriasPersonalizacion();
+      setCategoriasPersonalizacion(categorias.filter((cat: any) => cat.activo));
+    } catch (error) {
+      console.error('Error al cargar categorías de personalización:', error);
+    }
+  };
+
+  const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
+    if (!personalizacion) return null;
+    
+    // Convertir el nombre de la categoría a la misma clave que usa PersonalizacionAlmuerzo/Desayuno
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
+    
+    // Buscar directamente por la clave generada
+    return personalizacion[clave] || null;
+  };
 
   const cargarComandasActivas = async () => {
     try {
@@ -108,6 +129,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     }
   };
 
+  // FACTURA DETALLADA
   const generarFactura = () => {
     if (!comandaSeleccionada) return;
     
@@ -130,15 +152,24 @@ ${comandaSeleccionada.items.map(item => {
    $${item.precio_unitario.toLocaleString()}`;
   
   // Agregar personalización si existe
-  if (item.personalizacion) {
-    const personalizaciones = [];
-    if (item.personalizacion.caldo) personalizaciones.push(`Caldo: ${item.personalizacion.caldo.nombre}`);
-    if (item.personalizacion.principio) personalizaciones.push(`Principio: ${item.personalizacion.principio.nombre}`);
-    if (item.personalizacion.proteina) personalizaciones.push(`Proteína: ${item.personalizacion.proteina.nombre}`);
-    if (item.personalizacion.bebida) personalizaciones.push(`Bebida: ${item.personalizacion.bebida.nombre}`);
+  if (item.personalizacion && categoriasPersonalizacion.length > 0) {
+    const personalizaciones: string[] = [];
+    
+    // Recorrer dinámicamente todas las categorías
+    categoriasPersonalizacion.forEach((categoria) => {
+      const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
+      if (valor) {
+        personalizaciones.push(`${categoria.nombre}: ${valor.nombre}`);
+      }
+    });
     
     if (personalizaciones.length > 0) {
       itemText += `\n   PERSONALIZACIÓN: ${personalizaciones.join(' | ')}`;
+      
+      // Agregar precio adicional de personalización
+      if (item.personalizacion.precio_adicional && item.personalizacion.precio_adicional > 0) {
+        itemText += `\n   Precio Personalización: +$${item.personalizacion.precio_adicional.toLocaleString()}`;
+      }
     }
   }
   
@@ -164,6 +195,7 @@ TOTAL: $${comandaSeleccionada.total.toLocaleString('es-CO')}
     window.open(`/factura?data=${facturaData}`, '_blank');
   };
 
+  // RECIBO DE PAGO
   const generarRecibo = (factura: any) => {
     const fechaActual = new Date();
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
@@ -177,7 +209,7 @@ CRA 9 # 11 07 - EDUARDO SANTOS
       PALERMO - HUILA
 TEL: 3132171025 - 3224588520
 ================================
-      CUENTA DE COBRO
+      RECIBO DE PAGO
 No. ${numeroFactura}
 CAJA 01
 MESA: ${factura.comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}
@@ -194,9 +226,7 @@ ${factura.comanda.items.map((item: any) => {
 VLR TOTAL              ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
 ================================
 PAGO: ${factura.metodo_pago.toUpperCase()}
-                       ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
 
-TOTAL CONSUMO          ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
 TOTAL                  ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
 PAGO                   ${factura.monto_pagado.toLocaleString('es-CO').padStart(7, ' ')}
 CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')}

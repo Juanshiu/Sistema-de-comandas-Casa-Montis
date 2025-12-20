@@ -59,24 +59,11 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
     if (!personalizacion) return null;
     
-    const nombreNormalizado = nombreCategoria.toLowerCase();
+    // Convertir el nombre de la categoría a la misma clave que usa PersonalizacionAlmuerzo/Desayuno
+    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
     
-    // Buscar por nombre de categoría común
-    if (nombreNormalizado.includes('caldo') || nombreNormalizado.includes('sopa')) {
-      return personalizacion.caldo;
-    }
-    if (nombreNormalizado.includes('principio')) {
-      return personalizacion.principio;
-    }
-    if (nombreNormalizado.includes('proteína') || nombreNormalizado.includes('proteina')) {
-      return personalizacion.proteina;
-    }
-    if (nombreNormalizado.includes('bebida')) {
-      return personalizacion.bebida;
-    }
-    
-    // Si no coincide con ninguna categoría conocida, buscar por el nombre exacto en personalizacion
-    return personalizacion[nombreCategoria] || personalizacion[nombreNormalizado] || null;
+    // Buscar directamente por la clave generada
+    return personalizacion[clave] || null;
   };
 
   const agregarProducto = (producto: Producto) => {
