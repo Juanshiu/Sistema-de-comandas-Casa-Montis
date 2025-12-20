@@ -42,11 +42,11 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
   const lineas: string[] = [];
   
   // Encabezado
-  lineas.push('================================');
-  lineas.push('        CASA MONTIS');
+  // lineas.push('================================');
+  // lineas.push('        CASA MONTIS');
   lineas.push('     COMANDA DE COCINA');
-  lineas.push('================================');
-  lineas.push('');
+  // lineas.push('================================');
+  // lineas.push('');
   
   // Mesa
   const mesasTexto = comanda.mesas && comanda.mesas.length > 0 ? 
@@ -87,19 +87,26 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
         }
         
         if (personalizacion) {
-          if (personalizacion.caldo) {
-            lineas.push(`  Caldo: ${personalizacion.caldo.nombre}`);
-          }
-          if (personalizacion.principio) {
-            const principioLineas = dividirTexto(`Principio: ${personalizacion.principio.nombre}`, 30);
-            principioLineas.forEach(l => lineas.push(`  ${l}`));
-          }
-          if (personalizacion.proteina) {
-            lineas.push(`  Proteina: ${personalizacion.proteina.nombre}`);
-          }
-          if (personalizacion.bebida) {
-            lineas.push(`  Bebida: ${personalizacion.bebida.nombre}`);
-          }
+          // Recorrer dinámicamente todas las claves de personalización
+          Object.keys(personalizacion).forEach((clave) => {
+            // Ignorar precio_adicional y claves vacías
+            if (clave === 'precio_adicional' || !personalizacion[clave]) return;
+            
+            const valor = personalizacion[clave];
+            // Verificar que sea un objeto con nombre
+            if (valor && typeof valor === 'object' && valor.nombre) {
+              // Convertir clave a nombre legible (ej: "caldos_sopas" -> "Caldos/Sopas")
+              const nombreCategoria = clave
+                .split('_')
+                .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
+                .join(' ')
+                .replace('-', '/');
+              
+              const textoPersonalizacion = `${nombreCategoria}: ${valor.nombre}`;
+              const lineasPersonalizacion = dividirTexto(textoPersonalizacion, 30);
+              lineasPersonalizacion.forEach(l => lineas.push(`  ${l}`));
+            }
+          });
         }
       }
       
@@ -134,12 +141,12 @@ const crearArchivoComanda = (comanda: Comanda): string => {
   const separador = '================================';
   const separadorCorto = '--------------------------------';
   
-  // Encabezado
-  lineas.push(separador);
-  lineas.push('        CASA MONTIS');
-  lineas.push('     COMANDA DE COCINA');
-  lineas.push(separador);
-  lineas.push('');
+  // // Encabezado
+  // lineas.push(separador);
+  // lineas.push('        CASA MONTIS');
+  // lineas.push('     COMANDA DE COCINA');
+  // lineas.push(separador);
+  // lineas.push('');
   
   // Fecha
   const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : new Date();
@@ -167,14 +174,14 @@ const crearArchivoComanda = (comanda: Comanda): string => {
       mesasLineas.forEach(l => lineas.push(`  ${l}`));
     }
     
-    const capacidadTotal = comanda.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0);
-    lineas.push(`Capacidad: ${capacidadTotal} pers.`);
+    // const capacidadTotal = comanda.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0);
+    // lineas.push(`Capacidad: ${capacidadTotal} pers.`);
   }
   
   lineas.push('');
-  lineas.push(separador);
-  lineas.push('          PRODUCTOS');
-  lineas.push(separador);
+  // lineas.push(separador);
+  // lineas.push('          PRODUCTOS');
+  // lineas.push(separador);
   lineas.push('');
   
   // Items
@@ -212,30 +219,26 @@ const crearArchivoComanda = (comanda: Comanda): string => {
           lineas.push('');
           lineas.push('  PERSONALIZACION:');
           
-          if (personalizacion.caldo) {
-            const caldoLineas = dividirTexto(`Caldo: ${personalizacion.caldo.nombre}`, ANCHO_LINEA - 4);
-            caldoLineas.forEach(l => lineas.push(`    ${l}`));
-          }
-          
-          if (personalizacion.principio) {
-            const principioLineas = dividirTexto(`Principio: ${personalizacion.principio.nombre}`, ANCHO_LINEA - 4);
-            principioLineas.forEach(l => lineas.push(`    ${l}`));
-          }
-          
-          if (personalizacion.proteina) {
-            const proteinaLineas = dividirTexto(`Proteina: ${personalizacion.proteina.nombre}`, ANCHO_LINEA - 4);
-            proteinaLineas.forEach(l => lineas.push(`    ${l}`));
-          }
-          
-          if (personalizacion.bebida) {
-            const bebidaLineas = dividirTexto(`Bebida: ${personalizacion.bebida.nombre}`, ANCHO_LINEA - 4);
-            bebidaLineas.forEach(l => lineas.push(`    ${l}`));
-          }
-          
-          if (personalizacion.acompanamiento) {
-            const acompLineas = dividirTexto(`Acomp: ${personalizacion.acompanamiento.nombre}`, ANCHO_LINEA - 4);
-            acompLineas.forEach(l => lineas.push(`    ${l}`));
-          }
+          // Recorrer dinámicamente todas las claves de personalización
+          Object.keys(personalizacion).forEach((clave) => {
+            // Ignorar precio_adicional y claves vacías
+            if (clave === 'precio_adicional' || !personalizacion[clave]) return;
+            
+            const valor = personalizacion[clave];
+            // Verificar que sea un objeto con nombre
+            if (valor && typeof valor === 'object' && valor.nombre) {
+              // Convertir clave a nombre legible (ej: "caldos_sopas" -> "Caldos/Sopas")
+              const nombreCategoria = clave
+                .split('_')
+                .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
+                .join(' ')
+                .replace('-', '/');
+              
+              const textoPersonalizacion = `${nombreCategoria}: ${valor.nombre}`;
+              const lineasPersonalizacion = dividirTexto(textoPersonalizacion, ANCHO_LINEA - 4);
+              lineasPersonalizacion.forEach(l => lineas.push(`    ${l}`));
+            }
+          });
         }
       }
       
@@ -263,12 +266,12 @@ const crearArchivoComanda = (comanda: Comanda): string => {
     lineas.push('OBSERVACIONES GENERALES:');
     const obsLineas = dividirTexto(comanda.observaciones_generales, ANCHO_LINEA);
     obsLineas.forEach(l => lineas.push(l));
-    lineas.push(separador);
+    // lineas.push(separador);
   }
   
   lineas.push('');
   lineas.push('     ENVIADO A COCINA');
-  lineas.push(separador);
+  // lineas.push(separador);
   lineas.push('');
   lineas.push('');
   lineas.push('');
@@ -536,18 +539,25 @@ const imprimirEnConsola = (comanda: any) => {
           
         if (personalizacion) {
           console.log('     PERSONALIZACION:');
-          if (personalizacion.caldo) {
-            console.log(`       🥄 Caldo: ${personalizacion.caldo.nombre}`);
-          }
-          if (personalizacion.principio) {
-            console.log(`       🍽️ Principio: ${personalizacion.principio.nombre}`);
-          }
-          if (personalizacion.proteina) {
-            console.log(`       🥩 Proteína: ${personalizacion.proteina.nombre}`);
-          }
-          if (personalizacion.bebida) {
-            console.log(`       ☕ Bebida: ${personalizacion.bebida.nombre}`);
-          }
+          
+          // Recorrer dinámicamente todas las claves de personalización
+          Object.keys(personalizacion).forEach((clave) => {
+            // Ignorar precio_adicional y claves vacías
+            if (clave === 'precio_adicional' || !personalizacion[clave]) return;
+            
+            const valor = personalizacion[clave];
+            // Verificar que sea un objeto con nombre
+            if (valor && typeof valor === 'object' && valor.nombre) {
+              // Convertir clave a nombre legible
+              const nombreCategoria = clave
+                .split('_')
+                .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
+                .join(' ')
+                .replace('-', '/');
+              
+              console.log(`       🔹 ${nombreCategoria}: ${valor.nombre}`);
+            }
+          });
         }
       }
       
