@@ -292,7 +292,7 @@ export default function GestionPersonalizaciones() {
 
       {/* Pestañas */}
       <div className="border-b border-secondary-200">
-        <nav className="flex space-x-8">
+        <nav className="flex space-x-8 overflow-x-auto">
           {tipos.map((tipo) => (
             <button
               key={tipo.id}
