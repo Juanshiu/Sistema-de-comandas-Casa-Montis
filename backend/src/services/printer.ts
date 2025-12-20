@@ -378,13 +378,26 @@ async function imprimirPorEscPos(
     console.log(`🌐 URL: ${ESC_POS_URL}`);
     
     // Construir el payload según documentación del plugin
+    // Usar TextoSegunPaginaDeCodigos para soportar tildes
     const payload = {
       serial: "",
       nombreImpresora: nombreImpresora,
       operaciones: [
         {
-          nombre: "EscribirTexto",
-          argumentos: [contenido + "\n\n"]
+          nombre: "Iniciar",
+          argumentos: []
+        },
+        {
+          nombre: "DeshabilitarElModoDeCaracteresChinos",
+          argumentos: []
+        },
+        {
+          nombre: "TextoSegunPaginaDeCodigos",
+          argumentos: [2, "CP850", contenido + "\n\n"]
+        },
+        {
+          nombre: "Feed",
+          argumentos: [1]
         },
         {
           nombre: "Cortar",
@@ -393,7 +406,7 @@ async function imprimirPorEscPos(
       ]
     };
     
-    console.log('📦 Payload construido:', JSON.stringify(payload, null, 2));
+    console.log('📦 Payload con encoding CP850 para tildes');
     
     // Enviar a la API del plugin
     const response = await fetch(ESC_POS_URL, {
