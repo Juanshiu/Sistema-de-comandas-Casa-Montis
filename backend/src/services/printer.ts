@@ -1,18 +1,13 @@
 import { db } from '../database/init';
 import { Comanda } from '../models';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import * as fs from 'fs';
-import * as path from 'path';
 import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-const execAsync = promisify(exec);
-
-// Obtener nombre de impresora desde variables de entorno
-const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'POS-58';
-const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'POS-80';
+// Configuración del plugin HTTP a ESC/POS
+const ESC_POS_URL = process.env.ESC_POS_URL || 'http://localhost:8000/imprimir';
+const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'pos58';
+const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'pos58';
 
 
   // Impresion de comandas para productos adicionales 
@@ -255,7 +250,7 @@ const crearArchivoComanda = (comanda: Comanda): string => {
   }
   
   lineas.push('');
-  lineas.push(separador);
+  // lineas.push(separador);
   // const totalTexto = `TOTAL: $${comanda.total.toLocaleString('es-CO')}`;
   // lineas.push(totalTexto);
   lineas.push(separador);
@@ -272,9 +267,9 @@ const crearArchivoComanda = (comanda: Comanda): string => {
   lineas.push('');
   lineas.push('     ENVIADO A COCINA');
   // lineas.push(separador);
-  lineas.push('');
-  lineas.push('');
-  lineas.push('');
+  // lineas.push('');
+  // lineas.push('');
+  // lineas.push('');
   
   return lineas.join('\n');
 };
@@ -366,6 +361,64 @@ const formatearFecha = (fecha: Date): string => {
   }).format(fecha);
 };
 
+// ============================================
+// FUNCIÓN PRINCIPAL: IMPRIMIR POR ESC/POS
+// ============================================
+/**
+ * Imprime contenido usando el plugin HTTP a ESC/POS de Parzibyte
+ * @param contenido - Texto formateado de la comanda
+ * @param nombreImpresora - Nombre de la impresora (ej: "pos58")
+ */
+async function imprimirPorEscPos(
+  contenido: string,
+  nombreImpresora: string
+): Promise<void> {
+  try {
+    console.log(`🖨️  Enviando a ESC/POS - Impresora: ${nombreImpresora}`);
+    console.log(`🌐 URL: ${ESC_POS_URL}`);
+    
+    // Construir el payload según documentación del plugin
+    const payload = {
+      serial: "",
+      nombreImpresora: nombreImpresora,
+      operaciones: [
+        {
+          nombre: "EscribirTexto",
+          argumentos: [contenido + "\n\n"]
+        },
+        {
+          nombre: "Cortar",
+          argumentos: []
+        }
+      ]
+    };
+    
+    console.log('📦 Payload construido:', JSON.stringify(payload, null, 2));
+    
+    // Enviar a la API del plugin
+    const response = await fetch(ESC_POS_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload)
+    });
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`HTTP ${response.status}: ${errorText}`);
+    }
+    
+    const resultado = await response.json();
+    console.log('✅ Respuesta del plugin:', resultado);
+    console.log('✅ Impresión enviada exitosamente por ESC/POS');
+    
+  } catch (error) {
+    console.error('❌ Error al imprimir por ESC/POS:', error);
+    throw error;
+  }
+}
+
 // Función principal para imprimir comanda
 export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
   let comandaCompleta = comanda;
@@ -374,7 +427,6 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
     console.log('🖨️  ===== FUNCIÓN IMPRIMIR COMANDA LLAMADA =====');
     console.log('🖨️  ID Comanda:', comanda.id);
     console.log('🖨️  Items en comanda:', comanda.items?.length || 0);
-    console.log('🖨️  Intentando imprimir comanda...');
     
     // Obtener datos completos de la comanda si no los tiene
     if (!comanda.items || comanda.items.length === 0) {
@@ -394,89 +446,22 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
       contenidoComanda = crearArchivoComanda(comandaCompleta);
     }
     
-    // Intentar imprimir con diferentes métodos
-    const metodosImpresion = [
-      PRINTER_COCINA_NAME, // Usar variable de entorno principal
-      'POS-58', // Intentar con nombre exacto
-      'pos58',  // Intentar con minúsculas
-    ];
-    
-    let impresionExitosa = false;
-    
-    for (const nombreImpresora of metodosImpresion) {
-      try {
-        console.log(`🖨️  Intentando imprimir con: ${nombreImpresora}`);
-        
-        // Crear archivo temporal con codificación adecuada
-        const tempDir = path.join(process.cwd(), 'temp');
-        if (!fs.existsSync(tempDir)) {
-          fs.mkdirSync(tempDir, { recursive: true });
-        }
-        
-        const tempFile = path.join(tempDir, `comanda_${Date.now()}.txt`);
-        
-        // Escribir con BOM UTF-8 para mejor compatibilidad
-        const BOM = '\uFEFF';
-        fs.writeFileSync(tempFile, BOM + contenidoComanda, 'utf8');
-        
-        console.log(`📄 Archivo temporal creado: ${tempFile}`);
-        
-        // Métodos múltiples de impresión
-        const comandos = [
-          // Método 1: PowerShell con Out-Printer
-          `powershell -Command "$content = Get-Content -Path '${tempFile}' -Raw -Encoding UTF8; $content | Out-Printer -Name '${nombreImpresora}'"`,
-          // Método 2: type + copy (Windows clásico)
-          `cmd /c "type \\"${tempFile}\\" > \\"\\\\\\\\%COMPUTERNAME%\\\\${nombreImpresora}\\"" 2>nul`,
-          // Método 3: print (Windows)
-          `cmd /c "print /D:\\"${nombreImpresora}\\" \\"${tempFile}\\"" 2>nul`
-        ];
-        
-        let comandoExitoso = false;
-        
-        for (const comando of comandos) {
-          try {
-            console.log(`🔄 Probando método de impresión...`);
-            await execAsync(comando, { timeout: 15000 });
-            comandoExitoso = true;
-            console.log(`✅ Impresión exitosa con: ${nombreImpresora}`);
-            break;
-          } catch (cmdError) {
-            console.log(`⚠️  Método falló, probando siguiente...`);
-            continue;
-          }
-        }
-        
-        if (comandoExitoso) {
-          impresionExitosa = true;
-          
-          // Limpiar archivo temporal después de un pequeño delay
-          setTimeout(() => {
-            try {
-              if (fs.existsSync(tempFile)) {
-                fs.unlinkSync(tempFile);
-              }
-            } catch (e) {
-              console.log('⚠️  No se pudo eliminar archivo temporal');
-            }
-          }, 2000);
-          
-          break;
-        }
-        
-      } catch (error) {
-        console.log(`❌ Error con ${nombreImpresora}:`, error instanceof Error ? error.message : 'Error desconocido');
-      }
-    }
-    
-    if (!impresionExitosa) {
-      console.log('⚠️  No se pudo imprimir físicamente, mostrando en consola...');
+    // Imprimir usando el plugin HTTP a ESC/POS
+    try {
+      await imprimirPorEscPos(contenidoComanda, PRINTER_COCINA_NAME);
+      console.log('✅ Comanda impresa exitosamente');
+    } catch (error) {
+      console.error('❌ Error al imprimir por ESC/POS:', error);
+      console.log('🔄 Mostrando comanda en consola como fallback...');
       imprimirEnConsola(comandaCompleta);
     }
     
   } catch (error) {
     console.error('❌ Error general al imprimir:', error);
     console.log('🔄 Usando modo de impresión por consola...');
-    imprimirEnConsola(comandaCompleta);
+    if (comandaCompleta) {
+      imprimirEnConsola(comandaCompleta);
+    }
   }
 };
 
@@ -491,7 +476,7 @@ export const imprimirComandaPorId = async (comandaId: string): Promise<void> => 
   }
 };
 
-// Función para imprimir factura (por ahora en consola)
+// Función para imprimir factura
 export const imprimirFactura = async (comandaId: string): Promise<void> => {
   try {
     const comanda = await obtenerComandaCompleta(comandaId);
@@ -502,7 +487,40 @@ export const imprimirFactura = async (comandaId: string): Promise<void> => {
   }
 };
 
-// Función para imprimir en consola (modo desarrollo)
+// Función para probar la conexión con el plugin ESC/POS
+export const probarImpresora = async (): Promise<boolean> => {
+  try {
+    console.log('🖨️  Probando conexión con plugin HTTP a ESC/POS...');
+    console.log(`🌐 URL: ${ESC_POS_URL}`);
+    console.log(`🖨️  Impresora: ${PRINTER_COCINA_NAME}`);
+    
+    const contenidoPrueba = `
+=====================================
+           CASA MONTIS
+         PRUEBA DE IMPRESORA
+=====================================
+Fecha: ${new Date().toLocaleString('es-CO')}
+Impresora: ${PRINTER_COCINA_NAME}
+Plugin: HTTP a ESC/POS
+=====================================
+Si ve este mensaje,
+la impresora funciona correctamente.
+=====================================
+    `;
+    
+    await imprimirPorEscPos(contenidoPrueba, PRINTER_COCINA_NAME);
+    console.log('✅ Prueba de impresión exitosa');
+    return true;
+    
+  } catch (error) {
+    console.error('❌ Error al probar impresora:', error);
+    console.log('⚠️  Verifica que:');
+    console.log('   1. El plugin HTTP a ESC/POS esté corriendo');
+    console.log(`   2. La URL ${ESC_POS_URL} sea correcta`);
+    console.log(`   3. La impresora "${PRINTER_COCINA_NAME}" esté configurada en el plugin`);
+    return false;
+  }
+};
 const imprimirEnConsola = (comanda: any) => {
   console.log('\n' + '='.repeat(50));
   console.log('                 CASA MONTIS');
@@ -580,95 +598,6 @@ const imprimirEnConsola = (comanda: any) => {
   console.log('='.repeat(50));
   console.log('✅ Comanda enviada a cocina');
   console.log('='.repeat(50) + '\n');
-};
-
-// Función para probar la conexión de la impresora
-export const probarImpresora = async (): Promise<boolean> => {
-  try {
-    console.log('🖨️  Probando impresoras disponibles...');
-    
-    // Obtener lista de impresoras
-    const { stdout } = await execAsync('wmic printer get name', { timeout: 5000 });
-    const impresoras = stdout
-      .split('\n')
-      .map(line => line.trim())
-      .filter(line => line && line !== 'Name')
-      .filter(line => line.length > 0);
-    
-    console.log('� Impresoras disponibles:', impresoras);
-    
-    const metodosImpresion = [
-      PRINTER_COCINA_NAME,
-    ];
-    
-    let impresionExitosa = false;
-    
-    for (const nombreImpresora of metodosImpresion) {
-      // Verificar si la impresora está en la lista
-      const impresora = impresoras.find(imp => imp.toLowerCase().includes(nombreImpresora.toLowerCase()));
-      
-      if (impresora) {
-        try {
-          console.log(`🖨️  Probando impresora: ${nombreImpresora}`);
-          
-          // Crear contenido de prueba
-          const contenidoPrueba = `
-=====================================
-           CASA MONTIS
-         PRUEBA DE IMPRESORA
-=====================================
-Fecha: ${new Date().toLocaleString('es-CO')}
-Impresora: ${nombreImpresora}
-Estado: Conectada
-=====================================
-Si ve este mensaje,
-la impresora funciona correctamente.
-=====================================
-          `;
-          
-          // Crear archivo temporal
-          const tempDir = path.join(process.cwd(), 'temp');
-          if (!fs.existsSync(tempDir)) {
-            fs.mkdirSync(tempDir, { recursive: true });
-          }
-          
-          const tempFile = path.join(tempDir, `prueba_${Date.now()}.txt`);
-          fs.writeFileSync(tempFile, contenidoPrueba, 'utf8');
-          
-          // Intentar imprimir usando PowerShell
-          const comando = `powershell -Command "Get-Content '${tempFile}' | Out-Printer -Name '${nombreImpresora}'"`;
-          
-          await execAsync(comando, { timeout: 10000 });
-          
-          console.log(`✅ Prueba de impresión exitosa con ${nombreImpresora}`);
-          impresionExitosa = true;
-          
-          // Limpiar archivo temporal
-          try {
-            fs.unlinkSync(tempFile);
-          } catch (e) {
-            console.log('⚠️  No se pudo eliminar archivo temporal');
-          }
-          
-          break;
-        } catch (error) {
-          console.log(`❌ Error con ${nombreImpresora}:`, error instanceof Error ? error.message : 'Error desconocido');
-        }
-      } else {
-        console.log(`⚠️  Impresora ${nombreImpresora} no encontrada en el sistema`);
-      }
-    }
-    
-    if (!impresionExitosa) {
-      console.log('❌ No se pudo conectar a ninguna impresora física');
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error('❌ Error general al probar impresora:', error);
-    return false;
-  }
 };
 
 const imprimirFacturaEnConsola = (comanda: any) => {
