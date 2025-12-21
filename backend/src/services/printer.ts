@@ -4,8 +4,8 @@ import * as dotenv from 'dotenv';
 
 dotenv.config();
 
-// Configuración del plugin HTTP a ESC/POS
-const ESC_POS_URL = process.env.ESC_POS_URL || 'http://localhost:8000/imprimir';
+// Configuración de nuestro plugin HTTP propio (puerto 8001)
+const ESC_POS_URL = process.env.ESC_POS_URL || 'http://localhost:8001/imprimir';
 const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'pos58';
 const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'pos58';
 
@@ -374,45 +374,20 @@ async function imprimirPorEscPos(
   nombreImpresora: string
 ): Promise<void> {
   try {
-    console.log(`🖨️  Enviando a ESC/POS - Impresora: ${nombreImpresora}`);
+    console.log(`🖨️  Enviando a plugin propio - Impresora: ${nombreImpresora}`);
     console.log(`🌐 URL: ${ESC_POS_URL}`);
     
-    // Construir el payload según documentación del plugin
-    // Usar TextoSegunPaginaDeCodigos para soportar tildes
+    // Payload simplificado para nuestro plugin propio
     const payload = {
-      serial: "",
-      nombreImpresora: nombreImpresora,
-      operaciones: [
-        {
-          nombre: "Iniciar",
-          argumentos: []
-        },
-        {
-          nombre: "DeshabilitarElModoDeCaracteresChinos",
-          argumentos: []
-        },
-        {
-          nombre: "EstablecerTamañoFuente",
-          argumentos: [1, 1]
-        },
-        {
-          nombre: "TextoSegunPaginaDeCodigos",
-          argumentos: [2, "CP850", contenido + "\n\n"]
-        },
-        {
-          nombre: "Feed",
-          argumentos: [1]
-        },
-        {
-          nombre: "Cortar",
-          argumentos: []
-        }
-      ]
+      texto: contenido,
+      impresora: nombreImpresora,
+      cortar: true,
+      encoding: 'cp850'
     };
     
-    console.log('📦 Payload con encoding CP850 para tildes');
+    console.log('📦 Enviando con encoding CP850 para tildes');
     
-    // Enviar a la API del plugin
+    // Enviar a nuestro plugin HTTP propio
     const response = await fetch(ESC_POS_URL, {
       method: 'POST',
       headers: {
@@ -428,7 +403,7 @@ async function imprimirPorEscPos(
     
     const resultado = await response.json();
     console.log('✅ Respuesta del plugin:', resultado);
-    console.log('✅ Impresión enviada exitosamente por ESC/POS');
+    console.log('✅ Impresión enviada exitosamente');
     
   } catch (error) {
     console.error('❌ Error al imprimir por ESC/POS:', error);

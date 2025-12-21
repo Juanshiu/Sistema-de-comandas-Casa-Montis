@@ -13,6 +13,7 @@ import { initMigrationControl, migracionSalones_v1 } from './database/migration-
 import { migrarMultiplesMesas } from './database/migration-multiples-mesas';
 import { arreglarEstructuraComandas } from './database/migration-arreglar-comandas';
 import { migrarPersonalizacionesProductos } from './database/migration-personalizaciones-productos';
+import { iniciarPluginImpresora } from './services/pluginImpresora';
 import mesasRoutes from './routes/mesas';
 import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
@@ -150,6 +151,10 @@ async function startServer() {
       console.log(`\n📱 Para acceder desde otros dispositivos:`);
       console.log(`   1. Conecta los dispositivos a la misma red WiFi`);
       console.log(`   2. En el frontend, usa: http://${localIP}:${PORT}`);
+      
+      // Iniciar plugin de impresión en puerto 8001
+      console.log('\n🖨️  Iniciando plugin de impresión...');
+      iniciarPluginImpresora();
     });
   } catch (error) {
     console.error('❌ Error al inicializar el servidor:', error);
