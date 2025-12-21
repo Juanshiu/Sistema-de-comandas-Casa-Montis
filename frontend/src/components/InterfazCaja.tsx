@@ -145,11 +145,12 @@ TEL: 3132171025 - 3224588520
 Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}
 Fecha: ${new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
 Mesero: ${comandaSeleccionada.mesero}
-
-PRODUCTOS:
+================================
+CANT ARTICULO          TOTAL
+--------------------------------
 ${comandaSeleccionada.items.map(item => {
-  let itemText = `${item.cantidad}x ${item.producto.nombre}
-   $${item.precio_unitario.toLocaleString()}`;
+  const nombre = item.producto.nombre.length > 16 ? item.producto.nombre.substring(0, 16) : item.producto.nombre.padEnd(16);
+  let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
   
   // Agregar personalización si existe
   if (item.personalizacion && categoriasPersonalizacion.length > 0) {
@@ -159,31 +160,29 @@ ${comandaSeleccionada.items.map(item => {
     categoriasPersonalizacion.forEach((categoria) => {
       const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
       if (valor) {
-        personalizaciones.push(`${categoria.nombre}: ${valor.nombre}`);
+        personalizaciones.push(` ${valor.nombre}`); // ${categoria.nombre}: Para mostrar el nombre de la categoría si se desea
       }
     });
     
     if (personalizaciones.length > 0) {
-      itemText += `\n   PERSONALIZACIÓN: ${personalizaciones.join(' | ')}`;
+      itemText += `\n     ${personalizaciones.join(' | ')}`;
       
       // Agregar precio adicional de personalización
-      if (item.personalizacion.precio_adicional && item.personalizacion.precio_adicional > 0) {
-        itemText += `\n   Precio Personalización: +$${item.personalizacion.precio_adicional.toLocaleString()}`;
-      }
+      // if (item.personalizacion.precio_adicional && item.personalizacion.precio_adicional > 0) {
+      //   itemText += `\n     +$${item.personalizacion.precio_adicional.toLocaleString()}`;
+      // }
     }
   }
   
   if (item.observaciones) {
-    itemText += `\n   Obs: ${item.observaciones}`;
+    itemText += `\n     Obs: ${item.observaciones}`;
   }
   
   return itemText;
-}).join('\n\n')}
-
-${comandaSeleccionada.observaciones_generales ? `\nObs. generales:\n${comandaSeleccionada.observaciones_generales}\n` : ''}
-================================
-SUBTOTAL: $${comandaSeleccionada.subtotal.toLocaleString('es-CO')}
-TOTAL: $${comandaSeleccionada.total.toLocaleString('es-CO')}
+}).join('\n')}
+--------------------------------
+${comandaSeleccionada.observaciones_generales ? `Obs. generales:\n${comandaSeleccionada.observaciones_generales}\n================================\n` : '================================\n'}
+VALOR TOTAL              ${comandaSeleccionada.total.toLocaleString('es-CO').padStart(7, ' ')}
 ================================
     GRACIAS POR SU COMPRA
        VUELVA PRONTO
