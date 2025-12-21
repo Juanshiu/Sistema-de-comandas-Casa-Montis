@@ -1,7 +1,7 @@
 import axios from 'axios';
 import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial } from '@/types';
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://192.168.18.210:3001/api';
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
