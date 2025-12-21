@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Comanda, Factura, EstadoComanda } from '@/types';
 import { apiService } from '@/services/api';
-import { CreditCard, DollarSign, Receipt, CheckCircle, Clock, AlertCircle, ArrowRightLeft } from 'lucide-react';
+import { CreditCard, DollarSign, Receipt, CheckCircle, Clock, AlertCircle, ArrowRightLeft, Smartphone } from 'lucide-react';
 
 interface InterfazCajaProps {
   onMesaLiberada?: () => void;
@@ -244,6 +244,15 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
     try {
       await apiService.actualizarEstadoComanda(comandaId, nuevoEstado);
       await cargarComandasActivas();
+      
+      // Si el nuevo estado es 'lista', auto-seleccionar la comanda
+      if (nuevoEstado === 'lista') {
+        const comandasActualizadas = await apiService.getComandasActivas();
+        const comandaActualizada = comandasActualizadas.find(c => c.id === comandaId);
+        if (comandaActualizada) {
+          setComandaSeleccionada(comandaActualizada);
+        }
+      }
     } catch (err) {
       console.error('Error al actualizar estado:', err);
       alert('Error al actualizar el estado de la comanda');
@@ -479,7 +488,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                           : 'border-secondary-300 text-secondary-700'
                       }`}
                     >
-                      <ArrowRightLeft size={20} />
+                      <Smartphone size={20} />
                       <span>Transferencia</span>
                     </button>
                     <button
@@ -498,6 +507,24 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
 
                 {metodoPago === 'efectivo' && (
                   <div className="mb-4">
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Billetes rápidos:
+                    </label>
+                    <div className="grid grid-cols-4 gap-2 mb-3">
+                      {[500, 1000, 2000, 5000, 10000, 20000, 50000, 100000].map((valor) => (
+                        <button
+                          key={valor}
+                          type="button"
+                          onClick={() => {
+                            const montoActual = parseFloat(montoPagado) || 0;
+                            setMontoPagado((montoActual + valor).toString());
+                          }}
+                          className="px-2 py-1.5 text-normal hover:border-primary-500 hover:text-primary-700 border border-secondary-300 rounded hover:bg-secondary-100 transition-colors"
+                        >
+                          ${(valor / 1000)}k
+                        </button>
+                      ))}
+                    </div>
                     <label className="block text-sm font-medium text-secondary-700 mb-2">
                       Monto Pagado:
                     </label>
