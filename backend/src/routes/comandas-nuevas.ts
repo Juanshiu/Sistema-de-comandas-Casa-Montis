@@ -760,6 +760,224 @@ router.post('/', (req: Request, res: Response) => {
   });
 });
 
+// Editar comanda (agregar items adicionales)
+router.put('/:id', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { items, observaciones_generales, imprimir } = req.body;
+
+  if (!items || !Array.isArray(items) || items.length === 0) {
+    return res.status(400).json({ error: 'Debe proporcionar items para agregar' });
+  }
+
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+
+    // Actualizar observaciones generales si se proporcionan
+    if (observaciones_generales !== undefined) {
+      const updateObservacionesQuery = `
+        UPDATE comandas 
+        SET observaciones_generales = ?,
+            fecha_actualizacion = CURRENT_TIMESTAMP 
+        WHERE id = ?
+      `;
+      
+      db.run(updateObservacionesQuery, [observaciones_generales, id], (err: any) => {
+        if (err) {
+          console.error('Error al actualizar observaciones:', err);
+          db.run('ROLLBACK');
+          return res.status(500).json({ error: 'Error al actualizar observaciones' });
+        }
+      });
+    }
+
+    // Insertar nuevos items
+    const insertItemQuery = `
+      INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `;
+
+    let itemsInserted = 0;
+    let itemsErrors = 0;
+    let nuevoTotal = 0;
+
+    items.forEach((item) => {
+      const itemId = uuidv4();
+      const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
+      nuevoTotal += item.subtotal;
+
+      db.run(insertItemQuery, [
+        itemId,
+        id,
+        item.producto.id,
+        item.cantidad,
+        item.precio_unitario,
+        item.subtotal,
+        item.observaciones || null,
+        personalizacionStr
+      ], (err: any) => {
+        if (err) {
+          console.error('Error al insertar item adicional:', err);
+          itemsErrors++;
+        } else {
+          itemsInserted++;
+        }
+
+        // Verificar si todos los items han sido procesados
+        if (itemsInserted + itemsErrors === items.length) {
+          if (itemsErrors > 0) {
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Error al agregar items adicionales' });
+          }
+
+          // Actualizar totales
+          const updateTotalesQuery = `
+            UPDATE comandas 
+            SET subtotal = subtotal + ?,
+                total = total + ?,
+                fecha_actualizacion = CURRENT_TIMESTAMP
+            WHERE id = ?
+          `;
+
+          db.run(updateTotalesQuery, [nuevoTotal, nuevoTotal, id], (err: any) => {
+            if (err) {
+              console.error('Error al actualizar totales:', err);
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: 'Error al actualizar totales' });
+            }
+
+            db.run('COMMIT', (err: any) => {
+              if (err) {
+                console.error('Error al hacer commit:', err);
+                return res.status(500).json({ error: 'Error al guardar cambios' });
+              }
+
+              // Obtener la comanda actualizada
+              const getComandaQuery = 'SELECT * FROM comandas WHERE id = ?';
+              db.get(getComandaQuery, [id], (err: any, comandaRow: any) => {
+                if (err) {
+                  console.error('Error al obtener comanda actualizada:', err);
+                  return res.status(500).json({ error: 'Comanda actualizada pero error al obtener datos' });
+                }
+
+                // Si se debe imprimir, obtener comanda completa e imprimir
+                if (imprimir) {
+                  const getItemsQuery = `
+                    SELECT 
+                      ci.*,
+                      p.nombre as producto_nombre,
+                      p.precio as producto_precio,
+                      p.categoria as producto_categoria
+                    FROM comanda_items ci
+                    JOIN productos p ON ci.producto_id = p.id
+                    WHERE ci.comanda_id = ?
+                  `;
+
+                  db.all(getItemsQuery, [id], (err: any, itemsRows: any[]) => {
+                    if (err) {
+                      console.error('Error al obtener items para impresión:', err);
+                    } else {
+                      const itemsCompletos = itemsRows.map(row => ({
+                        id: row.id,
+                        comanda_id: row.comanda_id,
+                        producto_id: row.producto_id,
+                        cantidad: row.cantidad,
+                        precio_unitario: row.precio_unitario,
+                        subtotal: row.subtotal,
+                        observaciones: row.observaciones,
+                        personalizacion: row.personalizacion ? JSON.parse(row.personalizacion) : null,
+                        producto: {
+                          id: row.producto_id,
+                          nombre: row.producto_nombre,
+                          precio: row.producto_precio,
+                          categoria: row.producto_categoria,
+                          disponible: true
+                        }
+                      }));
+
+                      // Obtener mesas si es tipo mesa
+                      if (comandaRow.tipo_pedido === 'mesa') {
+                        const mesasQuery = `
+                          SELECT m.* 
+                          FROM mesas m
+                          INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+                          WHERE cm.comanda_id = ?
+                        `;
+
+                        db.all(mesasQuery, [id], (err: any, mesasRows: any[]) => {
+                          const comanda: Comanda = {
+                            id: comandaRow.id,
+                            mesas: mesasRows ? mesasRows.map(m => ({
+                              id: m.id,
+                              numero: m.numero,
+                              capacidad: m.capacidad,
+                              salon: m.salon,
+                              ocupada: m.ocupada
+                            })) : [],
+                            mesero: comandaRow.mesero,
+                            subtotal: comandaRow.subtotal,
+                            total: comandaRow.total,
+                            estado: comandaRow.estado,
+                            observaciones_generales: 'ITEMS ADICIONALES\n' + (comandaRow.observaciones_generales || ''),
+                            fecha_creacion: new Date(comandaRow.fecha_creacion),
+                            fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                            tipo_pedido: comandaRow.tipo_pedido || 'mesa',
+                            items: itemsCompletos
+                          };
+
+                          console.log('🖨️  Imprimiendo items adicionales...');
+                          imprimirComanda(comanda)
+                            .then(() => console.log('✅ Items adicionales impresos'))
+                            .catch((error) => console.error('❌ Error al imprimir items adicionales:', error));
+                        });
+                      } else {
+                        // Es domicilio
+                        const comanda: Comanda = {
+                          id: comandaRow.id,
+                          mesas: [],
+                          mesero: comandaRow.mesero,
+                          subtotal: comandaRow.subtotal,
+                          total: comandaRow.total,
+                          estado: comandaRow.estado,
+                          observaciones_generales: 'ITEMS ADICIONALES\n' + (comandaRow.observaciones_generales || ''),
+                          fecha_creacion: new Date(comandaRow.fecha_creacion),
+                          fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                          tipo_pedido: 'domicilio',
+                          datos_cliente: {
+                            nombre: comandaRow.cliente_nombre,
+                            direccion: comandaRow.cliente_direccion || '',
+                            telefono: comandaRow.cliente_telefono || '',
+                            es_para_llevar: comandaRow.es_para_llevar === 1
+                          },
+                          items: itemsCompletos
+                        };
+
+                        console.log('🖨️  Imprimiendo items adicionales...');
+                        imprimirComanda(comanda)
+                          .then(() => console.log('✅ Items adicionales impresos'))
+                          .catch((error) => console.error('❌ Error al imprimir items adicionales:', error));
+                      }
+                    }
+                  });
+                }
+
+                res.json({
+                  message: 'Comanda actualizada exitosamente',
+                  comanda: {
+                    id: comandaRow.id,
+                    subtotal: comandaRow.subtotal,
+                    total: comandaRow.total,
+                    itemsAgregados: items.length
+                  }
+                });
+              });
+            });
+          });
+        }
+      });
+    });
+  });
+});
+
 // Actualizar estado de comanda
 router.patch('/:id/estado', (req: Request, res: Response) => {
   const { id } = req.params;
