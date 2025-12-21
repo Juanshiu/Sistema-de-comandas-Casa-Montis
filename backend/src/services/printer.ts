@@ -211,8 +211,8 @@ const crearArchivoComanda = (comanda: Comanda): string => {
         }
         
         if (personalizacion) {
-          lineas.push('');
-          lineas.push('  PERSONALIZACION:');
+          // lineas.push('');
+          // lineas.push('  PERSONALIZACION:');
           
           // Recorrer dinámicamente todas las claves de personalización
           Object.keys(personalizacion).forEach((clave) => {
@@ -229,7 +229,7 @@ const crearArchivoComanda = (comanda: Comanda): string => {
                 .join(' ')
                 .replace('-', '/');
               
-              const textoPersonalizacion = `${nombreCategoria}: ${valor.nombre}`;
+              const textoPersonalizacion = `${valor.nombre}`; // ${nombreCategoria}: Si quieres mostrar la categoría
               const lineasPersonalizacion = dividirTexto(textoPersonalizacion, ANCHO_LINEA - 4);
               lineasPersonalizacion.forEach(l => lineas.push(`    ${l}`));
             }
@@ -266,7 +266,8 @@ const crearArchivoComanda = (comanda: Comanda): string => {
   
   lineas.push('');
   lineas.push('     ENVIADO A COCINA');
-  // lineas.push(separador);
+  lineas.push(separador);
+  lineas.push(separador);
   // lineas.push('');
   // lineas.push('');
   // lineas.push('');
