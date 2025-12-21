@@ -268,6 +268,138 @@ router.get('/activas', (req: Request, res: Response) => {
   });
 });
 
+// Obtener historial de comandas (todas las comandas con items y mesas)
+router.get('/historial', (req: Request, res: Response) => {
+  const query = `
+    SELECT 
+      c.*
+    FROM comandas c
+    ORDER BY c.fecha_creacion DESC
+  `;
+  
+  db.all(query, [], (err: any, rows: any[]) => {
+    if (err) {
+      console.error('Error al obtener historial:', err);
+      return res.status(500).json({ error: 'Error al obtener el historial' });
+    }
+    
+    if (rows.length === 0) {
+      return res.json([]);
+    }
+    
+    // Obtener mesas e items para cada comanda
+    const comandasPromises = rows.map((row: any) => {
+      return new Promise((resolve, reject) => {
+        // Obtener items primero
+        const itemsQuery = `
+          SELECT 
+            ci.*,
+            p.nombre as producto_nombre,
+            p.precio as producto_precio,
+            p.categoria as producto_categoria
+          FROM comanda_items ci
+          JOIN productos p ON ci.producto_id = p.id
+          WHERE ci.comanda_id = ?
+        `;
+        
+        db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
+          if (err) {
+            reject(err);
+            return;
+          }
+          
+          const items = itemsRows.map(itemRow => ({
+            id: itemRow.id,
+            comanda_id: itemRow.comanda_id,
+            producto_id: itemRow.producto_id,
+            cantidad: itemRow.cantidad,
+            precio_unitario: itemRow.precio_unitario,
+            subtotal: itemRow.subtotal,
+            observaciones: itemRow.observaciones,
+            personalizacion: itemRow.personalizacion ? JSON.parse(itemRow.personalizacion) : null,
+            producto: {
+              id: itemRow.producto_id,
+              nombre: itemRow.producto_nombre,
+              precio: itemRow.producto_precio,
+              categoria: itemRow.producto_categoria,
+              disponible: true
+            }
+          }));
+          
+          // Si es domicilio, no buscar mesas
+          if (row.tipo_pedido === 'domicilio') {
+            const comanda: Comanda = {
+              id: row.id,
+              mesas: [],
+              mesero: row.mesero,
+              subtotal: row.subtotal,
+              total: row.total,
+              estado: row.estado,
+              observaciones_generales: row.observaciones_generales,
+              fecha_creacion: new Date(row.fecha_creacion),
+              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              tipo_pedido: 'domicilio',
+              datos_cliente: {
+                nombre: row.cliente_nombre,
+                direccion: row.cliente_direccion || '',
+                telefono: row.cliente_telefono || '',
+                es_para_llevar: row.es_para_llevar === 1
+              },
+              items: items
+            };
+            resolve(comanda);
+            return;
+          }
+          
+          // Si es mesa, buscar las mesas asociadas
+          const mesasQuery = `
+            SELECT m.* 
+            FROM mesas m
+            INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+            WHERE cm.comanda_id = ?
+          `;
+          
+          db.all(mesasQuery, [row.id], (err: any, mesasRows: any[]) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            
+            const comanda: Comanda = {
+              id: row.id,
+              mesas: mesasRows.map(mesa => ({
+                id: mesa.id,
+                numero: mesa.numero,
+                capacidad: mesa.capacidad,
+                salon: mesa.salon,
+                ocupada: mesa.ocupada
+              })),
+              mesero: row.mesero,
+              subtotal: row.subtotal,
+              total: row.total,
+              estado: row.estado,
+              observaciones_generales: row.observaciones_generales,
+              fecha_creacion: new Date(row.fecha_creacion),
+              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              tipo_pedido: row.tipo_pedido || 'mesa',
+              items: items
+            };
+            
+            resolve(comanda);
+          });
+        });
+      });
+    });
+    
+    Promise.all(comandasPromises)
+      .then(comandas => res.json(comandas))
+      .catch(err => {
+        console.error('Error al obtener historial completo:', err);
+        res.status(500).json({ error: 'Error al obtener el historial' });
+      });
+  });
+});
+
 // Obtener una comanda específica con sus items
 router.get('/:id', (req: Request, res: Response) => {
   const { id } = req.params;

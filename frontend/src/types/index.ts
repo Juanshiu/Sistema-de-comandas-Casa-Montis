@@ -205,13 +205,16 @@ export interface FormularioComanda {
 
 export interface ComandaHistorial {
   id: string;
-  fecha: string;
+  fecha_creacion: Date;
+  fecha_actualizacion: Date;
   mesero: string;
   subtotal: number;
   total: number;
   estado: string;
   observaciones_generales?: string;
-  mesas: string; // Viene como string del GROUP_CONCAT
+  mesas: Mesa[];
+  tipo_pedido: 'mesa' | 'domicilio';
+  datos_cliente?: DatosCliente;
   items: ItemComandaHistorial[];
 }
 
@@ -221,6 +224,12 @@ export interface ItemComandaHistorial {
   precio_unitario: number;
   subtotal: number;
   observaciones?: string;
-  producto_nombre: string; // Desde el JOIN con productos
+  producto?: {
+    id: number;
+    nombre: string;
+    precio: number;
+    categoria: string;
+    disponible: boolean;
+  };
   personalizacion?: PersonalizacionItem;
 }

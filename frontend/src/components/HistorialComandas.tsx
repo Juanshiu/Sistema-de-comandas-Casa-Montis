@@ -194,12 +194,19 @@ export default function HistorialComandas() {
                       
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <MapPin className="w-4 h-4" />
-                        {comanda.mesas}
+                        {comanda.tipo_pedido === 'domicilio' 
+                          ? comanda.datos_cliente?.es_para_llevar 
+                            ? 'Para Llevar'
+                            : 'Domicilio'
+                          : Array.isArray(comanda.mesas) && comanda.mesas.length > 0
+                            ? comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')
+                            : 'N/A'
+                        }
                       </div>
                       
                       <div className="flex items-center gap-2 text-sm text-gray-600">
                         <Clock className="w-4 h-4" />
-                        {formatearFecha(comanda.fecha)}
+                        {formatearFecha(comanda.fecha_creacion?.toString() || new Date().toString())}
                       </div>
                     </div>
                     
@@ -234,7 +241,7 @@ export default function HistorialComandas() {
                               <div className="flex justify-between items-start">
                                 <div className="flex-1">
                                   <p className="font-medium text-gray-900">
-                                    {item.cantidad}x {item.producto_nombre}
+                                    {item.cantidad}x {item.producto?.nombre || 'Producto'}
                                   </p>
                                   
                                   {item.personalizacion && (
