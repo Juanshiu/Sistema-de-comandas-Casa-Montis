@@ -119,6 +119,13 @@ export interface CategoriaPersonalizacion {
   orden: number;
 }
 
+export interface DatosCliente {
+  nombre: string;
+  direccion: string;
+  telefono?: string;
+  es_para_llevar: boolean; // true = cliente recoge, false = domicilio
+}
+
 export interface Comanda {
   id: string;
   mesas: Mesa[];
@@ -130,6 +137,8 @@ export interface Comanda {
   fecha_actualizacion: Date;
   mesero: string;
   observaciones_generales?: string;
+  tipo_pedido: 'mesa' | 'domicilio';
+  datos_cliente?: DatosCliente;
 }
 
 export type EstadoComanda = 'pendiente' | 'preparando' | 'lista' | 'entregada' | 'cancelada' | 'facturada';
@@ -190,6 +199,8 @@ export interface FormularioComanda {
   items: ItemComanda[];
   observaciones_generales?: string;
   mesero: string;
+  tipo_pedido: 'mesa' | 'domicilio';
+  datos_cliente?: DatosCliente;
 }
 
 export interface ComandaHistorial {

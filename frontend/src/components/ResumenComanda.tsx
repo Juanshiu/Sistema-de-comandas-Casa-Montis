@@ -67,8 +67,25 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   };
 
   const enviarComanda = async () => {
-    if (!formulario.mesas || formulario.mesas.length === 0 || formulario.items.length === 0) {
-      setError('Debe seleccionar al menos una mesa y un producto');
+    // Validaciones según el tipo de pedido
+    if (formulario.tipo_pedido === 'domicilio') {
+      if (!formulario.datos_cliente || !formulario.datos_cliente.nombre.trim()) {
+        setError('Debe ingresar el nombre del cliente');
+        return;
+      }
+      if (!formulario.datos_cliente.es_para_llevar && !formulario.datos_cliente.direccion.trim()) {
+        setError('Debe ingresar la dirección de entrega');
+        return;
+      }
+    } else {
+      if (!formulario.mesas || formulario.mesas.length === 0) {
+        setError('Debe seleccionar al menos una mesa');
+        return;
+      }
+    }
+
+    if (formulario.items.length === 0) {
+      setError('Debe agregar al menos un producto');
       return;
     }
 
@@ -93,13 +110,17 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       setError(null);
 
       const comandaData = {
-        mesas: formulario.mesas,
+        mesas: formulario.tipo_pedido === 'mesa' ? formulario.mesas : [],
         items: formulario.items,
         subtotal: calcularSubtotal(),
         total: calcularTotal(),
         mesero: formulario.mesero,
+        tipo_pedido: formulario.tipo_pedido || 'mesa',
+        datos_cliente: formulario.tipo_pedido === 'domicilio' ? formulario.datos_cliente : undefined,
         observaciones_generales: formulario.observaciones_generales
       };
+
+      console.log('📤 Enviando comanda:', JSON.stringify(comandaData, null, 2));
 
       if (modoEdicion && comandaId) {
         // Editar comanda existente - con opción de imprimir o no
@@ -116,16 +137,20 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
         }, 2000);
       } else {
         // Crear nueva comanda
+        console.log('🚀 Creando nueva comanda...');
         const response = await apiService.createComanda(comandaData);
+        console.log('✅ Respuesta del servidor:', response);
         setSuccess(true);
         setTimeout(() => {
           window.location.reload();
         }, 2000);
       }
 
-    } catch (error) {
-      console.error('Error al procesar comanda:', error);
-      setError(`Error al ${modoEdicion ? 'actualizar' : 'crear'} la comanda. Intente nuevamente.`);
+    } catch (error: any) {
+      console.error('❌ Error al procesar comanda:', error);
+      console.error('📋 Detalles del error:', error.response?.data);
+      const errorMessage = error.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} la comanda. Intente nuevamente.`;
+      setError(errorMessage);
     } finally {
       setEnviando(false);
       setMostrarDialogoImpresion(false);
@@ -138,12 +163,23 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       formulario.items.filter(item => item.id.startsWith('temp_')) : 
       formulario.items;
     
+    // Construir información de mesa o cliente según tipo de pedido
+    let infoMesaOCliente = '';
+    if (formulario.tipo_pedido === 'domicilio' && formulario.datos_cliente) {
+      if (formulario.datos_cliente.es_para_llevar) {
+        infoMesaOCliente = `PARA LLEVAR\nCliente: ${formulario.datos_cliente.nombre}\nTel: ${formulario.datos_cliente.telefono || 'N/A'}`;
+      } else {
+        infoMesaOCliente = `DOMICILIO\nCliente: ${formulario.datos_cliente.nombre}\nTel: ${formulario.datos_cliente.telefono || 'N/A'}\nDirección: ${formulario.datos_cliente.direccion}`;
+      }
+    } else if (formulario.mesas && formulario.mesas.length > 0) {
+      infoMesaOCliente = `Mesa(s): ${formulario.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}\nCapacidad total: ${formulario.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0)} personas`;
+    }
+    
     const comandaInfo = `
 CASA MONTIS - VISTA PREVIA ${modoEdicion ? 'ITEMS ADICIONALES' : 'COMANDA'}
 =======================================
 Mesero: ${formulario.mesero}
-Mesa(s): ${formulario.mesas?.map(m => `${m.salon} - ${m.numero}`).join(', ')}
-Capacidad total: ${formulario.mesas?.reduce((sum, mesa) => sum + mesa.capacidad, 0)} personas
+${infoMesaOCliente}
 ${modoEdicion ? '\n⚠️  ESTOS SON ITEMS ADICIONALES' : ''}
 ${modoEdicion ? '⚠️  PARA COMANDA EXISTENTE\n' : ''}
 
@@ -222,16 +258,46 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
 
   return (
     <div className="space-y-6">
-      {/* Información de la mesa */}
+      {/* Información de la comanda */}
       <div className="card">
         <h2 className="text-xl font-semibold text-secondary-800 mb-4">Información de la Comanda</h2>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+          {/* Mostrar Mesa o Datos de Cliente según el tipo */}
+          {formulario.tipo_pedido === 'domicilio' ? (
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">
+                {formulario.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'}
+              </label>
+              <div className="p-3 bg-green-50 rounded-lg border border-green-200">
+                <p className="font-semibold text-green-800">{formulario.datos_cliente?.nombre}</p>
+                {formulario.datos_cliente?.telefono && (
+                  <p className="text-sm text-green-700">📞 {formulario.datos_cliente.telefono}</p>
+                )}
+                {!formulario.datos_cliente?.es_para_llevar && formulario.datos_cliente?.direccion && (
+                  <p className="text-sm text-green-700 mt-1">📍 {formulario.datos_cliente.direccion}</p>
+                )}
+                {formulario.datos_cliente?.es_para_llevar && (
+                  <p className="text-xs text-green-600 mt-1">Cliente recoge en el restaurante</p>
+                )}
+              </div>
+            </div>
+          ) : (
+            formulario.mesas && formulario.mesas.length > 0 && (
+              <div>
+                <label className="block text-sm font-medium text-secondary-700 mb-2">Mesa</label>
+                <div className="p-3 bg-secondary-50 rounded-lg">
+                  {formulario.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')} 
+                  (Capacidad total: {formulario.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0)})
+                </div>
+              </div>
+            )
+          )}
+          
           <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Mesa</label>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Mesero</label>
             <div className="p-3 bg-secondary-50 rounded-lg">
-              {formulario.mesas?.map(m => `${m.salon} - ${m.numero}`).join(', ')} 
-              (Capacidad total: {formulario.mesas?.reduce((sum, mesa) => sum + mesa.capacidad, 0)})
+              {formulario.mesero}
             </div>
           </div>
           

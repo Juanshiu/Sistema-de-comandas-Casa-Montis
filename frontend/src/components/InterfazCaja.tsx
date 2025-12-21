@@ -133,6 +133,21 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const generarFactura = () => {
     if (!comandaSeleccionada) return;
     
+    // Información de mesa o cliente según tipo
+    let mesaInfo = '';
+    if (comandaSeleccionada.tipo_pedido === 'domicilio' && comandaSeleccionada.datos_cliente) {
+      const tipo = comandaSeleccionada.datos_cliente.es_para_llevar ? 'PARA LLEVAR' : 'DOMICILIO';
+      mesaInfo = `${tipo}: ${comandaSeleccionada.datos_cliente.nombre}`;
+      if (comandaSeleccionada.datos_cliente.telefono) {
+        mesaInfo += `\nTel: ${comandaSeleccionada.datos_cliente.telefono}`;
+      }
+      if (!comandaSeleccionada.datos_cliente.es_para_llevar && comandaSeleccionada.datos_cliente.direccion) {
+        mesaInfo += `\nDir: ${comandaSeleccionada.datos_cliente.direccion}`;
+      }
+    } else if (comandaSeleccionada.mesas && comandaSeleccionada.mesas.length > 0) {
+      mesaInfo = `Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`;
+    }
+    
     const facturaContent = `
 ================================
     CASA MONTIS RESTAURANTE
@@ -142,13 +157,13 @@ CRA 9 # 11 07 - EDUARDO SANTOS
       PALERMO - HUILA
 TEL: 3132171025 - 3224588520
 ================================
-Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}
+${mesaInfo}
 Fecha: ${new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
 Mesero: ${comandaSeleccionada.mesero}
 ================================
 CANT ARTICULO          TOTAL
 --------------------------------
-${comandaSeleccionada.items.map(item => {
+${(comandaSeleccionada.items || []).map(item => {
   const nombre = item.producto.nombre.length > 16 ? item.producto.nombre.substring(0, 16) : item.producto.nombre.padEnd(16);
   let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
   
@@ -199,6 +214,21 @@ VALOR TOTAL              ${comandaSeleccionada.total.toLocaleString('es-CO').pad
     const fechaActual = new Date();
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
     
+    // Información de mesa o cliente según tipo
+    let mesaInfo = '';
+    if (factura.comanda.tipo_pedido === 'domicilio' && factura.comanda.datos_cliente) {
+      const tipo = factura.comanda.datos_cliente.es_para_llevar ? 'PARA LLEVAR' : 'DOMICILIO';
+      mesaInfo = `${tipo}: ${factura.comanda.datos_cliente.nombre}`;
+      if (factura.comanda.datos_cliente.telefono) {
+        mesaInfo += `\nTel: ${factura.comanda.datos_cliente.telefono}`;
+      }
+      if (!factura.comanda.datos_cliente.es_para_llevar && factura.comanda.datos_cliente.direccion) {
+        mesaInfo += `\nDir: ${factura.comanda.datos_cliente.direccion}`;
+      }
+    } else if (factura.comanda.mesas && factura.comanda.mesas.length > 0) {
+      mesaInfo = `MESA: ${factura.comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}`;
+    }
+    
     const reciboContent = `
 ================================
   CASA MONTIS RESTAURANTE
@@ -211,13 +241,13 @@ TEL: 3132171025 - 3224588520
       RECIBO DE PAGO
 No. ${numeroFactura}
 CAJA 01
-MESA: ${factura.comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}
+${mesaInfo}
 FECHA: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
 PAGO: ${factura.metodo_pago.toUpperCase()}
 ================================
 CANT ARTICULO          TOTAL
 --------------------------------
-${factura.comanda.items.map((item: any) => {
+${(factura.comanda.items || []).map((item: any) => {
   const nombre = item.producto.nombre.length > 16 ? item.producto.nombre.substring(0, 16) : item.producto.nombre.padEnd(16);
   return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
 }).join('\n')}
@@ -344,10 +374,31 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                   onClick={() => setComandaSeleccionada(comanda)}
                 >
                   <div className="flex justify-between items-start mb-2">
-                    <div>
-                      <h3 className="font-semibold text-secondary-800">
-                        Mesas: {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
-                      </h3>
+                    <div className="flex-1">
+                      {comanda.tipo_pedido === 'domicilio' ? (
+                        <>
+                          <h3 className="font-semibold text-secondary-800 flex items-center">
+                            {comanda.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'} 
+                            <span className="ml-2">- {comanda.datos_cliente?.nombre}</span>
+                          </h3>
+                          {!comanda.datos_cliente?.es_para_llevar && comanda.datos_cliente?.direccion && (
+                            <p className="text-sm text-secondary-600 mt-1">
+                              📍 {comanda.datos_cliente.direccion}
+                            </p>
+                          )}
+                          {comanda.datos_cliente?.telefono && (
+                            <p className="text-sm text-secondary-600">
+                              📞 {comanda.datos_cliente.telefono}
+                            </p>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <h3 className="font-semibold text-secondary-800">
+                            Mesas: {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                          </h3>
+                        </>
+                      )}
                       <p className="text-sm text-secondary-600">
                         {new Date(comanda.fecha_creacion).toLocaleString()}
                       </p>
@@ -412,9 +463,35 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
           ) : (
             <div className="space-y-4">
               <div className="bg-secondary-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-secondary-800 mb-2">
-                  Mesas: {comandaSeleccionada.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
-                </h3>
+                {comandaSeleccionada.tipo_pedido === 'domicilio' ? (
+                  <>
+                    <h3 className="font-semibold text-secondary-800 mb-2 flex items-center">
+                      {comandaSeleccionada.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'}
+                      <span className="ml-2">- {comandaSeleccionada.datos_cliente?.nombre}</span>
+                    </h3>
+                    {comandaSeleccionada.datos_cliente?.telefono && (
+                      <p className="text-sm text-secondary-600">
+                        📞 Teléfono: {comandaSeleccionada.datos_cliente.telefono}
+                      </p>
+                    )}
+                    {!comandaSeleccionada.datos_cliente?.es_para_llevar && comandaSeleccionada.datos_cliente?.direccion && (
+                      <p className="text-sm text-secondary-600">
+                        📍 Dirección: {comandaSeleccionada.datos_cliente.direccion}
+                      </p>
+                    )}
+                    {comandaSeleccionada.datos_cliente?.es_para_llevar && (
+                      <p className="text-xs text-green-600 mt-1">
+                        ⚠️ Cliente recoge en el restaurante
+                      </p>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <h3 className="font-semibold text-secondary-800 mb-2">
+                      Mesas: {comandaSeleccionada.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                    </h3>
+                  </>
+                )}
                 <p className="text-sm text-secondary-600">
                   Mesero: {comandaSeleccionada.mesero}
                 </p>
@@ -426,22 +503,26 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
               <div>
                 <h4 className="font-medium text-secondary-800 mb-2">Items:</h4>
                 <div className="space-y-2">
-                  {comandaSeleccionada.items.map((item) => (
-                    <div key={item.id} className="flex justify-between text-sm">
-                      <span>
-                        {item.producto.nombre} x {item.cantidad}
-                        {item.personalizacion && (
-                          <div className="text-xs text-secondary-500">
-                            {item.personalizacion.caldo && `Caldo: ${item.personalizacion.caldo.nombre}`}
-                            {item.personalizacion.principio && ` | Principio: ${item.personalizacion.principio.nombre}`}
-                            {item.personalizacion.proteina && ` | Proteína: ${item.personalizacion.proteina.nombre}`}
-                            {item.personalizacion.bebida && ` | Bebida: ${item.personalizacion.bebida.nombre}`}
-                          </div>
-                        )}
-                      </span>
-                      <span>${item.subtotal.toLocaleString()}</span>
-                    </div>
-                  ))}
+                  {comandaSeleccionada.items && comandaSeleccionada.items.length > 0 ? (
+                    comandaSeleccionada.items.map((item) => (
+                      <div key={item.id} className="flex justify-between text-sm">
+                        <span>
+                          {item.producto.nombre} x {item.cantidad}
+                          {item.personalizacion && (
+                            <div className="text-xs text-secondary-500">
+                              {item.personalizacion.caldo && `Caldo: ${item.personalizacion.caldo.nombre}`}
+                              {item.personalizacion.principio && ` | Principio: ${item.personalizacion.principio.nombre}`}
+                              {item.personalizacion.proteina && ` | Proteína: ${item.personalizacion.proteina.nombre}`}
+                              {item.personalizacion.bebida && ` | Bebida: ${item.personalizacion.bebida.nombre}`}
+                            </div>
+                          )}
+                        </span>
+                        <span>${item.subtotal.toLocaleString()}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-secondary-500 italic">No hay items en esta comanda</p>
+                  )}
                 </div>
               </div>
 

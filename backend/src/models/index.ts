@@ -19,6 +19,13 @@ export interface Producto {
   updated_at?: Date;
 }
 
+export interface DatosCliente {
+  nombre: string;
+  direccion: string;
+  telefono?: string;
+  es_para_llevar: boolean;
+}
+
 export interface Comanda {
   id: string;
   mesas: Mesa[];
@@ -30,6 +37,8 @@ export interface Comanda {
   fecha_creacion?: Date;
   fecha_actualizacion?: Date;
   items?: ComandaItem[];
+  tipo_pedido: 'mesa' | 'domicilio';
+  datos_cliente?: DatosCliente;
 }
 
 export interface ComandaItem {
@@ -46,7 +55,7 @@ export interface ComandaItem {
 }
 
 export interface CreateComandaRequest {
-  mesas: Mesa[];
+  mesas?: Mesa[];
   items: {
     producto: Producto;
     cantidad: number;
@@ -59,4 +68,6 @@ export interface CreateComandaRequest {
   total: number;
   mesero: string;
   observaciones_generales?: string;
+  tipo_pedido: 'mesa' | 'domicilio';
+  datos_cliente?: DatosCliente;
 }

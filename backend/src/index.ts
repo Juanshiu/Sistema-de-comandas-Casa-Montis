@@ -17,7 +17,7 @@ import { iniciarPluginImpresora } from './services/pluginImpresora';
 import mesasRoutes from './routes/mesas';
 import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
-import comandasRoutes from './routes/comandas';
+import comandasRoutes from './routes/comandas-nuevas';
 import facturasRoutes from './routes/facturas';
 import reportesRoutes from './routes/reportes';
 import personalizacionesRoutes from './routes/personalizaciones';

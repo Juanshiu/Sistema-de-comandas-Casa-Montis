@@ -172,7 +172,8 @@ router.get('/', (req: Request, res: Response) => {
             estado: row.estado,
             observaciones_generales: row.observaciones_generales,
             fecha_creacion: new Date(row.fecha_creacion),
-            fecha_actualizacion: new Date(row.fecha_actualizacion)
+            fecha_actualizacion: new Date(row.fecha_actualizacion),
+            tipo_pedido: row.tipo_pedido || 'mesa'
           };
           
           resolve(comanda);
@@ -278,6 +279,7 @@ router.get('/activas', (req: Request, res: Response) => {
               observaciones_generales: row.observaciones_generales,
               fecha_creacion: new Date(row.fecha_creacion),
               fecha_actualizacion: new Date(row.fecha_actualizacion),
+              tipo_pedido: row.tipo_pedido || 'mesa',
               items
             };
             
@@ -477,6 +479,7 @@ router.get('/:id', (req: Request, res: Response) => {
           observaciones_generales: comandaRow.observaciones_generales,
           fecha_creacion: new Date(comandaRow.fecha_creacion),
           fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+          tipo_pedido: comandaRow.tipo_pedido || 'mesa',
           items
         };
         
@@ -532,7 +535,7 @@ router.post('/', (req: Request, res: Response) => {
       let mesasInserted = 0;
       let mesasErrors = 0;
       
-      comandaData.mesas.forEach((mesa) => {
+      comandaData.mesas?.forEach((mesa) => {
         db.run(insertMesaQuery, [comandaId, mesa.id], (err: any) => {
           if (err) {
             console.error('Error al relacionar mesa:', err);
@@ -542,7 +545,7 @@ router.post('/', (req: Request, res: Response) => {
           }
           
           // Verificar si todas las mesas han sido procesadas
-          if (mesasInserted + mesasErrors === comandaData.mesas.length) {
+          if (mesasInserted + mesasErrors === (comandaData.mesas?.length || 0)) {
             if (mesasErrors > 0) {
               db.run('ROLLBACK');
               return res.status(500).json({ error: 'Error al relacionar mesas con la comanda' });
@@ -553,7 +556,7 @@ router.post('/', (req: Request, res: Response) => {
             let mesasUpdated = 0;
             let updateErrors = 0;
             
-            comandaData.mesas.forEach((mesa) => {
+            comandaData.mesas?.forEach((mesa) => {
               db.run(updateMesaQuery, [mesa.id], (err: any) => {
                 if (err) {
                   console.error('Error al ocupar mesa:', err);
@@ -563,7 +566,7 @@ router.post('/', (req: Request, res: Response) => {
                 }
                 
                 // Verificar si todas las mesas han sido actualizadas
-                if (mesasUpdated + updateErrors === comandaData.mesas.length) {
+                if (mesasUpdated + updateErrors === (comandaData.mesas?.length || 0)) {
                   if (updateErrors > 0) {
                     db.run('ROLLBACK');
                     return res.status(500).json({ error: 'Error al ocupar las mesas' });
@@ -622,14 +625,15 @@ router.post('/', (req: Request, res: Response) => {
                             
                             const comanda: Comanda = {
                               id: comandaRow.id,
-                              mesas: comandaData.mesas,
+                              mesas: comandaData.mesas || [],
                               mesero: comandaRow.mesero,
                               subtotal: comandaRow.subtotal,
                               total: comandaRow.total,
                               estado: comandaRow.estado,
                               observaciones_generales: comandaRow.observaciones_generales,
                               fecha_creacion: new Date(comandaRow.fecha_creacion),
-                              fecha_actualizacion: new Date(comandaRow.fecha_actualizacion)
+                              fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                              tipo_pedido: comandaRow.tipo_pedido || 'mesa'
                             };
                             
                             // Imprimir comanda

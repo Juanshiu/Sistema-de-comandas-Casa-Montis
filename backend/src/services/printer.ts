@@ -43,10 +43,21 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
   // lineas.push('================================');
   // lineas.push('');
   
-  // Mesa
-  const mesasTexto = comanda.mesas && comanda.mesas.length > 0 ? 
-    comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ') : 'N/A';
-  lineas.push(`MESA: ${mesasTexto}`);
+  // Mesa o Cliente según tipo de pedido
+  if (comanda.tipo_pedido === 'domicilio' && comanda.datos_cliente) {
+    if (comanda.datos_cliente.es_para_llevar) {
+      lineas.push(`PARA LLEVAR: ${comanda.datos_cliente.nombre}`);
+    } else {
+      lineas.push(`DOMICILIO: ${comanda.datos_cliente.nombre}`);
+    }
+    if (comanda.datos_cliente.telefono) {
+      lineas.push(`Tel: ${comanda.datos_cliente.telefono}`);
+    }
+  } else {
+    const mesasTexto = comanda.mesas && comanda.mesas.length > 0 ? 
+      comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ') : 'N/A';
+    lineas.push(`MESA: ${mesasTexto}`);
+  }
   lineas.push('');
   
   // Fecha y mesero
@@ -158,8 +169,27 @@ const crearArchivoComanda = (comanda: Comanda): string => {
     lineas.push(`  ${comanda.mesero}`);
   }
   
-  // Mesas
-  if (comanda.mesas && comanda.mesas.length > 0) {
+  // Mesas o Datos de Cliente según tipo de pedido
+  if (comanda.tipo_pedido === 'domicilio' && comanda.datos_cliente) {
+    lineas.push('');
+    if (comanda.datos_cliente.es_para_llevar) {
+      lineas.push('*** PARA LLEVAR ***');
+    } else {
+      lineas.push('*** DOMICILIO ***');
+    }
+    lineas.push('');
+    lineas.push(`Cliente: ${comanda.datos_cliente.nombre}`);
+    
+    if (comanda.datos_cliente.telefono) {
+      lineas.push(`Tel: ${comanda.datos_cliente.telefono}`);
+    }
+    
+    if (!comanda.datos_cliente.es_para_llevar && comanda.datos_cliente.direccion) {
+      lineas.push('Direccion:');
+      const direccionLineas = dividirTexto(comanda.datos_cliente.direccion, ANCHO_LINEA - 2);
+      direccionLineas.forEach(l => lineas.push(`  ${l}`));
+    }
+  } else if (comanda.mesas && comanda.mesas.length > 0) {
     const mesasTexto = comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ');
     if (mesasTexto.length <= 24) {
       lineas.push(`Mesa(s): ${mesasTexto}`);
@@ -168,9 +198,6 @@ const crearArchivoComanda = (comanda: Comanda): string => {
       const mesasLineas = dividirTexto(mesasTexto, ANCHO_LINEA - 2);
       mesasLineas.forEach(l => lineas.push(`  ${l}`));
     }
-    
-    // const capacidadTotal = comanda.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0);
-    // lineas.push(`Capacidad: ${capacidadTotal} pers.`);
   }
   
   lineas.push('');

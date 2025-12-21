@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../database/init';
 import { Comanda, ComandaItem, CreateComandaRequest, Mesa } from '../models';
 import { v4 as uuidv4 } from 'uuid';
-import { imprimirComanda } from '../services/printer-nuevo';
+import { imprimirComanda } from '../services/printer';
 
 const router = Router();
 
@@ -28,6 +28,30 @@ router.get('/', (req: Request, res: Response) => {
     // Obtener las mesas para cada comanda
     const comandasPromises = rows.map((row: any) => {
       return new Promise((resolve, reject) => {
+        // Si es domicilio, no buscar mesas
+        if (row.tipo_pedido === 'domicilio') {
+          const comanda: Comanda = {
+            id: row.id,
+            mesas: [],
+            mesero: row.mesero,
+            subtotal: row.subtotal,
+            total: row.total,
+            estado: row.estado,
+            observaciones_generales: row.observaciones_generales,
+            fecha_creacion: new Date(row.fecha_creacion),
+            fecha_actualizacion: new Date(row.fecha_actualizacion),
+            tipo_pedido: 'domicilio',
+            datos_cliente: {
+              nombre: row.cliente_nombre,
+              direccion: row.cliente_direccion || '',
+              telefono: row.cliente_telefono || '',
+              es_para_llevar: row.es_para_llevar === 1
+            }
+          };
+          resolve(comanda);
+          return;
+        }
+        
         const mesasQuery = `
           SELECT m.* 
           FROM mesas m
@@ -56,7 +80,8 @@ router.get('/', (req: Request, res: Response) => {
             estado: row.estado,
             observaciones_generales: row.observaciones_generales,
             fecha_creacion: new Date(row.fecha_creacion),
-            fecha_actualizacion: new Date(row.fecha_actualizacion)
+            fecha_actualizacion: new Date(row.fecha_actualizacion),
+            tipo_pedido: row.tipo_pedido || 'mesa'
           };
           
           resolve(comanda);
@@ -93,9 +118,72 @@ router.get('/activas', (req: Request, res: Response) => {
       return res.json([]);
     }
     
-    // Obtener las mesas para cada comanda
+    // Obtener las mesas para cada comanda (solo si es tipo mesa)
     const comandasPromises = rows.map((row: any) => {
       return new Promise((resolve, reject) => {
+        // Si es domicilio, no buscar mesas pero sí items
+        if (row.tipo_pedido === 'domicilio') {
+          // Obtener items de la comanda
+          const itemsQuery = `
+            SELECT 
+              ci.*,
+              p.nombre as producto_nombre,
+              p.precio as producto_precio,
+              p.categoria as producto_categoria
+            FROM comanda_items ci
+            JOIN productos p ON ci.producto_id = p.id
+            WHERE ci.comanda_id = ?
+          `;
+          
+          db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            
+            const items = itemsRows.map(itemRow => ({
+              id: itemRow.id,
+              comanda_id: itemRow.comanda_id,
+              producto_id: itemRow.producto_id,
+              cantidad: itemRow.cantidad,
+              precio_unitario: itemRow.precio_unitario,
+              subtotal: itemRow.subtotal,
+              observaciones: itemRow.observaciones,
+              personalizacion: itemRow.personalizacion ? JSON.parse(itemRow.personalizacion) : null,
+              producto: {
+                id: itemRow.producto_id,
+                nombre: itemRow.producto_nombre,
+                precio: itemRow.producto_precio,
+                categoria: itemRow.producto_categoria,
+                disponible: true
+              }
+            }));
+            
+            const comanda: Comanda = {
+              id: row.id,
+              mesas: [],
+              mesero: row.mesero,
+              subtotal: row.subtotal,
+              total: row.total,
+              estado: row.estado,
+              observaciones_generales: row.observaciones_generales,
+              fecha_creacion: new Date(row.fecha_creacion),
+              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              tipo_pedido: 'domicilio',
+              datos_cliente: {
+                nombre: row.cliente_nombre,
+                direccion: row.cliente_direccion || '',
+                telefono: row.cliente_telefono || '',
+                es_para_llevar: row.es_para_llevar === 1
+              },
+              items: items
+            };
+            resolve(comanda);
+          });
+          return;
+        }
+        
+        // Si es mesa, buscar las mesas asociadas
         const mesasQuery = `
           SELECT m.* 
           FROM mesas m
@@ -109,25 +197,64 @@ router.get('/activas', (req: Request, res: Response) => {
             return;
           }
           
-          const comanda: Comanda = {
-            id: row.id,
-            mesas: mesasRows.map(mesa => ({
-              id: mesa.id,
-              numero: mesa.numero,
-              capacidad: mesa.capacidad,
-              salon: mesa.salon,
-              ocupada: mesa.ocupada
-            })),
-            mesero: row.mesero,
-            subtotal: row.subtotal,
-            total: row.total,
-            estado: row.estado,
-            observaciones_generales: row.observaciones_generales,
-            fecha_creacion: new Date(row.fecha_creacion),
-            fecha_actualizacion: new Date(row.fecha_actualizacion)
-          };
+          // Obtener items de la comanda
+          const itemsQuery = `
+            SELECT 
+              ci.*,
+              p.nombre as producto_nombre,
+              p.precio as producto_precio,
+              p.categoria as producto_categoria
+            FROM comanda_items ci
+            JOIN productos p ON ci.producto_id = p.id
+            WHERE ci.comanda_id = ?
+          `;
           
-          resolve(comanda);
+          db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
+            if (err) {
+              reject(err);
+              return;
+            }
+            
+            const items = itemsRows.map(itemRow => ({
+              id: itemRow.id,
+              comanda_id: itemRow.comanda_id,
+              producto_id: itemRow.producto_id,
+              cantidad: itemRow.cantidad,
+              precio_unitario: itemRow.precio_unitario,
+              subtotal: itemRow.subtotal,
+              observaciones: itemRow.observaciones,
+              personalizacion: itemRow.personalizacion ? JSON.parse(itemRow.personalizacion) : null,
+              producto: {
+                id: itemRow.producto_id,
+                nombre: itemRow.producto_nombre,
+                precio: itemRow.producto_precio,
+                categoria: itemRow.producto_categoria,
+                disponible: true
+              }
+            }));
+            
+            const comanda: Comanda = {
+              id: row.id,
+              mesas: mesasRows.map(mesa => ({
+                id: mesa.id,
+                numero: mesa.numero,
+                capacidad: mesa.capacidad,
+                salon: mesa.salon,
+                ocupada: mesa.ocupada
+              })),
+              mesero: row.mesero,
+              subtotal: row.subtotal,
+              total: row.total,
+              estado: row.estado,
+              observaciones_generales: row.observaciones_generales,
+              fecha_creacion: new Date(row.fecha_creacion),
+              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              tipo_pedido: row.tipo_pedido || 'mesa',
+              items: items
+            };
+            
+            resolve(comanda);
+          });
         });
       });
     });
@@ -225,6 +352,13 @@ router.get('/:id', (req: Request, res: Response) => {
           observaciones_generales: comandaRow.observaciones_generales,
           fecha_creacion: new Date(comandaRow.fecha_creacion),
           fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+          tipo_pedido: comandaRow.tipo_pedido || 'mesa',
+          datos_cliente: comandaRow.tipo_pedido === 'domicilio' ? {
+            nombre: comandaRow.cliente_nombre,
+            direccion: comandaRow.cliente_direccion || '',
+            telefono: comandaRow.cliente_telefono || '',
+            es_para_llevar: comandaRow.es_para_llevar === 1
+          } : undefined,
           items
         };
         
@@ -238,9 +372,26 @@ router.get('/:id', (req: Request, res: Response) => {
 router.post('/', (req: Request, res: Response) => {
   const comandaData: CreateComandaRequest = req.body;
   
-  // Validar datos requeridos
-  if (!comandaData.mesas || comandaData.mesas.length === 0 || !comandaData.items || comandaData.items.length === 0) {
-    return res.status(400).json({ error: 'Faltan datos requeridos: mesas e items' });
+  // Validar datos requeridos según el tipo de pedido
+  const tipoPedido = comandaData.tipo_pedido || 'mesa';
+  
+  if (tipoPedido === 'domicilio') {
+    // Validaciones para domicilio
+    if (!comandaData.datos_cliente || !comandaData.datos_cliente.nombre) {
+      return res.status(400).json({ error: 'Debe proporcionar el nombre del cliente para pedidos a domicilio' });
+    }
+    if (!comandaData.datos_cliente.es_para_llevar && !comandaData.datos_cliente.direccion) {
+      return res.status(400).json({ error: 'Debe proporcionar la dirección para pedidos a domicilio' });
+    }
+  } else {
+    // Validaciones para mesa
+    if (!comandaData.mesas || comandaData.mesas.length === 0) {
+      return res.status(400).json({ error: 'Debe seleccionar al menos una mesa' });
+    }
+  }
+  
+  if (!comandaData.items || comandaData.items.length === 0) {
+    return res.status(400).json({ error: 'Debe agregar al menos un producto' });
   }
 
   if (!comandaData.mesero || comandaData.mesero.trim() === '') {
@@ -252,10 +403,21 @@ router.post('/', (req: Request, res: Response) => {
   db.serialize(() => {
     db.run('BEGIN TRANSACTION');
     
-    // Insertar comanda
+    // Insertar comanda con los nuevos campos de domicilio
     const insertComandaQuery = `
-      INSERT INTO comandas (id, mesero, subtotal, total, observaciones_generales)
-      VALUES (?, ?, ?, ?, ?)
+      INSERT INTO comandas (
+        id, 
+        mesero, 
+        subtotal, 
+        total, 
+        observaciones_generales,
+        tipo_pedido,
+        cliente_nombre,
+        cliente_direccion,
+        cliente_telefono,
+        es_para_llevar
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.run(insertComandaQuery, [
@@ -263,7 +425,12 @@ router.post('/', (req: Request, res: Response) => {
       comandaData.mesero,
       comandaData.subtotal,
       comandaData.total,
-      comandaData.observaciones_generales || null
+      comandaData.observaciones_generales || null,
+      tipoPedido,
+      comandaData.datos_cliente?.nombre || null,
+      comandaData.datos_cliente?.direccion || null,
+      comandaData.datos_cliente?.telefono || null,
+      comandaData.datos_cliente?.es_para_llevar ? 1 : 0
     ], function(err: any) {
       if (err) {
         console.error('Error al insertar comanda:', err);
@@ -271,133 +438,192 @@ router.post('/', (req: Request, res: Response) => {
         return res.status(500).json({ error: 'Error al crear la comanda' });
       }
       
-      // Insertar relaciones de mesas
-      const insertMesaQuery = 'INSERT INTO comanda_mesas (comanda_id, mesa_id) VALUES (?, ?)';
-      let mesasInserted = 0;
-      let mesasErrors = 0;
-      
-      comandaData.mesas.forEach((mesa) => {
-        db.run(insertMesaQuery, [comandaId, mesa.id], (err: any) => {
-          if (err) {
-            console.error('Error al relacionar mesa:', err);
-            mesasErrors++;
-          } else {
-            mesasInserted++;
-          }
+      // Función auxiliar para insertar items
+      function insertarItems() {
+        // Insertar items
+        const insertItemQuery = `
+          INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        `;
+        
+        let itemsInserted = 0;
+        let itemsErrors = 0;
+        
+        comandaData.items.forEach((item) => {
+          const itemId = uuidv4();
+          const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
           
-          // Verificar si todas las mesas han sido procesadas
-          if (mesasInserted + mesasErrors === comandaData.mesas.length) {
-            if (mesasErrors > 0) {
-              db.run('ROLLBACK');
-              return res.status(500).json({ error: 'Error al relacionar mesas con la comanda' });
+          db.run(insertItemQuery, [
+            itemId,
+            comandaId,
+            item.producto.id,
+            item.cantidad,
+            item.precio_unitario,
+            item.subtotal,
+            item.observaciones || null,
+            personalizacionStr
+          ], (err: any) => {
+            if (err) {
+              console.error('Error al insertar item:', err);
+              itemsErrors++;
+            } else {
+              itemsInserted++;
             }
             
-            // Marcar mesas como ocupadas
-            const updateMesaQuery = 'UPDATE mesas SET ocupada = 1 WHERE id = ?';
-            let mesasUpdated = 0;
-            let updateErrors = 0;
-            
-            comandaData.mesas.forEach((mesa) => {
-              db.run(updateMesaQuery, [mesa.id], (err: any) => {
+            // Verificar si todos los items han sido procesados
+            if (itemsInserted + itemsErrors === comandaData.items.length) {
+              if (itemsErrors > 0) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Error al crear los items de la comanda' });
+              }
+              
+              db.run('COMMIT', (err: any) => {
                 if (err) {
-                  console.error('Error al ocupar mesa:', err);
-                  updateErrors++;
-                } else {
-                  mesasUpdated++;
+                  console.error('Error al hacer commit:', err);
+                  return res.status(500).json({ error: 'Error al guardar la comanda' });
                 }
                 
-                // Verificar si todas las mesas han sido actualizadas
-                if (mesasUpdated + updateErrors === comandaData.mesas.length) {
-                  if (updateErrors > 0) {
-                    db.run('ROLLBACK');
-                    return res.status(500).json({ error: 'Error al ocupar las mesas' });
+                // Obtener la comanda creada con sus items
+                const getComandaQuery = 'SELECT * FROM comandas WHERE id = ?';
+                db.get(getComandaQuery, [comandaId], (err: any, comandaRow: any) => {
+                  if (err) {
+                    console.error('Error al obtener comanda creada:', err);
+                    return res.status(500).json({ error: 'Comanda creada pero error al obtener datos' });
                   }
                   
-                  // Insertar items
-                  const insertItemQuery = `
-                    INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
-                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                  // Obtener los items de la comanda
+                  const getItemsQuery = `
+                    SELECT 
+                      ci.*,
+                      p.nombre as producto_nombre,
+                      p.precio as producto_precio,
+                      p.categoria as producto_categoria
+                    FROM comanda_items ci
+                    JOIN productos p ON ci.producto_id = p.id
+                    WHERE ci.comanda_id = ?
                   `;
                   
-                  let itemsInserted = 0;
-                  let itemsErrors = 0;
-                  
-                  comandaData.items.forEach((item) => {
-                    const itemId = uuidv4();
-                    const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
+                  db.all(getItemsQuery, [comandaId], (err: any, itemsRows: any[]) => {
+                    if (err) {
+                      console.error('Error al obtener items:', err);
+                      return res.status(500).json({ error: 'Comanda creada pero error al obtener items' });
+                    }
                     
-                    db.run(insertItemQuery, [
-                      itemId,
-                      comandaId,
-                      item.producto.id,
-                      item.cantidad,
-                      item.precio_unitario,
-                      item.subtotal,
-                      item.observaciones || null,
-                      personalizacionStr
-                    ], (err: any) => {
-                      if (err) {
-                        console.error('Error al insertar item:', err);
-                        itemsErrors++;
-                      } else {
-                        itemsInserted++;
+                    const items = itemsRows.map(row => ({
+                      id: row.id,
+                      comanda_id: row.comanda_id,
+                      producto_id: row.producto_id,
+                      cantidad: row.cantidad,
+                      precio_unitario: row.precio_unitario,
+                      subtotal: row.subtotal,
+                      observaciones: row.observaciones,
+                      personalizacion: row.personalizacion ? JSON.parse(row.personalizacion) : null,
+                      producto: {
+                        id: row.producto_id,
+                        nombre: row.producto_nombre,
+                        precio: row.producto_precio,
+                        categoria: row.producto_categoria,
+                        disponible: true
                       }
-                      
-                      // Verificar si todos los items han sido procesados
-                      if (itemsInserted + itemsErrors === comandaData.items.length) {
-                        if (itemsErrors > 0) {
-                          db.run('ROLLBACK');
-                          return res.status(500).json({ error: 'Error al crear los items de la comanda' });
-                        }
-                        
-                        db.run('COMMIT', (err: any) => {
-                          if (err) {
-                            console.error('Error al hacer commit:', err);
-                            return res.status(500).json({ error: 'Error al guardar la comanda' });
-                          }
-                          
-                          // Obtener la comanda creada
-                          const getComandaQuery = 'SELECT * FROM comandas WHERE id = ?';
-                          db.get(getComandaQuery, [comandaId], (err: any, comandaRow: any) => {
-                            if (err) {
-                              console.error('Error al obtener comanda creada:', err);
-                              return res.status(500).json({ error: 'Comanda creada pero error al obtener datos' });
-                            }
-                            
-                            const comanda: Comanda = {
-                              id: comandaRow.id,
-                              mesas: comandaData.mesas,
-                              mesero: comandaRow.mesero,
-                              subtotal: comandaRow.subtotal,
-                              total: comandaRow.total,
-                              estado: comandaRow.estado,
-                              observaciones_generales: comandaRow.observaciones_generales,
-                              fecha_creacion: new Date(comandaRow.fecha_creacion),
-                              fecha_actualizacion: new Date(comandaRow.fecha_actualizacion)
-                            };
-                            
-                            // Imprimir comanda
-                            try {
-                              imprimirComanda(comanda);
-                            } catch (error) {
-                              console.error('Error al imprimir comanda:', error);
-                            }
-                            
-                            res.status(201).json({
-                              message: 'Comanda creada exitosamente',
-                              comanda
-                            });
-                          });
-                        });
-                      }
+                    }));
+                    
+                    const comanda: Comanda = {
+                      id: comandaRow.id,
+                      mesas: comandaData.mesas || [],
+                      mesero: comandaRow.mesero,
+                      subtotal: comandaRow.subtotal,
+                      total: comandaRow.total,
+                      estado: comandaRow.estado,
+                      observaciones_generales: comandaRow.observaciones_generales,
+                      fecha_creacion: new Date(comandaRow.fecha_creacion),
+                      fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                      tipo_pedido: comandaRow.tipo_pedido || 'mesa',
+                      datos_cliente: comandaRow.tipo_pedido === 'domicilio' ? {
+                        nombre: comandaRow.cliente_nombre,
+                        direccion: comandaRow.cliente_direccion || '',
+                        telefono: comandaRow.cliente_telefono || '',
+                        es_para_llevar: comandaRow.es_para_llevar === 1
+                      } : undefined,
+                      items: items
+                    };
+                    
+                    // Imprimir comanda (async)
+                    console.log('🖨️  Intentando imprimir comanda:', comandaId);
+                    imprimirComanda(comanda)
+                      .then(() => {
+                        console.log('✅ Comanda enviada a impresora exitosamente');
+                      })
+                      .catch((error) => {
+                        console.error('❌ Error al imprimir comanda:', error);
+                      });
+                    
+                    res.status(201).json({
+                      message: 'Comanda creada exitosamente',
+                      comanda
                     });
                   });
-                }
+                });
               });
-            });
-          }
+            }
+          });
         });
-      });
+      }
+      
+      // Insertar relaciones de mesas (solo si es tipo mesa)
+      if (tipoPedido === 'mesa' && comandaData.mesas && comandaData.mesas.length > 0) {
+        const insertMesaQuery = 'INSERT INTO comanda_mesas (comanda_id, mesa_id) VALUES (?, ?)';
+        let mesasInserted = 0;
+        let mesasErrors = 0;
+        
+        comandaData.mesas.forEach((mesa) => {
+          db.run(insertMesaQuery, [comandaId, mesa.id], (err: any) => {
+            if (err) {
+              console.error('Error al relacionar mesa:', err);
+              mesasErrors++;
+            } else {
+              mesasInserted++;
+            }
+            
+            // Verificar si todas las mesas han sido procesadas
+            if (mesasInserted + mesasErrors === (comandaData.mesas?.length || 0)) {
+              if (mesasErrors > 0) {
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Error al relacionar mesas con la comanda' });
+              }
+              
+              // Marcar mesas como ocupadas
+              const updateMesaQuery = 'UPDATE mesas SET ocupada = 1 WHERE id = ?';
+              let mesasUpdated = 0;
+              let updateErrors = 0;
+              
+              comandaData.mesas?.forEach((mesa) => {
+                db.run(updateMesaQuery, [mesa.id], (err: any) => {
+                  if (err) {
+                    console.error('Error al ocupar mesa:', err);
+                    updateErrors++;
+                  } else {
+                    mesasUpdated++;
+                  }
+                  
+                  // Verificar si todas las mesas han sido actualizadas
+                  if (mesasUpdated + updateErrors === (comandaData.mesas?.length || 0)) {
+                    if (updateErrors > 0) {
+                      db.run('ROLLBACK');
+                      return res.status(500).json({ error: 'Error al ocupar las mesas' });
+                    }
+                    
+                    // Continuar con inserción de items
+                    insertarItems();
+                  }
+                });
+              });
+            }
+          });
+        });
+      } else {
+        // Si es domicilio, ir directo a insertar items
+        insertarItems();
+      }
     });
   });
 });

@@ -1,8 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { Mesa, FormularioComanda, ItemComanda, PasoComanda, Comanda } from '@/types';
+import { Mesa, FormularioComanda, ItemComanda, PasoComanda, Comanda, DatosCliente } from '@/types';
 import SeleccionMesaYMesero from './SeleccionMesaYMesero';
+import SeleccionTipoPedido from './SeleccionTipoPedido';
+import FormularioDatosCliente from './FormularioDatosCliente';
 import SeleccionTipoServicio from './SeleccionTipoServicio';
 import SeleccionProductos from './SeleccionProductos';
 import ResumenComanda from './ResumenComanda';
@@ -16,14 +18,38 @@ export default function FormularioComandas() {
   const [formulario, setFormulario] = useState<FormularioComanda>({
     mesas: [],
     items: [],
-    mesero: ''
+    mesero: '',
+    tipo_pedido: 'mesa' // Por defecto es mesa
   });
 
   const pasos: PasoComanda[] = [
-    { paso: 0, titulo: 'Seleccionar Mesa', completado: formulario.mesas.length > 0 },
-    { paso: 1, titulo: 'Tipo de Servicio', completado: !!formulario.tipo_servicio },
-    { paso: 2, titulo: 'Seleccionar Productos', completado: formulario.items.length > 0 },
-    { paso: 3, titulo: 'Resumen y Envío', completado: false }
+    { 
+      paso: 0, 
+      titulo: 'Tipo de Pedido', 
+      completado: !!formulario.tipo_pedido 
+    },
+    { 
+      paso: 1, 
+      titulo: formulario.tipo_pedido === 'domicilio' ? 'Datos del Cliente' : 'Seleccionar Mesa', 
+      completado: formulario.tipo_pedido === 'domicilio' 
+        ? (!!formulario.datos_cliente?.nombre && !!formulario.mesero)
+        : (formulario.mesas.length > 0 && !!formulario.mesero)
+    },
+    { 
+      paso: 2, 
+      titulo: 'Tipo de Servicio', 
+      completado: !!formulario.tipo_servicio 
+    },
+    { 
+      paso: 3, 
+      titulo: 'Seleccionar Productos', 
+      completado: formulario.items.length > 0 
+    },
+    { 
+      paso: 4, 
+      titulo: 'Resumen y Envío', 
+      completado: false 
+    }
   ];
 
   const handleEditarComanda = (comanda: Comanda) => {
@@ -33,10 +59,12 @@ export default function FormularioComandas() {
       mesas: comanda.mesas,
       items: comanda.items,
       mesero: comanda.mesero,
-      tipo_servicio: 'desayuno', // Empezar con desayuno en edición
-      observaciones_generales: comanda.observaciones_generales
+      tipo_servicio: 'desayuno',
+      observaciones_generales: comanda.observaciones_generales,
+      tipo_pedido: comanda.tipo_pedido || 'mesa',
+      datos_cliente: comanda.datos_cliente
     });
-    setPasoActual(1); // Ir a la selección de tipo de servicio primero
+    setPasoActual(2); // Ir a la selección de tipo de servicio
   };
 
   const cancelarEdicion = () => {
@@ -45,7 +73,8 @@ export default function FormularioComandas() {
     setFormulario({
       mesas: [],
       items: [],
-      mesero: ''
+      mesero: '',
+      tipo_pedido: 'mesa'
     });
     setPasoActual(0);
   };
@@ -70,13 +99,44 @@ export default function FormularioComandas() {
     setFormulario(prev => ({ ...prev, observaciones_generales: observaciones }));
   };
 
+  const handleTipoPedidoSelect = (tipo: 'mesa' | 'domicilio') => {
+    setFormulario(prev => ({ 
+      ...prev, 
+      tipo_pedido: tipo,
+      // Limpiar datos según el tipo
+      mesas: tipo === 'domicilio' ? [] : prev.mesas,
+      datos_cliente: tipo === 'mesa' ? undefined : prev.datos_cliente
+    }));
+  };
+
+  const handleDatosClienteChange = (datos: DatosCliente) => {
+    setFormulario(prev => ({ ...prev, datos_cliente: datos }));
+  };
+
   const puedeAvanzar = () => {
     switch (pasoActual) {
-      case 0: return formulario.mesas.length > 0 && formulario.mesero.trim() !== '';
-      case 1: return !!formulario.tipo_servicio || formulario.items.length > 0; // Permitir avanzar si hay tipo de servicio O productos agregados
-      case 2: return formulario.items.length > 0;
-      case 3: return false; // Último paso
-      default: return false;
+      case 0: 
+        return !!formulario.tipo_pedido;
+      case 1:
+        if (formulario.tipo_pedido === 'domicilio') {
+          // Para domicilio: validar nombre, mesero, y dirección (solo si no es para llevar)
+          const datosValidos = formulario.datos_cliente?.nombre.trim() !== '' && 
+                                formulario.mesero.trim() !== '' &&
+                                (formulario.datos_cliente?.es_para_llevar || 
+                                 formulario.datos_cliente?.direccion.trim() !== '');
+          return datosValidos;
+        } else {
+          // Para mesa: validar mesas y mesero
+          return formulario.mesas.length > 0 && formulario.mesero.trim() !== '';
+        }
+      case 2: 
+        return !!formulario.tipo_servicio || formulario.items.length > 0;
+      case 3: 
+        return formulario.items.length > 0;
+      case 4: 
+        return false; // Último paso
+      default: 
+        return false;
     }
   };
 
@@ -96,15 +156,33 @@ export default function FormularioComandas() {
     switch (pasoActual) {
       case 0:
         return (
-          <SeleccionMesaYMesero 
-            mesasSeleccionadas={formulario.mesas}
-            onMesasChange={handleMesasSelect}
-            mesero={formulario.mesero}
-            onMeseroChange={handleMeseroChange}
-            onEditarComanda={handleEditarComanda}
+          <SeleccionTipoPedido
+            tipoPedidoSeleccionado={formulario.tipo_pedido}
+            onTipoPedidoSelect={handleTipoPedidoSelect}
           />
         );
       case 1:
+        if (formulario.tipo_pedido === 'domicilio') {
+          return (
+            <FormularioDatosCliente
+              datosCliente={formulario.datos_cliente}
+              mesero={formulario.mesero}
+              onDatosClienteChange={handleDatosClienteChange}
+              onMeseroChange={handleMeseroChange}
+            />
+          );
+        } else {
+          return (
+            <SeleccionMesaYMesero 
+              mesasSeleccionadas={formulario.mesas}
+              onMesasChange={handleMesasSelect}
+              mesero={formulario.mesero}
+              onMeseroChange={handleMeseroChange}
+              onEditarComanda={handleEditarComanda}
+            />
+          );
+        }
+      case 2:
         return (
           <>
             <BuscadorProductos
@@ -122,7 +200,7 @@ export default function FormularioComandas() {
             />
           </>
         );
-      case 2:
+      case 3:
         return (
           <SeleccionProductos
             tipoServicio={formulario.tipo_servicio!}
@@ -130,7 +208,7 @@ export default function FormularioComandas() {
             onItemsChange={handleProductosChange}
           />
         );
-      case 3:
+      case 4:
         return (
           <ResumenComanda
             formulario={formulario}
