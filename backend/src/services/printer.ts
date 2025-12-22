@@ -1,6 +1,7 @@
 import { db } from '../database/init';
 import { Comanda } from '../models';
 import * as dotenv from 'dotenv';
+import { getFechaHoraColombia } from '../utils/dateUtils';
 
 dotenv.config();
 
@@ -61,7 +62,7 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
   lineas.push('');
   
   // Fecha y mesero
-  const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : new Date();
+  const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : getFechaHoraColombia();
   lineas.push(`${fecha.toLocaleDateString('es-CO')}`);
   lineas.push(`${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
   lineas.push(`Mesero: ${comanda.mesero}`);
@@ -155,7 +156,7 @@ const crearArchivoComanda = (comanda: Comanda): string => {
   // lineas.push('');
   
   // Fecha
-  const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : new Date();
+  const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : getFechaHoraColombia();
   lineas.push(`Fecha: ${fecha.toLocaleDateString('es-CO')}`);
   lineas.push(`Hora:  ${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
   lineas.push('');
@@ -519,7 +520,7 @@ export const probarImpresora = async (): Promise<boolean> => {
            CASA MONTIS
          PRUEBA DE IMPRESORA
 =====================================
-Fecha: ${new Date().toLocaleString('es-CO')}
+Fecha: ${getFechaHoraColombia().toLocaleString('es-CO')}
 Impresora: ${PRINTER_COCINA_NAME}
 Plugin: HTTP a ESC/POS
 =====================================

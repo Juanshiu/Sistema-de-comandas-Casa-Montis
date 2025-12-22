@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { convertirAHoraColombia, getFechaISO_Colombia } from '../utils/dateUtils';
 import { db } from '../database/init';
 import { v4 as uuidv4 } from 'uuid';
 import { imprimirFactura } from '../services/printer-nuevo';
@@ -75,7 +76,7 @@ router.post('/', (req: Request, res: Response) => {
         }
 
         const facturaId = uuidv4();
-        const fechaCreacion = new Date().toISOString();
+        const fechaCreacion = getFechaISO_Colombia();
 
         db.serialize(() => {
           db.run('BEGIN TRANSACTION');
@@ -198,7 +199,7 @@ router.post('/', (req: Request, res: Response) => {
                       total: comanda.total,
                       metodo_pago: metodo_pago,
                       cajero: cajero,
-                      fecha_creacion: new Date(fechaCreacion)
+                      fecha_creacion: convertirAHoraColombia(fechaCreacion)
                     };
 
                     // Imprimir factura
@@ -276,7 +277,7 @@ router.get('/', (req: Request, res: Response) => {
             metodo_pago: row.metodo_pago,
             cajero: row.cajero,
             mesero: row.mesero,
-            fecha_creacion: new Date(row.fecha_creacion)
+            fecha_creacion: convertirAHoraColombia(row.fecha_creacion)
           };
           
           resolve(factura);
@@ -376,7 +377,7 @@ router.get('/:id', (req: Request, res: Response) => {
           metodo_pago: facturaRow.metodo_pago,
           cajero: facturaRow.cajero,
           mesero: facturaRow.mesero,
-          fecha_creacion: new Date(facturaRow.fecha_creacion)
+          fecha_creacion: convertirAHoraColombia(facturaRow.fecha_creacion)
         };
 
         res.json(factura);
@@ -410,3 +411,4 @@ router.get('/fecha/:inicio/:fin', (req: Request, res: Response) => {
 });
 
 export default router;
+

@@ -3,6 +3,7 @@ import { db } from '../database/init';
 import { Comanda, ComandaItem, CreateComandaRequest, Mesa } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { imprimirComanda } from '../services/printer';
+import { convertirAHoraColombia, getFechaSQLite_Colombia } from '../utils/dateUtils';
 
 const router = Router();
 
@@ -38,8 +39,8 @@ router.get('/', (req: Request, res: Response) => {
             total: row.total,
             estado: row.estado,
             observaciones_generales: row.observaciones_generales,
-            fecha_creacion: new Date(row.fecha_creacion),
-            fecha_actualizacion: new Date(row.fecha_actualizacion),
+            fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+            fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
             tipo_pedido: 'domicilio',
             datos_cliente: {
               nombre: row.cliente_nombre,
@@ -79,8 +80,8 @@ router.get('/', (req: Request, res: Response) => {
             total: row.total,
             estado: row.estado,
             observaciones_generales: row.observaciones_generales,
-            fecha_creacion: new Date(row.fecha_creacion),
-            fecha_actualizacion: new Date(row.fecha_actualizacion),
+            fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+            fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
             tipo_pedido: row.tipo_pedido || 'mesa'
           };
           
@@ -167,8 +168,8 @@ router.get('/activas', (req: Request, res: Response) => {
               total: row.total,
               estado: row.estado,
               observaciones_generales: row.observaciones_generales,
-              fecha_creacion: new Date(row.fecha_creacion),
-              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+              fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
               tipo_pedido: 'domicilio',
               datos_cliente: {
                 nombre: row.cliente_nombre,
@@ -247,8 +248,8 @@ router.get('/activas', (req: Request, res: Response) => {
               total: row.total,
               estado: row.estado,
               observaciones_generales: row.observaciones_generales,
-              fecha_creacion: new Date(row.fecha_creacion),
-              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+              fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
               tipo_pedido: row.tipo_pedido || 'mesa',
               items: items
             };
@@ -336,8 +337,8 @@ router.get('/historial', (req: Request, res: Response) => {
               total: row.total,
               estado: row.estado,
               observaciones_generales: row.observaciones_generales,
-              fecha_creacion: new Date(row.fecha_creacion),
-              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+              fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
               tipo_pedido: 'domicilio',
               datos_cliente: {
                 nombre: row.cliente_nombre,
@@ -379,8 +380,8 @@ router.get('/historial', (req: Request, res: Response) => {
               total: row.total,
               estado: row.estado,
               observaciones_generales: row.observaciones_generales,
-              fecha_creacion: new Date(row.fecha_creacion),
-              fecha_actualizacion: new Date(row.fecha_actualizacion),
+              fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+              fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
               tipo_pedido: row.tipo_pedido || 'mesa',
               items: items
             };
@@ -458,7 +459,7 @@ router.get('/:id', (req: Request, res: Response) => {
           subtotal: row.subtotal,
           observaciones: row.observaciones,
           personalizacion: row.personalizacion ? JSON.parse(row.personalizacion) : null,
-          created_at: new Date(row.created_at),
+          created_at: convertirAHoraColombia(row.created_at),
           producto: {
             id: row.producto_id,
             nombre: row.producto_nombre,
@@ -482,8 +483,8 @@ router.get('/:id', (req: Request, res: Response) => {
           total: comandaRow.total,
           estado: comandaRow.estado,
           observaciones_generales: comandaRow.observaciones_generales,
-          fecha_creacion: new Date(comandaRow.fecha_creacion),
-          fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+          fecha_creacion: convertirAHoraColombia(comandaRow.fecha_creacion),
+          fecha_actualizacion: convertirAHoraColombia(comandaRow.fecha_actualizacion),
           tipo_pedido: comandaRow.tipo_pedido || 'mesa',
           datos_cliente: comandaRow.tipo_pedido === 'domicilio' ? {
             nombre: comandaRow.cliente_nombre,
@@ -667,8 +668,8 @@ router.post('/', (req: Request, res: Response) => {
                       total: comandaRow.total,
                       estado: comandaRow.estado,
                       observaciones_generales: comandaRow.observaciones_generales,
-                      fecha_creacion: new Date(comandaRow.fecha_creacion),
-                      fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                      fecha_creacion: convertirAHoraColombia(comandaRow.fecha_creacion),
+                      fecha_actualizacion: convertirAHoraColombia(comandaRow.fecha_actualizacion),
                       tipo_pedido: comandaRow.tipo_pedido || 'mesa',
                       datos_cliente: comandaRow.tipo_pedido === 'domicilio' ? {
                         nombre: comandaRow.cliente_nombre,
@@ -935,8 +936,8 @@ router.put('/:id', (req: Request, res: Response) => {
                           total: comandaRow.total,
                           estado: comandaRow.estado,
                           observaciones_generales: 'ITEMS ADICIONALES\n' + (comandaRow.observaciones_generales || ''),
-                          fecha_creacion: new Date(comandaRow.fecha_creacion),
-                          fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                          fecha_creacion: convertirAHoraColombia(comandaRow.fecha_creacion),
+                          fecha_actualizacion: convertirAHoraColombia(comandaRow.fecha_actualizacion),
                           tipo_pedido: comandaRow.tipo_pedido || 'mesa',
                           items: itemsParaImprimir
                         };
@@ -956,8 +957,8 @@ router.put('/:id', (req: Request, res: Response) => {
                         total: comandaRow.total,
                         estado: comandaRow.estado,
                         observaciones_generales: 'ITEMS ADICIONALES\n' + (comandaRow.observaciones_generales || ''),
-                        fecha_creacion: new Date(comandaRow.fecha_creacion),
-                        fecha_actualizacion: new Date(comandaRow.fecha_actualizacion),
+                        fecha_creacion: convertirAHoraColombia(comandaRow.fecha_creacion),
+                        fecha_actualizacion: convertirAHoraColombia(comandaRow.fecha_actualizacion),
                         tipo_pedido: 'domicilio',
                         datos_cliente: {
                           nombre: comandaRow.cliente_nombre,
@@ -1120,3 +1121,4 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 export default router;
+

@@ -12,6 +12,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getFechaHoraColombia } from '../utils/dateUtils';
 
 const execAsync = promisify(exec);
 
@@ -402,7 +403,7 @@ app.post('/probar', async (req: Request, res: Response) => {
 ================================
    PRUEBA DE IMPRESORA
 ================================
-Fecha: ${new Date().toLocaleString('es-CO')}
+Fecha: ${getFechaHoraColombia().toLocaleString('es-CO')}
 Sistema: Casa Montis
 
 Caracteres especiales:
