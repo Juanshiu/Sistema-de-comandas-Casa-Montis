@@ -159,8 +159,33 @@ export interface ReporteVentas {
   fecha: string;
   total_ventas: number;
   cantidad_comandas: number;
+  promedio_por_comanda: number;
   productos_mas_vendidos: ProductoVendido[];
   ventas_por_hora: VentaPorHora[];
+  comparativas?: Comparativas;
+  metodos_pago?: MetodoPago[];
+  alertas?: string[];
+}
+
+export interface Comparativas {
+  vs_dia_anterior: ComparativaDetalle;
+  vs_semana_anterior: ComparativaDetalle;
+  vs_promedio_semanal: ComparativaDetalle;
+}
+
+export interface ComparativaDetalle {
+  ventas: number;
+  ventas_porcentaje: number;
+  comandas: number;
+  comandas_porcentaje: number;
+}
+
+export interface MetodoPago {
+  metodo: 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto';
+  cantidad: number;
+  total: number;
+  porcentaje: number;
+  comision_estimada?: number;
 }
 
 export interface ProductoVendido {
@@ -173,6 +198,8 @@ export interface VentaPorHora {
   hora: string;
   ventas: number;
   comandas: number;
+  es_pico?: boolean;
+  es_muerta?: boolean;
 }
 
 export interface DesayunoConfig {

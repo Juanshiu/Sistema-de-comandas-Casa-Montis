@@ -3,7 +3,11 @@
 import { useState, useEffect } from 'react';
 import { ReporteVentas, ProductoVendido, VentaPorHora } from '@/types';
 import { apiService } from '@/services/api';
-import { TrendingUp, DollarSign, ShoppingCart, Calendar, Download } from 'lucide-react';
+import { 
+  TrendingUp, DollarSign, ShoppingCart, Calendar, Download, 
+  TrendingDown, Clock, AlertCircle, Flame, CreditCard, 
+  ArrowUp, ArrowDown, Minus
+} from 'lucide-react';
 
 export default function Reportes() {
   const [reporte, setReporte] = useState<ReporteVentas | null>(null);
@@ -46,22 +50,64 @@ export default function Reportes() {
 
   const exportarReporte = () => {
     if (vistaActual === 'dia' && reporte) {
-      const contenido = `Reporte de Ventas - ${reporte.fecha}
+      let contenido = `REPORTE DE VENTAS - CASA MONTIS
+Fecha: ${new Date(reporte.fecha).toLocaleDateString('es-CO')}
+========================================
+
+📊 RESUMEN GENERAL
+----------------------------------------
 Total de Ventas: $${reporte.total_ventas.toLocaleString()}
 Cantidad de Comandas: ${reporte.cantidad_comandas}
+Promedio por Comanda: $${Math.round(reporte.promedio_por_comanda).toLocaleString()}
+`;
 
-Productos Más Vendidos:
-${reporte.productos_mas_vendidos.map(p => 
-  `${p.producto.nombre}: ${p.cantidad_vendida} unidades - $${p.total_vendido.toLocaleString()}`
-).join('\n')}
+      // Añadir comparativas si existen
+      if (reporte.comparativas) {
+        contenido += `\n\n📈 COMPARATIVAS
+----------------------------------------
+vs Día Anterior: ${reporte.comparativas.vs_dia_anterior.ventas_porcentaje > 0 ? '+' : ''}${reporte.comparativas.vs_dia_anterior.ventas_porcentaje.toFixed(1)}% ($${reporte.comparativas.vs_dia_anterior.ventas.toLocaleString()})
+vs Semana Anterior: ${reporte.comparativas.vs_semana_anterior.ventas_porcentaje > 0 ? '+' : ''}${reporte.comparativas.vs_semana_anterior.ventas_porcentaje.toFixed(1)}% ($${reporte.comparativas.vs_semana_anterior.ventas.toLocaleString()})
+vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaje > 0 ? '+' : ''}${reporte.comparativas.vs_promedio_semanal.ventas_porcentaje.toFixed(1)}% ($${reporte.comparativas.vs_promedio_semanal.ventas.toLocaleString()})
+`;
+      }
 
-Ventas por Hora:
-${reporte.ventas_por_hora.map(v => 
-  `${v.hora}: $${v.ventas.toLocaleString()} (${v.comandas} comandas)`
-).join('\n')}
-      `;
-      
-      const blob = new Blob([contenido], { type: 'text/plain' });
+      // Añadir métodos de pago si existen
+      if (reporte.metodos_pago && reporte.metodos_pago.length > 0) {
+        contenido += `\n\n💳 MÉTODOS DE PAGO
+----------------------------------------\n`;
+        reporte.metodos_pago.forEach(m => {
+          contenido += `${m.metodo.toUpperCase()}: $${m.total.toLocaleString()} (${m.porcentaje.toFixed(1)}%)\n`;
+          if (m.comision_estimada && m.comision_estimada > 0) {
+            contenido += `  Comisión estimada: $${m.comision_estimada.toLocaleString()}\n`;
+          }
+        });
+      }
+
+      // Añadir productos más vendidos
+      contenido += `\n\n🏆 PRODUCTOS MÁS VENDIDOS
+----------------------------------------\n`;
+      reporte.productos_mas_vendidos.slice(0, 10).forEach((p, i) => {
+        contenido += `${i + 1}. ${p.producto.nombre}: ${p.cantidad_vendida} unidades - $${p.total_vendido.toLocaleString()}\n`;
+      });
+
+      // Añadir ventas por hora
+      contenido += `\n\n🕐 VENTAS POR HORA
+----------------------------------------\n`;
+      reporte.ventas_por_hora.forEach(v => {
+        const marcador = v.es_pico ? '🔥 ' : v.es_muerta ? '💤 ' : '   ';
+        contenido += `${marcador}${v.hora}:00 - $${v.ventas.toLocaleString()} (${v.comandas} comandas)\n`;
+      });
+
+      // Añadir alertas si existen
+      if (reporte.alertas && reporte.alertas.length > 0) {
+        contenido += `\n\n⚡ ALERTAS
+----------------------------------------\n`;
+        reporte.alertas.forEach(alerta => {
+          contenido += `${alerta}\n`;
+        });
+      }
+
+      const blob = new Blob([contenido], { type: 'text/plain;charset=utf-8' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -79,6 +125,18 @@ ${reporte.ventas_por_hora.map(v =>
 
   const calcularComandasRango = () => {
     return reporteRango.reduce((sum, r) => sum + r.cantidad_comandas, 0);
+  };
+
+  const IconoComparativa = ({ porcentaje }: { porcentaje: number }) => {
+    if (porcentaje > 5) return <ArrowUp className="text-green-500" size={16} />;
+    if (porcentaje < -5) return <ArrowDown className="text-red-500" size={16} />;
+    return <Minus className="text-gray-500" size={16} />;
+  };
+
+  const getColorComparativa = (porcentaje: number) => {
+    if (porcentaje > 5) return 'text-green-600';
+    if (porcentaje < -5) return 'text-red-600';
+    return 'text-gray-600';
   };
 
   if (loading) {
@@ -138,7 +196,7 @@ ${reporte.ventas_por_hora.map(v =>
 
       {/* Controles de fecha */}
       <div className="card">
-        <div className="flex items-center space-x-4">
+        <div className="flex items-center space-x-4 flex-wrap">
           {vistaActual === 'dia' ? (
             <>
               <div className="flex items-center space-x-2">
@@ -199,54 +257,129 @@ ${reporte.ventas_por_hora.map(v =>
 
       {vistaActual === 'dia' && reporte ? (
         <>
-          {/* Métricas principales */}
+          {/* Alertas inteligentes */}
+          {reporte.alertas && reporte.alertas.length > 0 && (
+            <div className="card bg-blue-50 border-l-4 border-blue-500">
+              <div className="flex items-start space-x-3">
+                <AlertCircle className="text-blue-500 mt-0.5" size={20} />
+                <div className="flex-1">
+                  <h3 className="font-semibold text-blue-800 mb-2">Alertas del Día</h3>
+                  <div className="space-y-1">
+                    {reporte.alertas.map((alerta, index) => (
+                      <p key={index} className="text-sm text-blue-700">{alerta}</p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Métricas principales con comparativas */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {/* Total Ventas */}
             <div className="card bg-gradient-to-r from-green-500 to-green-600 text-white">
-              <div className="flex items-center space-x-3">
-                <DollarSign size={24} />
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-green-100">Total Ventas</p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-green-100 text-sm mb-1">Total Ventas</p>
+                  <p className="text-3xl font-bold mb-2">
                     ${reporte.total_ventas.toLocaleString()}
                   </p>
+                  {reporte.comparativas && (
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center space-x-1">
+                        <IconoComparativa porcentaje={reporte.comparativas.vs_dia_anterior.ventas_porcentaje} />
+                        <span>{reporte.comparativas.vs_dia_anterior.ventas_porcentaje > 0 ? '+' : ''}{reporte.comparativas.vs_dia_anterior.ventas_porcentaje.toFixed(1)}% vs ayer</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <IconoComparativa porcentaje={reporte.comparativas.vs_promedio_semanal.ventas_porcentaje} />
+                        <span>{reporte.comparativas.vs_promedio_semanal.ventas_porcentaje > 0 ? '+' : ''}{reporte.comparativas.vs_promedio_semanal.ventas_porcentaje.toFixed(1)}% vs promedio</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
+                <DollarSign size={48} className="opacity-20" />
               </div>
             </div>
 
+            {/* Total Comandas */}
             <div className="card bg-gradient-to-r from-blue-500 to-blue-600 text-white">
-              <div className="flex items-center space-x-3">
-                <ShoppingCart size={24} />
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-blue-100">Comandas</p>
-                  <p className="text-2xl font-bold">
+                  <p className="text-blue-100 text-sm mb-1">Comandas</p>
+                  <p className="text-3xl font-bold mb-2">
                     {reporte.cantidad_comandas}
                   </p>
+                  {reporte.comparativas && (
+                    <div className="space-y-1 text-xs">
+                      <div className="flex items-center space-x-1">
+                        <IconoComparativa porcentaje={reporte.comparativas.vs_dia_anterior.comandas_porcentaje} />
+                        <span>{reporte.comparativas.vs_dia_anterior.comandas_porcentaje > 0 ? '+' : ''}{reporte.comparativas.vs_dia_anterior.comandas_porcentaje.toFixed(1)}% vs ayer</span>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <IconoComparativa porcentaje={reporte.comparativas.vs_promedio_semanal.comandas_porcentaje} />
+                        <span>{reporte.comparativas.vs_promedio_semanal.comandas_porcentaje > 0 ? '+' : ''}{reporte.comparativas.vs_promedio_semanal.comandas_porcentaje.toFixed(1)}% vs promedio</span>
+                      </div>
+                    </div>
+                  )}
                 </div>
+                <ShoppingCart size={48} className="opacity-20" />
               </div>
             </div>
 
+            {/* Promedio por Comanda */}
             <div className="card bg-gradient-to-r from-purple-500 to-purple-600 text-white">
-              <div className="flex items-center space-x-3">
-                <TrendingUp size={24} />
+              <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-purple-100">Promedio por Comanda</p>
-                  <p className="text-2xl font-bold">
-                    ${reporte.cantidad_comandas > 0 
-                      ? Math.round(reporte.total_ventas / reporte.cantidad_comandas).toLocaleString()
-                      : '0'
-                    }
+                  <p className="text-purple-100 text-sm mb-1">Promedio por Comanda</p>
+                  <p className="text-3xl font-bold">
+                    ${Math.round(reporte.promedio_por_comanda).toLocaleString()}
                   </p>
                 </div>
+                <TrendingUp size={48} className="opacity-20" />
               </div>
             </div>
           </div>
 
+          {/* Métodos de Pago */}
+          {reporte.metodos_pago && reporte.metodos_pago.length > 0 && (
+            <div className="card">
+              <div className="flex items-center space-x-2 mb-4">
+                <CreditCard size={20} className="text-secondary-700" />
+                <h3 className="text-lg font-semibold text-secondary-800">
+                  Métodos de Pago
+                </h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {reporte.metodos_pago.map((metodo) => (
+                  <div key={metodo.metodo} className="border border-secondary-200 rounded-lg p-4">
+                    <p className="text-sm text-secondary-600 mb-1 capitalize">{metodo.metodo}</p>
+                    <p className="text-2xl font-bold text-secondary-800 mb-1">
+                      ${metodo.total.toLocaleString()}
+                    </p>
+                    <div className="flex items-center justify-between text-xs text-secondary-600">
+                      <span>{metodo.porcentaje.toFixed(1)}% del total</span>
+                      <span>{metodo.cantidad} transacciones</span>
+                    </div>
+                    {metodo.comision_estimada && metodo.comision_estimada > 0 && (
+                      <p className="text-xs text-red-600 mt-1">
+                        Comisión: -${metodo.comision_estimada.toLocaleString()}
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Productos más vendidos */}
             <div className="card">
-              <h3 className="text-lg font-semibold text-secondary-800 mb-4">
-                Productos Más Vendidos
-              </h3>
+              <div className="flex items-center space-x-2 mb-4">
+                <Flame size={20} className="text-orange-500" />
+                <h3 className="text-lg font-semibold text-secondary-800">
+                  Productos Más Vendidos
+                </h3>
+              </div>
               {reporte.productos_mas_vendidos.length === 0 ? (
                 <p className="text-secondary-600 text-center py-4">
                   No hay datos de productos
@@ -255,20 +388,25 @@ ${reporte.ventas_por_hora.map(v =>
                 <div className="space-y-3">
                   {reporte.productos_mas_vendidos.slice(0, 10).map((item, index) => (
                     <div key={item.producto.id} className="flex items-center justify-between">
-                      <div className="flex items-center space-x-3">
-                        <span className="w-6 h-6 bg-primary-100 text-primary-600 rounded-full flex items-center justify-center text-xs font-bold">
+                      <div className="flex items-center space-x-3 flex-1">
+                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold ${
+                          index === 0 ? 'bg-yellow-100 text-yellow-700' :
+                          index === 1 ? 'bg-gray-100 text-gray-700' :
+                          index === 2 ? 'bg-orange-100 text-orange-700' :
+                          'bg-primary-100 text-primary-600'
+                        }`}>
                           {index + 1}
                         </span>
-                        <div>
-                          <p className="font-medium text-secondary-800">
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-secondary-800 truncate">
                             {item.producto.nombre}
                           </p>
                           <p className="text-sm text-secondary-600">
-                            {item.cantidad_vendida} unidades vendidas
+                            {item.cantidad_vendida} unidades
                           </p>
                         </div>
                       </div>
-                      <span className="font-bold text-primary-600">
+                      <span className="font-bold text-primary-600 ml-2">
                         ${item.total_vendido.toLocaleString()}
                       </span>
                     </div>
@@ -277,11 +415,14 @@ ${reporte.ventas_por_hora.map(v =>
               )}
             </div>
 
-            {/* Ventas por hora */}
+            {/* Ventas por hora mejoradas */}
             <div className="card">
-              <h3 className="text-lg font-semibold text-secondary-800 mb-4">
-                Ventas por Hora
-              </h3>
+              <div className="flex items-center space-x-2 mb-4">
+                <Clock size={20} className="text-secondary-700" />
+                <h3 className="text-lg font-semibold text-secondary-800">
+                  Ventas por Hora
+                </h3>
+              </div>
               {reporte.ventas_por_hora.length === 0 ? (
                 <p className="text-secondary-600 text-center py-4">
                   No hay datos de ventas por hora
@@ -289,23 +430,36 @@ ${reporte.ventas_por_hora.map(v =>
               ) : (
                 <div className="space-y-2">
                   {reporte.ventas_por_hora.map((hora) => (
-                    <div key={hora.hora} className="flex items-center justify-between py-2 border-b border-secondary-100">
-                      <div>
+                    <div 
+                      key={hora.hora} 
+                      className={`flex items-center justify-between py-2 px-2 rounded ${
+                        hora.es_pico ? 'bg-orange-50 border border-orange-200' :
+                        hora.es_muerta ? 'bg-gray-50' :
+                        'border-b border-secondary-100'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-2">
+                        {hora.es_pico && <Flame size={16} className="text-orange-500" />}
                         <span className="font-medium text-secondary-800">
                           {hora.hora}:00
                         </span>
-                        <span className="text-sm text-secondary-600 ml-2">
+                        <span className="text-sm text-secondary-600">
                           ({hora.comandas} comandas)
                         </span>
+                        {hora.es_pico && (
+                          <span className="text-xs bg-orange-100 text-orange-700 px-2 py-0.5 rounded-full">
+                            Hora pico
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center space-x-2">
                         <div 
-                          className="bg-primary-200 h-2 rounded"
+                          className="bg-primary-200 h-2 rounded transition-all"
                           style={{
                             width: `${Math.max(10, (hora.ventas / Math.max(...reporte.ventas_por_hora.map(h => h.ventas))) * 80)}px`
                           }}
                         ></div>
-                        <span className="font-bold text-primary-600 min-w-[80px] text-right">
+                        <span className="font-bold text-primary-600 min-w-[90px] text-right">
                           ${hora.ventas.toLocaleString()}
                         </span>
                       </div>
@@ -378,21 +532,23 @@ ${reporte.ventas_por_hora.map(v =>
                   </thead>
                   <tbody>
                     {reporteRango.map((dia) => (
-                      <tr key={dia.fecha} className="border-b border-secondary-100">
-                        <td className="py-2 px-4">
-                          {new Date(dia.fecha).toLocaleDateString()}
+                      <tr key={dia.fecha} className="border-b border-secondary-100 hover:bg-secondary-50">
+                        <td className="py-3 px-4">
+                          {new Date(dia.fecha + 'T00:00:00').toLocaleDateString('es-CO', {
+                            weekday: 'short',
+                            year: 'numeric',
+                            month: 'short',
+                            day: 'numeric'
+                          })}
                         </td>
-                        <td className="text-right py-2 px-4">
+                        <td className="text-right py-3 px-4">
                           {dia.cantidad_comandas}
                         </td>
-                        <td className="text-right py-2 px-4 font-bold text-primary-600">
+                        <td className="text-right py-3 px-4 font-bold text-primary-600">
                           ${dia.total_ventas.toLocaleString()}
                         </td>
-                        <td className="text-right py-2 px-4">
-                          ${dia.cantidad_comandas > 0 
-                            ? Math.round(dia.total_ventas / dia.cantidad_comandas).toLocaleString()
-                            : '0'
-                          }
+                        <td className="text-right py-3 px-4">
+                          ${Math.round(dia.promedio_por_comanda).toLocaleString()}
                         </td>
                       </tr>
                     ))}
