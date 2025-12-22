@@ -234,6 +234,43 @@ router.delete('/categorias/:categoriaId/items/:itemId', (req: Request, res: Resp
   });
 });
 
+// Cambiar disponibilidad de un item
+router.patch('/categorias/:categoriaId/items/:itemId/disponibilidad', (req: Request, res: Response) => {
+  const { categoriaId, itemId } = req.params;
+  const { disponible } = req.body;
+  
+  if (disponible === undefined) {
+    return res.status(400).json({ error: 'El campo disponible es requerido' });
+  }
+  
+  const query = `
+    UPDATE items_personalizacion 
+    SET disponible = ?, updated_at = CURRENT_TIMESTAMP
+    WHERE id = ? AND categoria_id = ?
+  `;
+  
+  db.run(query, [disponible ? 1 : 0, itemId, categoriaId], function(err: any) {
+    if (err) {
+      console.error('Error al actualizar disponibilidad:', err);
+      return res.status(500).json({ error: 'Error al actualizar disponibilidad' });
+    }
+    
+    if (this.changes === 0) {
+      return res.status(404).json({ error: 'Item no encontrado' });
+    }
+    
+    db.get('SELECT * FROM items_personalizacion WHERE id = ?', [itemId], (err: any, row: any) => {
+      if (err) {
+        return res.status(500).json({ error: 'Error al obtener item actualizado' });
+      }
+      res.json({ 
+        mensaje: `Item ${disponible ? 'disponible' : 'no disponible'}`, 
+        item: row 
+      });
+    });
+  });
+});
+
 // ========== CALDOS ==========
 
 // Obtener todos los caldos

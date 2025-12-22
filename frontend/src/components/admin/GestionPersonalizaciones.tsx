@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { OpcionCaldo, OpcionPrincipio, OpcionProteina, OpcionBebida } from '@/types';
 import { apiService } from '@/services/api';
-import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, CheckCircle2, XCircle } from 'lucide-react';
 
 type TipoPersonalizacion = 'categorias' | 'caldos' | 'principios' | 'proteinas' | 'bebidas';
 
@@ -27,6 +27,7 @@ export default function GestionPersonalizaciones() {
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | number | null>(null);
   const [creandoNuevo, setCreandoNuevo] = useState(false);
+  const [notificacion, setNotificacion] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [formulario, setFormulario] = useState<PersonalizacionForm>({
     nombre: '',
     precio_adicional: 0
@@ -278,10 +279,67 @@ export default function GestionPersonalizaciones() {
     }
   };
 
+  const cambiarDisponibilidad = async (itemId: number, disponibleActual: boolean) => {
+    try {
+      const tipoEncontrado = tipos.find(t => t.id === tipoActivo);
+      if (!tipoEncontrado || !tipoEncontrado.categoriaId) {
+        setError('No se pudo identificar la categoría');
+        return;
+      }
+
+      const nuevoEstado = !disponibleActual;
+      await apiService.updateDisponibilidadItem(tipoEncontrado.categoriaId, itemId, nuevoEstado);
+      
+      // Actualizar la lista local - convertir booleano a número (0 o 1)
+      setItems(items.map(item => 
+        item.id === itemId ? { ...item, disponible: nuevoEstado ? 1 : 0 } : item
+      ));
+
+      // Obtener el item para el mensaje
+      const item = items.find(i => i.id === itemId);
+      const mensaje = `"${item?.nombre}" ahora está ${nuevoEstado ? 'DISPONIBLE' : 'NO DISPONIBLE'}`;
+      
+      // Mostrar notificación local
+      setNotificacion({
+        tipo: 'success',
+        mensaje: mensaje
+      });
+
+      // Guardar notificación en localStorage para otras páginas
+      localStorage.setItem('personalizacion_notification', JSON.stringify({
+        tipo: 'success',
+        mensaje: mensaje
+      }));
+
+      // Ocultar notificación después de 3 segundos
+      setTimeout(() => {
+        setNotificacion(null);
+      }, 3000);
+
+    } catch (err: any) {
+      setError(err.response?.data?.error || 'Error al cambiar disponibilidad');
+      console.error('Error:', err);
+    }
+  };
+
   const tipoActual = tipos.find(t => t.id === tipoActivo);
 
   return (
     <div className="space-y-6">
+      {/* Notificación Toast */}
+      {notificacion && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 animate-slide-in ${
+          notificacion.tipo === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {notificacion.tipo === 'success' ? (
+            <CheckCircle2 size={24} className="flex-shrink-0" />
+          ) : (
+            <XCircle size={24} className="flex-shrink-0" />
+          )}
+          <p className="font-medium">{notificacion.mensaje}</p>
+        </div>
+      )}
+
       {/* Header */}
       <div>
         <h2 className="text-2xl font-bold text-secondary-800 mb-2">Gestión de Personalizaciones</h2>
@@ -564,25 +622,51 @@ export default function GestionPersonalizaciones() {
                       Precio Adicional
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Disponibilidad
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                       Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-secondary-200">
                   {items.map((item) => (
-                    <tr key={item.id}>
+                    <tr key={item.id} className={item.disponible === 0 ? 'bg-gray-50' : ''}>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm font-medium text-secondary-900">
+                        <div className={`text-sm font-medium ${item.disponible === 0 ? 'text-gray-400 line-through' : 'text-secondary-900'}`}>
                           {item.nombre}
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <div className="text-sm text-secondary-900">
+                        <div className={`text-sm ${item.disponible === 0 ? 'text-gray-400' : 'text-secondary-900'}`}>
                           {item.precio_adicional > 0 
                             ? `+$${item.precio_adicional.toLocaleString()}`
                             : 'Sin costo adicional'
                           }
                         </div>
+                      </td>
+                      <td className="px-6 py-4 whitespace-nowrap">
+                        <button
+                          onClick={() => cambiarDisponibilidad(item.id, item.disponible === 1)}
+                          disabled={creandoNuevo || editandoId !== null}
+                          className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium transition-colors disabled:opacity-50 ${
+                            item.disponible === 1
+                              ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                              : 'bg-red-100 text-red-800 hover:bg-red-200'
+                          }`}
+                        >
+                          {item.disponible === 1 ? (
+                            <>
+                              <CheckCircle2 size={16} />
+                              <span>Disponible</span>
+                            </>
+                          ) : (
+                            <>
+                              <XCircle size={16} />
+                              <span>No disponible</span>
+                            </>
+                          )}
+                        </button>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                         <div className="flex space-x-2">

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { PersonalizacionItem, Producto, ItemPersonalizacion } from '@/types';
 import { apiService } from '@/services/api';
+import { CheckCircle2, XCircle } from 'lucide-react';
 
 interface CategoriaConItems {
   id: number;
@@ -22,10 +23,47 @@ export default function PersonalizacionDesayuno({ producto, onPersonalizacionCha
   );
   const [categoriasConItems, setCategoriasConItems] = useState<CategoriaConItems[]>([]);
   const [loading, setLoading] = useState(true);
+  const [notificacion, setNotificacion] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
 
   useEffect(() => {
     cargarOpcionesDinamicas();
   }, [producto]);
+
+  useEffect(() => {
+    // Listener para notificaciones de cambios de disponibilidad
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'personalizacion_notification') {
+        const data = JSON.parse(e.newValue || '{}');
+        setNotificacion(data);
+        
+        // Recargar las opciones para actualizar disponibilidad
+        cargarOpcionesDinamicas();
+        
+        // Ocultar notificación después de 3 segundos
+        setTimeout(() => {
+          setNotificacion(null);
+          localStorage.removeItem('personalizacion_notification');
+        }, 3000);
+      }
+    };
+
+    window.addEventListener('storage', handleStorageChange);
+    
+    // También verificar al montar el componente
+    const existingNotification = localStorage.getItem('personalizacion_notification');
+    if (existingNotification) {
+      const data = JSON.parse(existingNotification);
+      setNotificacion(data);
+      setTimeout(() => {
+        setNotificacion(null);
+        localStorage.removeItem('personalizacion_notification');
+      }, 3000);
+    }
+
+    return () => {
+      window.removeEventListener('storage', handleStorageChange);
+    };
+  }, []);
 
   const cargarOpcionesDinamicas = async () => {
     try {
@@ -44,10 +82,12 @@ export default function PersonalizacionDesayuno({ producto, onPersonalizacionCha
       const categoriasCompletas = await Promise.all(
         categoriasParaCargar.map(async (cat) => {
           const items = await apiService.getItemsPersonalizacion(cat.id);
+          // Filtrar solo items disponibles (disponible = 1 o true)
+          const itemsDisponibles = items.filter((item: any) => item.disponible === 1 || item.disponible === true);
           return {
             id: cat.id,
             nombre: cat.nombre,
-            items: items
+            items: itemsDisponibles
           };
         })
       );
@@ -105,10 +145,25 @@ export default function PersonalizacionDesayuno({ producto, onPersonalizacionCha
   }
 
   return (
-    <div className="space-y-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
-      <h3 className="text-lg font-semibold text-orange-800 mb-4">
-        🌅 Personalizar Desayuno
-      </h3>
+    <>
+      {/* Notificación Toast */}
+      {notificacion && (
+        <div className={`fixed top-4 right-4 z-50 px-6 py-4 rounded-lg shadow-lg flex items-center space-x-3 animate-slide-in ${
+          notificacion.tipo === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'
+        }`}>
+          {notificacion.tipo === 'success' ? (
+            <CheckCircle2 size={24} className="flex-shrink-0" />
+          ) : (
+            <XCircle size={24} className="flex-shrink-0" />
+          )}
+          <p className="font-medium">{notificacion.mensaje}</p>
+        </div>
+      )}
+
+      <div className="space-y-6 p-4 bg-orange-50 rounded-lg border border-orange-200">
+        <h3 className="text-lg font-semibold text-orange-800 mb-4">
+          🌅 Personalizar Desayuno
+        </h3>
 
       {categoriasConItems.length === 0 ? (
         <p className="text-secondary-600 text-center py-4">
@@ -155,6 +210,7 @@ export default function PersonalizacionDesayuno({ producto, onPersonalizacionCha
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

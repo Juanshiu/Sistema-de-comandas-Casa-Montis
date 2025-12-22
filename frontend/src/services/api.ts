@@ -220,6 +220,11 @@ export const apiService = {
     await api.delete(`/personalizaciones/categorias/${categoriaId}/items/${itemId}`);
   },
 
+  async updateDisponibilidadItem(categoriaId: number, itemId: number, disponible: boolean): Promise<any> {
+    const response = await api.patch(`/personalizaciones/categorias/${categoriaId}/items/${itemId}/disponibilidad`, { disponible });
+    return response.data;
+  },
+
   // Personalizaciones (endpoints legacy - se mantienen por compatibilidad)
   async getCaldos(): Promise<any[]> {
     const response = await api.get('/personalizaciones/caldos');
