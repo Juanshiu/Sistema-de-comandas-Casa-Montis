@@ -117,7 +117,7 @@ export default function HistorialComandas() {
         </div>
 
         {/* Estadísticas */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <div className="bg-white p-4 rounded-lg shadow border">
             <div className="flex items-center justify-between">
               <div>
@@ -144,7 +144,7 @@ export default function HistorialComandas() {
             </div>
           </div>
           
-          <div className="bg-white p-4 rounded-lg shadow border">
+          {/* <div className="bg-white p-4 rounded-lg shadow border">
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Total Ventas</p>
@@ -156,7 +156,7 @@ export default function HistorialComandas() {
                 <DollarSign className="w-6 h-6 text-emerald-600" />
               </div>
             </div>
-          </div>
+          </div> */}
         </div>
       </div>
 
