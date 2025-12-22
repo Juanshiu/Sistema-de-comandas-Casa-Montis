@@ -326,4 +326,107 @@ router.post('/limpiar-comandas-antiguas', (req, res) => {
   });
 });
 
+// Limpiar SOLO comandas (todas)
+router.post('/limpiar-solo-comandas', (req, res) => {
+  console.log('🗑️  Limpiando TODAS las comandas y facturas...');
+
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+
+    // 1. Eliminar items de comandas
+    db.run('DELETE FROM comanda_items', function(err: any) {
+      if (err) {
+        console.error('❌ Error al eliminar items de comandas:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ 
+          error: 'Error al eliminar items de comandas',
+          detalles: err.message 
+        });
+      }
+
+      const itemsEliminados = this.changes;
+      console.log(`✅ Items de comandas eliminados: ${itemsEliminados}`);
+
+      // 2. Eliminar relación mesa-comanda
+      db.run('DELETE FROM comanda_mesas', function(err: any) {
+        if (err) {
+          console.error('❌ Error al eliminar relaciones mesa-comanda:', err);
+          db.run('ROLLBACK');
+          return res.status(500).json({ 
+            error: 'Error al eliminar relaciones mesa-comanda',
+            detalles: err.message 
+          });
+        }
+
+        console.log(`✅ Relaciones mesa-comanda eliminadas: ${this.changes}`);
+
+        // 3. Eliminar todas las comandas
+        db.run('DELETE FROM comandas', function(err: any) {
+          if (err) {
+            console.error('❌ Error al eliminar comandas:', err);
+            db.run('ROLLBACK');
+            return res.status(500).json({ 
+              error: 'Error al eliminar comandas',
+              detalles: err.message 
+            });
+          }
+
+          const comandasEliminadas = this.changes;
+          console.log(`✅ Comandas eliminadas: ${comandasEliminadas}`);
+
+          // 4. Eliminar todas las facturas
+          db.run('DELETE FROM facturas', function(err: any) {
+            if (err) {
+              console.error('❌ Error al eliminar facturas:', err);
+              db.run('ROLLBACK');
+              return res.status(500).json({ 
+                error: 'Error al eliminar facturas',
+                detalles: err.message 
+              });
+            }
+
+            const facturasEliminadas = this.changes;
+            console.log(`✅ Facturas eliminadas: ${facturasEliminadas}`);
+
+            // 5. Liberar todas las mesas
+            db.run('UPDATE mesas SET ocupada = 0 WHERE ocupada = 1', function(err: any) {
+              if (err) {
+                console.error('❌ Error al liberar mesas:', err);
+                db.run('ROLLBACK');
+                return res.status(500).json({ 
+                  error: 'Error al liberar mesas',
+                  detalles: err.message 
+                });
+              }
+
+              const mesasLiberadas = this.changes;
+              console.log(`✅ Mesas liberadas: ${mesasLiberadas}`);
+
+              // 6. Commit de la transacción
+              db.run('COMMIT', (commitErr: any) => {
+                if (commitErr) {
+                  console.error('❌ Error al hacer commit:', commitErr);
+                  return res.status(500).json({ 
+                    error: 'Error al confirmar limpieza',
+                    detalles: commitErr.message 
+                  });
+                }
+
+                res.json({ 
+                  success: true, 
+                  mensaje: 'Todas las comandas y facturas fueron eliminadas exitosamente',
+                  comandas: comandasEliminadas,
+                  facturas: facturasEliminadas,
+                  items: itemsEliminados,
+                  mesasLiberadas: mesasLiberadas
+                });
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
 export default router;

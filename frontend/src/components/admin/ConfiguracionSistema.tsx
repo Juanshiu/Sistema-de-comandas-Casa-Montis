@@ -96,6 +96,36 @@ export default function ConfiguracionSistema() {
     }
   };
 
+  // Limpiar SOLO comandas (todas)
+  const handleLimpiarSoloComandas = async () => {
+    if (confirmacion1 !== 'ELIMINAR') {
+      alert('Debes escribir "ELIMINAR" para confirmar');
+      return;
+    }
+
+    setProcesando(true);
+    try {
+      const response = await fetch('http://localhost:3001/api/sistema/limpiar-solo-comandas', {
+        method: 'POST',
+      });
+
+      const data = await response.json();
+      
+      if (response.ok) {
+        alert(`✅ ${data.mensaje}\n\nDetalles:\n- Comandas eliminadas: ${data.comandas}\n- Facturas eliminadas: ${data.facturas}\n- Items eliminados: ${data.items}\n- Mesas liberadas: ${data.mesasLiberadas}`);
+        window.location.reload();
+      } else {
+        alert(`❌ Error al limpiar comandas: ${data.detalles || data.error}`);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      alert('❌ Error de conexión al servidor');
+    } finally {
+      setProcesando(false);
+      cerrarModal();
+    }
+  };
+
   const abrirModal = (tipo: string) => {
     setModalAbierto(tipo);
     setConfirmacion1('');
@@ -119,6 +149,15 @@ export default function ConfiguracionSistema() {
       accion: handleLiberarTodasMesas
     },
     {
+      id: 'limpiar-solo-comandas',
+      titulo: 'Limpiar SOLO Comandas',
+      descripcion: 'Elimina TODAS las comandas y facturas de la base de datos, dejando intactos productos, mesas y personalizaciones. Limpia el historial y reportes completamente.',
+      icon: Trash2,
+      color: 'orange',
+      peligro: 'alto',
+      accion: handleLimpiarSoloComandas
+    },
+    {
       id: 'limpiar-comandas',
       titulo: 'Limpiar Comandas Antiguas',
       descripcion: 'Elimina comandas y facturas con más de 30 días. Ayuda a mantener la base de datos optimizada.',
@@ -140,6 +179,14 @@ export default function ConfiguracionSistema() {
 
   const getColorClasses = (color: string, peligro: string) => {
     if (peligro === 'alto') {
+      if (color === 'orange') {
+        return {
+          border: 'border-orange-200 hover:border-orange-300',
+          bg: 'bg-orange-50',
+          icon: 'text-orange-600',
+          button: 'bg-orange-600 hover:bg-orange-700 text-white'
+        };
+      }
       return {
         border: 'border-red-200 hover:border-red-300',
         bg: 'bg-red-50',
@@ -320,6 +367,70 @@ export default function ConfiguracionSistema() {
                 className="flex-1 bg-yellow-600 text-white px-4 py-2 rounded-md hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               >
                 {procesando ? 'Procesando...' : 'Confirmar'}
+              </button>
+              <button
+                onClick={cerrarModal}
+                disabled={procesando}
+                className="flex-1 bg-secondary-500 text-white px-4 py-2 rounded-md hover:bg-secondary-600 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación - Limpiar SOLO Comandas */}
+      {modalAbierto === 'limpiar-solo-comandas' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <Trash2 className="h-8 w-8 text-orange-600 mr-3" />
+              <h3 className="text-xl font-bold text-orange-800">
+                Limpiar SOLO Comandas
+              </h3>
+            </div>
+
+            <div className="bg-orange-50 border-l-4 border-orange-500 p-4 mb-4">
+              <p className="text-orange-800 text-sm font-semibold mb-2">
+                Esta acción eliminará:
+              </p>
+              <ul className="text-orange-700 text-sm list-disc list-inside space-y-1">
+                <li>TODAS las comandas (activas y antiguas)</li>
+                <li>TODAS las facturas</li>
+                <li>Todo el historial de ventas</li>
+                <li>Todos los datos de reportes</li>
+              </ul>
+              <p className="text-orange-800 text-sm font-semibold mt-2">
+                NO eliminará:
+              </p>
+              <ul className="text-orange-700 text-sm list-disc list-inside space-y-1">
+                <li>Productos</li>
+                <li>Mesas y salones</li>
+                <li>Personalizaciones</li>
+              </ul>
+            </div>
+
+            <p className="text-secondary-700 mb-4">
+              Para confirmar, escribe la palabra <strong className="text-orange-600">ELIMINAR</strong>:
+            </p>
+
+            <input
+              type="text"
+              value={confirmacion1}
+              onChange={(e) => setConfirmacion1(e.target.value)}
+              placeholder="Escribe: ELIMINAR"
+              className="w-full px-3 py-2 border border-orange-300 rounded-md mb-4 focus:outline-none focus:ring-2 focus:ring-orange-500"
+              disabled={procesando}
+            />
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleLimpiarSoloComandas}
+                disabled={confirmacion1 !== 'ELIMINAR' || procesando}
+                className="flex-1 bg-orange-600 text-white px-4 py-2 rounded-md hover:bg-orange-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
+              >
+                {procesando ? 'Eliminando...' : 'Eliminar Todas'}
               </button>
               <button
                 onClick={cerrarModal}
