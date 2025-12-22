@@ -413,7 +413,7 @@ async function imprimirPorEscPos(
       encoding: 'cp850'
     };
     
-    console.log('📦 Enviando con encoding CP850 para tildes');
+    console.log('📦 Enviando con encoding CP850 (DOS Latin 1) para tildes');
     
     // Enviar a nuestro plugin HTTP propio
     const response = await fetch(ESC_POS_URL, {
