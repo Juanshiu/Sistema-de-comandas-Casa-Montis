@@ -104,12 +104,16 @@ export default function PersonalizacionDesayuno({ producto, onPersonalizacionCha
     // Convertir nombre de categoría a clave dinámica
     const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
     
+    // Si ya está seleccionado, deseleccionar (toggle)
+    const seleccionActual = personalizacion[clave];
+    const nuevoValor = seleccionActual?.id === opcion.id ? null : opcion;
+    
     const nuevaPersonalizacion = {
       ...personalizacion,
-      [clave]: opcion,
+      [clave]: nuevoValor,
       precio_adicional: calcularPrecioAdicional({
         ...personalizacion,
-        [clave]: opcion
+        [clave]: nuevoValor
       })
     };
     

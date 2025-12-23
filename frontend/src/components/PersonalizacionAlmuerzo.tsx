@@ -103,12 +103,16 @@ export default function PersonalizacionAlmuerzo({ onPersonalizacionChange, perso
     // Convertir el nombre de la categoría a la clave correspondiente
     const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
     
+    // Si ya está seleccionado, deseleccionar (toggle)
+    const seleccionActual = personalizacion[clave];
+    const nuevoValor = seleccionActual?.id === opcion.id ? null : opcion;
+    
     const nuevaPersonalizacion = {
       ...personalizacion,
-      [clave]: opcion,
+      [clave]: nuevoValor,
       precio_adicional: calcularPrecioAdicional({
         ...personalizacion,
-        [clave]: opcion
+        [clave]: nuevoValor
       })
     };
     

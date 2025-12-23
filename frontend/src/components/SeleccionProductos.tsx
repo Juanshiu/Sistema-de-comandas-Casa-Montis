@@ -69,12 +69,15 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   const agregarProducto = (producto: Producto) => {
     // Para almuerzo y desayuno, siempre crear items separados para permitir personalizaciones únicas
     if (producto.categoria === 'almuerzo' || producto.categoria === 'desayuno') {
+      // Buscar el producto completo desde el estado productos para asegurar que tenga todas las propiedades
+      const productoCompleto = productos.find(p => p.id === producto.id) || producto;
+      
       const nuevoItem: ItemComanda = {
         id: `item_${Date.now()}_${Math.random()}_${producto.id}`,
-        producto,
+        producto: productoCompleto,
         cantidad: 1,
-        precio_unitario: producto.precio,
-        subtotal: producto.precio,
+        precio_unitario: productoCompleto.precio,
+        subtotal: productoCompleto.precio,
         observaciones: ''
       };
       onItemsChange([...items, nuevoItem]);
@@ -114,7 +117,14 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
     return precioBase + (cantidad * precioAdicional);
   };
 
-  const quitarProducto = (productoId: number) => {
+  const quitarProducto = (itemIdOProductoId: string | number) => {
+    // Si es un string, es un itemId específico
+    if (typeof itemIdOProductoId === 'string') {
+      eliminarItem(itemIdOProductoId);
+      return;
+    }
+    
+    const productoId = itemIdOProductoId;
     const producto = productos.find(p => p.id === productoId);
     
     // Para almuerzo y desayuno, eliminar el último item agregado de ese producto
@@ -143,22 +153,19 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
           : item
       );
       onItemsChange(nuevosItems);
-    } else {
-      eliminarItem(productoId);
+    } else if (itemExistente) {
+      eliminarItem(itemExistente.id);
     }
   };
 
-  const eliminarItem = (productoId: number) => {
-    const producto = productos.find(p => p.id === productoId);
-    
-    // Para almuerzo y desayuno, eliminar todos los items de ese producto
-    if (producto && (producto.categoria === 'almuerzo' || producto.categoria === 'desayuno')) {
-      const nuevosItems = items.filter(item => item.producto.id !== productoId);
-      onItemsChange(nuevosItems);
-      return;
-    }
+  const eliminarItem = (itemId: string) => {
+    // Eliminar el item específico por su id único, no por producto.id
+    const nuevosItems = items.filter(item => item.id !== itemId);
+    onItemsChange(nuevosItems);
+  };
 
-    // Para otros productos, mantener la lógica original
+  const eliminarTodosLosItemsDeProducto = (productoId: number) => {
+    // Eliminar todos los items de un producto específico (usado en Productos Disponibles)
     const nuevosItems = items.filter(item => item.producto.id !== productoId);
     onItemsChange(nuevosItems);
   };
@@ -295,7 +302,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     
                     {cantidad > 0 && (
                       <button
-                        onClick={() => eliminarItem(producto.id)}
+                        onClick={() => eliminarTodosLosItemsDeProducto(producto.id)}
                         className="text-red-500 hover:text-red-700 p-1"
                       >
                         <Trash2 size={16} />
@@ -362,7 +369,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     )}
                     
                     <button
-                      onClick={() => quitarProducto(item.producto.id)}
+                      onClick={() => quitarProducto(item.id)}
                       className="w-8 h-8 rounded-full bg-secondary-200 hover:bg-secondary-300 flex items-center justify-center"
                     >
                       <Minus size={16} />
@@ -380,7 +387,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     </button>
                     
                     <button
-                      onClick={() => eliminarItem(item.producto.id)}
+                      onClick={() => eliminarItem(item.id)}
                       className="text-red-500 hover:text-red-700 p-1 ml-2"
                     >
                       <Trash2 size={16} />
