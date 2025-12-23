@@ -40,7 +40,7 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
   // Encabezado
   // lineas.push('================================');
   // lineas.push('        CASA MONTIS');
-  lineas.push('     COMANDA DE COCINA');
+  // lineas.push('     COMANDA DE COCINA');
   // lineas.push('================================');
   // lineas.push('');
   
@@ -53,6 +53,11 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
     }
     if (comanda.datos_cliente.telefono) {
       lineas.push(`Tel: ${comanda.datos_cliente.telefono}`);
+    }
+    if (!comanda.datos_cliente.es_para_llevar && comanda.datos_cliente.direccion) {
+      lineas.push('DIRECCIÓN:');
+      const direccionLineas = dividirTexto(comanda.datos_cliente.direccion, 30);
+      direccionLineas.forEach(l => lineas.push(`  ${l}`));
     }
   } else {
     const mesasTexto = comanda.mesas && comanda.mesas.length > 0 ? 
