@@ -104,7 +104,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
     await procesarEnvioComanda();
   };
 
-  const procesarEnvioComanda = async (imprimirAdicionales?: boolean) => {
+  const procesarEnvioComanda = async (imprimirAdicionales?: boolean, imprimirCompleta?: boolean) => {
     try {
       setEnviando(true);
       setError(null);
@@ -128,7 +128,8 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
           comandaId, 
           comandaData.items, 
           comandaData.observaciones_generales, 
-          imprimirAdicionales
+          imprimirAdicionales,
+          imprimirCompleta
         );
         
         setSuccess(true);
@@ -464,7 +465,7 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
               </h3>
             </div>
             
-            <p className="text-secondary-700 mb-6">
+            <p className="text-secondary-700 mb-4">
               Estás agregando productos a una comanda existente. ¿Deseas imprimir estos productos adicionales en cocina?
             </p>
 
@@ -474,18 +475,14 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
               </p>
             </div>
 
-            <div className="flex flex-col sm:flex-row gap-3">
+            <div className="flex flex-col gap-2">
               <button
-                onClick={() => procesarEnvioComanda(false)}
+                onClick={() => {
+                  setMostrarDialogoImpresion(false);
+                  procesarEnvioComanda(true, false);
+                }}
                 disabled={enviando}
-                className="flex-1 px-4 py-3 bg-secondary-100 hover:bg-secondary-200 text-secondary-800 font-semibold rounded-lg transition-colors"
-              >
-                No imprimir
-              </button>
-              <button
-                onClick={() => procesarEnvioComanda(true)}
-                disabled={enviando}
-                className="flex-1 px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center"
+                className="w-full px-4 py-3 bg-primary-600 hover:bg-primary-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center"
               >
                 {enviando ? (
                   <>
@@ -495,9 +492,32 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
                 ) : (
                   <>
                     <Printer size={18} className="mr-2" />
-                    Sí, imprimir
+                    Imprimir solo adicionales
                   </>
                 )}
+              </button>
+              
+              <button
+                onClick={() => {
+                  setMostrarDialogoImpresion(false);
+                  procesarEnvioComanda(false, true);
+                }}
+                disabled={enviando}
+                className="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 text-white font-semibold rounded-lg transition-colors flex items-center justify-center"
+              >
+                <Printer size={18} className="mr-2" />
+                Imprimir comanda completa
+              </button>
+              
+              <button
+                onClick={() => {
+                  setMostrarDialogoImpresion(false);
+                  procesarEnvioComanda(false, false);
+                }}
+                disabled={enviando}
+                className="w-full px-4 py-3 bg-secondary-100 hover:bg-secondary-200 text-secondary-800 font-semibold rounded-lg transition-colors"
+              >
+                No imprimir
               </button>
             </div>
 

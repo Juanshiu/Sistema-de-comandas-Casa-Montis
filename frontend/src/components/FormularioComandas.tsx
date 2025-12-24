@@ -52,18 +52,47 @@ export default function FormularioComandas() {
     }
   ];
 
-  const handleEditarComanda = (comanda: Comanda) => {
+  const handleEditarComanda = async (comanda: Comanda) => {
     setModoEdicion(true);
     setComandaEditando(comanda);
-    setFormulario({
-      mesas: comanda.mesas,
-      items: comanda.items,
-      mesero: comanda.mesero,
-      tipo_servicio: 'desayuno',
-      observaciones_generales: comanda.observaciones_generales,
-      tipo_pedido: comanda.tipo_pedido || 'mesa',
-      datos_cliente: comanda.datos_cliente
-    });
+    
+    // Cargar los productos completos desde la API para tener personalizaciones_habilitadas
+    try {
+      const { apiService } = await import('@/services/api');
+      const productosCompletos = await apiService.getAllProductos();
+      
+      // Enriquecer los items con los productos completos
+      const itemsEnriquecidos = comanda.items.map(item => {
+        const productoCompleto = productosCompletos.find(p => p.id === item.producto.id);
+        return {
+          ...item,
+          producto: productoCompleto || item.producto
+        };
+      });
+      
+      setFormulario({
+        mesas: comanda.mesas,
+        items: itemsEnriquecidos,
+        mesero: comanda.mesero,
+        tipo_servicio: 'desayuno',
+        observaciones_generales: comanda.observaciones_generales,
+        tipo_pedido: comanda.tipo_pedido || 'mesa',
+        datos_cliente: comanda.datos_cliente
+      });
+    } catch (error) {
+      console.error('Error al cargar productos:', error);
+      // Si falla, usar los items originales
+      setFormulario({
+        mesas: comanda.mesas,
+        items: comanda.items,
+        mesero: comanda.mesero,
+        tipo_servicio: 'desayuno',
+        observaciones_generales: comanda.observaciones_generales,
+        tipo_pedido: comanda.tipo_pedido || 'mesa',
+        datos_cliente: comanda.datos_cliente
+      });
+    }
+    
     setPasoActual(2); // Ir a la selección de tipo de servicio
   };
 

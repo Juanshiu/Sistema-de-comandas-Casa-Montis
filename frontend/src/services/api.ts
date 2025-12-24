@@ -133,11 +133,12 @@ export const apiService = {
   async deleteComanda(comandaId: string): Promise<void> {
     await api.delete(`/comandas/${comandaId}`);
   },
-  async editarComanda(comandaId: string, items: ItemComanda[], observaciones_generales?: string, imprimir_adicionales?: boolean): Promise<any> {
+  async editarComanda(comandaId: string, items: ItemComanda[], observaciones_generales?: string, imprimir_adicionales?: boolean, imprimir_completa?: boolean): Promise<any> {
     const response = await api.put(`/comandas/${comandaId}`, {
       items,
       observaciones_generales,
-      imprimir: imprimir_adicionales
+      imprimir: imprimir_adicionales,
+      imprimirCompleta: imprimir_completa
     });
     return response.data;
   },
