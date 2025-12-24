@@ -77,6 +77,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   const [error, setError] = useState<string | null>(null);
   const [itemPersonalizando, setItemPersonalizando] = useState<string | null>(null);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<CategoriaPersonalizacion[]>([]);
+  const [itemEliminando, setItemEliminando] = useState<{ id: string; nombre: string } | null>(null);
 
   useEffect(() => {
     cargarProductos();
@@ -204,7 +205,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   const quitarProducto = (itemIdOProductoId: string | number) => {
     // Si es un string, es un itemId específico
     if (typeof itemIdOProductoId === 'string') {
-      eliminarItem(itemIdOProductoId);
+      solicitarConfirmacionEliminar(itemIdOProductoId);
       return;
     }
     
@@ -217,8 +218,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
       if (itemsDeEsteProducto.length > 0) {
         // Eliminar el último item agregado
         const ultimoItem = itemsDeEsteProducto[itemsDeEsteProducto.length - 1];
-        const nuevosItems = items.filter(item => item.id !== ultimoItem.id);
-        onItemsChange(nuevosItems);
+        solicitarConfirmacionEliminar(ultimoItem.id);
       }
       return;
     }
@@ -238,14 +238,28 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
       );
       onItemsChange(nuevosItems);
     } else if (itemExistente) {
-      eliminarItem(itemExistente.id);
+      solicitarConfirmacionEliminar(itemExistente.id);
     }
   };
 
-  const eliminarItem = (itemId: string) => {
-    // Eliminar el item específico por su id único, no por producto.id
-    const nuevosItems = items.filter(item => item.id !== itemId);
-    onItemsChange(nuevosItems);
+  const solicitarConfirmacionEliminar = (itemId: string) => {
+    const item = items.find(i => i.id === itemId);
+    if (item) {
+      setItemEliminando({ id: itemId, nombre: item.producto.nombre });
+    }
+  };
+
+  const confirmarEliminarItem = () => {
+    if (itemEliminando) {
+      // Eliminar el item específico por su id único, no por producto.id
+      const nuevosItems = items.filter(item => item.id !== itemEliminando.id);
+      onItemsChange(nuevosItems);
+      setItemEliminando(null);
+    }
+  };
+
+  const cancelarEliminarItem = () => {
+    setItemEliminando(null);
   };
 
   const eliminarTodosLosItemsDeProducto = (productoId: number) => {
@@ -408,13 +422,41 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
             Items Seleccionados ({items.length})
           </h3>
           
+          {/* Leyenda de colores si hay items adicionales */}
+          {items.some(item => item.id.startsWith('temp_') || item.id.startsWith('item_')) && items.some(item => !item.id.startsWith('temp_') && !item.id.startsWith('item_')) && (
+            <div className="mb-4 flex gap-4 text-sm">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-100 border-2 border-green-400 rounded mr-2"></div>
+                <span className="text-secondary-600">Items originales</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-blue-100 border-2 border-blue-400 rounded mr-2"></div>
+                <span className="text-secondary-600">Items adicionales</span>
+              </div>
+            </div>
+          )}
+          
           <div className="space-y-3">
-            {items.map((item) => (
-              <div key={item.id} className="p-3 bg-secondary-50 rounded-lg">
+            {items.map((item) => {
+              const esItemAdicional = item.id.startsWith('temp_') || item.id.startsWith('item_');
+              return (
+              <div 
+                key={item.id} 
+                className={`p-3 rounded-lg border-2 ${
+                  esItemAdicional 
+                    ? 'border-blue-400 bg-blue-50' 
+                    : 'border-green-400 bg-green-50'
+                }`}
+              >
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <div className="font-medium text-secondary-800">
-                      {item.producto.nombre} x {item.cantidad}
+                    <div className="flex items-center gap-2 font-medium text-secondary-800">
+                      <span>{item.producto.nombre} x {item.cantidad}</span>
+                      {esItemAdicional && (
+                        <span className="text-xs font-semibold text-blue-600 bg-blue-200 px-2 py-0.5 rounded">
+                          NUEVO
+                        </span>
+                      )}
                     </div>
                     <div className="text-sm text-secondary-600">
                       ${item.precio_unitario.toLocaleString()} c/u
@@ -427,7 +469,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     </div>
                     
                     {item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0 && (
-                      <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                      <div className="mt-2 p-2 bg-white rounded border border-blue-200">
                         <div className="text-xs font-semibold text-blue-700 mb-1">🔹 PERSONALIZACIÓN</div>
                         <PersonalizacionDisplay personalizacion={item.personalizacion} />
                       </div>
@@ -464,8 +506,9 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     </button>
                     
                     <button
-                      onClick={() => eliminarItem(item.id)}
+                      onClick={() => solicitarConfirmacionEliminar(item.id)}
                       className="text-red-500 hover:text-red-700 p-1 ml-2"
+                      title="Eliminar item"
                     >
                       <Trash2 size={16} />
                     </button>
@@ -482,7 +525,8 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                   />
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
           
           <div className="mt-4 pt-4 border-t border-secondary-200">
@@ -565,6 +609,46 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                 </div>
               );
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Diálogo de confirmación de eliminación */}
+      {itemEliminando && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4 shadow-xl">
+            <div className="flex items-start mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+                <Trash2 size={20} className="text-red-600" />
+              </div>
+              <div className="ml-4 flex-1">
+                <h3 className="text-lg font-semibold text-secondary-800 mb-2">
+                  ¿Eliminar item?
+                </h3>
+                <p className="text-secondary-600 text-sm mb-1">
+                  Está a punto de eliminar el siguiente producto:
+                </p>
+                <p className="font-medium text-secondary-800">
+                  {itemEliminando.nombre}
+                </p>
+              </div>
+            </div>
+            
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={cancelarEliminarItem}
+                className="btn-secondary"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={confirmarEliminarItem}
+                className="bg-red-600 hover:bg-red-700 text-white px-4 py-2 rounded-lg transition-colors flex items-center"
+              >
+                <Trash2 size={16} className="mr-2" />
+                Eliminar
+              </button>
+            </div>
           </div>
         </div>
       )}

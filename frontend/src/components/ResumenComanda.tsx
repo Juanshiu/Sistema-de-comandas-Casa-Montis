@@ -407,13 +407,46 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
           Resumen de Productos ({formulario.items.length} items)
         </h3>
         
+        {/* Leyenda de colores en modo edición */}
+        {modoEdicion && formulario.items.some(item => item.id.startsWith('temp_') || item.id.startsWith('item_')) && (
+          <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+            <p className="text-sm font-medium text-blue-800 mb-2">Modo Edición - Agregando items adicionales:</p>
+            <div className="flex gap-4 text-sm">
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-green-100 border-2 border-green-400 rounded mr-2"></div>
+                <span className="text-secondary-600">Items originales</span>
+              </div>
+              <div className="flex items-center">
+                <div className="w-3 h-3 bg-blue-100 border-2 border-blue-400 rounded mr-2"></div>
+                <span className="text-secondary-600">Items adicionales (nuevos)</span>
+              </div>
+            </div>
+          </div>
+        )}
+        
         <div className="space-y-3">
-          {formulario.items.map((item) => (
-            <div key={item.id} className="p-4 bg-secondary-50 rounded-lg border-l-4 border-primary-500">
+          {formulario.items.map((item) => {
+            const esItemAdicional = item.id.startsWith('temp_') || item.id.startsWith('item_');
+            return (
+            <div 
+              key={item.id} 
+              className={`p-4 rounded-lg border-l-4 ${
+                modoEdicion && esItemAdicional
+                  ? 'border-blue-500 bg-blue-50'
+                  : modoEdicion && !esItemAdicional
+                  ? 'border-green-500 bg-green-50'
+                  : 'border-primary-500 bg-secondary-50'
+              }`}
+            >
               {/* Header con nombre del producto y precio */}
               <div className="flex justify-between items-start mb-2">
-                <div className="font-medium text-secondary-800 text-lg">
-                  {item.cantidad}x {item.producto.nombre}
+                <div className="flex items-center gap-2 font-medium text-secondary-800 text-lg">
+                  <span>{item.cantidad}x {item.producto.nombre}</span>
+                  {modoEdicion && esItemAdicional && (
+                    <span className="text-xs font-semibold text-blue-600 bg-blue-200 px-2 py-0.5 rounded">
+                      NUEVO
+                    </span>
+                  )}
                 </div>
                 <div className="font-bold text-lg text-secondary-900 ml-4">
                   ${item.subtotal.toLocaleString()}
@@ -441,7 +474,8 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
                 </div>
               )}
             </div>
-          ))}
+            );
+          })}
         </div>
         
         {/* Totales */}
