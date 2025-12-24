@@ -15,6 +15,8 @@ export interface Producto {
   precio: number;
   categoria: string;
   disponible: boolean;
+  tiene_personalizacion?: boolean;
+  personalizaciones_habilitadas?: string | string[];
   created_at?: Date;
   updated_at?: Date;
 }

@@ -182,11 +182,34 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                 onClick={() => onEditarComanda(comanda)}
               >
                 <div className="flex justify-between items-start mb-2">
-                  <div>
-                    <h3 className="font-semibold text-secondary-800">
-                      {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
-                    </h3>
-                    <p className="text-sm text-secondary-600">
+                  <div className="flex-1">
+                    {comanda.tipo_pedido === 'domicilio' ? (
+                      <>
+                        <div className="flex items-center mb-1">
+                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mr-2">
+                            🏠 Domicilio
+                          </span>
+                          {comanda.datos_cliente?.es_para_llevar && (
+                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
+                              🛍️ Para llevar
+                            </span>
+                          )}
+                        </div>
+                        <h3 className="font-semibold text-secondary-800">
+                          {comanda.datos_cliente?.nombre || 'Cliente'}
+                        </h3>
+                        {comanda.datos_cliente?.direccion && !comanda.datos_cliente.es_para_llevar && (
+                          <p className="text-xs text-secondary-500 mt-1">
+                            📍 {comanda.datos_cliente.direccion}
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <h3 className="font-semibold text-secondary-800">
+                        {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                      </h3>
+                    )}
+                    <p className="text-sm text-secondary-600 mt-1">
                       Mesero: {comanda.mesero}
                     </p>
                   </div>

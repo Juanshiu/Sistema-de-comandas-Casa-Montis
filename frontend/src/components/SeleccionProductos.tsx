@@ -4,9 +4,59 @@ import { useState, useEffect } from 'react';
 import { TipoServicio, Producto, ItemComanda, PersonalizacionItem } from '@/types';
 import { apiService } from '@/services/api';
 import { Plus, Minus, Trash2, Settings } from 'lucide-react';
-import PersonalizacionDesayuno from './PersonalizacionDesayuno';
-import PersonalizacionAlmuerzo from './PersonalizacionAlmuerzo';
 
+import PersonalizacionProducto from './PersonalizacionProducto';
+// Componente auxiliar para mostrar personalizaciones
+function PersonalizacionDisplay({ personalizacion }: { personalizacion: PersonalizacionItem }) {
+  const [texto, setTexto] = useState<string[]>([]);
+  
+  useEffect(() => {
+    const cargarPersonalizaciones = async () => {
+      if (!personalizacion || Object.keys(personalizacion).length === 0) {
+        setTexto([]);
+        return;
+      }
+      
+      const resultado: string[] = [];
+      
+      try {
+        const categorias = await apiService.getCategoriasPersonalizacion();
+        
+        for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
+          if (categoriaId === 'precio_adicional') continue;
+          
+          const catId = parseInt(categoriaId);
+          const categoria = categorias.find((c: any) => c.id === catId);
+          
+          if (categoria) {
+            const items = await apiService.getItemsPersonalizacion(catId);
+            const item = items.find((i: any) => i.id === itemId);
+            
+            if (item) {
+              resultado.push(`${categoria.nombre}: ${item.nombre}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error al cargar personalizaciones:', error);
+      }
+      
+      setTexto(resultado);
+    };
+    
+    cargarPersonalizaciones();
+  }, [personalizacion]);
+  
+  if (texto.length === 0) return null;
+  
+  return (
+    <div className="text-xs space-y-1">
+      {texto.map((t, idx) => (
+        <div key={idx} className="text-blue-700 font-medium">• {t}</div>
+      ))}
+    </div>
+  );
+}
 interface SeleccionProductosProps {
   tipoServicio: TipoServicio;
   items: ItemComanda[];
@@ -66,9 +116,43 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
     return personalizacion[clave] || null;
   };
 
+  const obtenerPersonalizacionesFormateadas = async (personalizacion: PersonalizacionItem): Promise<string[]> => {
+    if (!personalizacion || Object.keys(personalizacion).length === 0) return [];
+    
+    const resultado: string[] = [];
+    
+    try {
+      // Obtener todas las categorías
+      const categorias = await apiService.getCategoriasPersonalizacion();
+      
+      // Para cada categoría ID en la personalización
+      for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
+        // Saltar precio_adicional
+        if (categoriaId === 'precio_adicional') continue;
+        
+        const catId = parseInt(categoriaId);
+        const categoria = categorias.find((c: any) => c.id === catId);
+        
+        if (categoria) {
+          // Obtener los items de esta categoría
+          const items = await apiService.getItemsPersonalizacion(catId);
+          const item = items.find((i: any) => i.id === itemId);
+          
+          if (item) {
+            resultado.push(`${categoria.nombre}: ${item.nombre}`);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error al obtener personalizaciones formateadas:', error);
+    }
+    
+    return resultado;
+  };
+
   const agregarProducto = (producto: Producto) => {
-    // Para almuerzo y desayuno, siempre crear items separados para permitir personalizaciones únicas
-    if (producto.categoria === 'almuerzo' || producto.categoria === 'desayuno') {
+    // Para productos con personalización, siempre crear items separados para permitir personalizaciones únicas
+    if (esPersonalizable(producto)) {
       // Buscar el producto completo desde el estado productos para asegurar que tenga todas las propiedades
       const productoCompleto = productos.find(p => p.id === producto.id) || producto;
       
@@ -189,8 +273,9 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
     setItemPersonalizando(null);
   };
 
-  const esPersonalizable = (categoria: string): boolean => {
-    return categoria === 'desayuno' || categoria === 'almuerzo';
+  const esPersonalizable = (producto: Producto): boolean => {
+    // Un producto es personalizable si tiene el flag activado O si es desayuno/almuerzo (legacy)
+    return producto.tiene_personalizacion === true || producto.categoria === 'desayuno' || producto.categoria === 'almuerzo';
   };
 
   const actualizarObservaciones = (itemId: string, observaciones: string) => {
@@ -203,9 +288,9 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   };
 
   const obtenerCantidadProducto = (productoId: number): number => {
-    // Para almuerzo y desayuno, contar todos los items con ese producto (no sumar cantidades)
+    // Para productos con personalización, contar todos los items con ese producto (no sumar cantidades)
     const producto = productos.find(p => p.id === productoId);
-    if (producto && (producto.categoria === 'almuerzo' || producto.categoria === 'desayuno')) {
+    if (producto && esPersonalizable(producto)) {
       return items.filter(item => item.producto.id === productoId).length;
     }
     
@@ -341,24 +426,16 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                       {' '}= ${item.subtotal.toLocaleString()}
                     </div>
                     
-                    {item.personalizacion && (
-                      <div className="text-xs text-secondary-500 mt-1">
-                        {categoriasPersonalizacion.map((categoria, idx) => {
-                          const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
-                          if (!valor) return null;
-                          return (
-                            <span key={categoria.id}>
-                              {idx > 0 && ' | '}
-                              {categoria.nombre}: {valor.nombre}
-                            </span>
-                          );
-                        })}
+                    {item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0 && (
+                      <div className="mt-2 p-2 bg-blue-50 rounded border border-blue-200">
+                        <div className="text-xs font-semibold text-blue-700 mb-1">🔹 PERSONALIZACIÓN</div>
+                        <PersonalizacionDisplay personalizacion={item.personalizacion} />
                       </div>
                     )}
                   </div>
                   
                   <div className="ml-4 flex items-center space-x-2">
-                    {esPersonalizable(item.producto.categoria) && (
+                    {esPersonalizable(item.producto) && (
                       <button
                         onClick={() => personalizarItem(item.id)}
                         className="w-8 h-8 rounded-full bg-blue-500 hover:bg-blue-600 text-white flex items-center justify-center"
@@ -450,82 +527,43 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
               const item = items.find(i => i.id === itemPersonalizando);
               if (!item) return null;
               
-              if (item.producto.categoria === 'desayuno') {
-                return (
-                  <div>
-                    <PersonalizacionDesayuno
-                      producto={item.producto}
-                      onPersonalizacionChange={(personalizacion) => {
-                        // Actualizar temporalmente sin cerrar el modal
-                        const nuevosItems = items.map(i => {
-                          if (i.id === itemPersonalizando) {
-                            return {
-                              ...i,
-                              personalizacion,
-                              subtotal: calcularSubtotalConPersonalizacion(i.cantidad, i.precio_unitario, personalizacion)
-                            };
-                          }
-                          return i;
-                        });
-                        onItemsChange(nuevosItems);
-                      }}
-                      personalizacionInicial={item.personalizacion}
-                    />
-                    <div className="flex gap-2 mt-6 pt-4 border-t border-gray-200">
-                      <button
-                        onClick={() => setItemPersonalizando(null)}
-                        className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => setItemPersonalizando(null)}
-                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-                      >
-                        Confirmar
-                      </button>
-                    </div>
+              // Usar el mismo componente para TODOS los productos
+              return (
+                <div>
+                  <PersonalizacionProducto
+                    producto={item.producto}
+                    onPersonalizacionChange={(personalizacion: PersonalizacionItem) => {
+                      // Actualizar temporalmente sin cerrar el modal
+                      const nuevosItems = items.map(i => {
+                        if (i.id === itemPersonalizando) {
+                          return {
+                            ...i,
+                            personalizacion,
+                            subtotal: calcularSubtotalConPersonalizacion(i.cantidad, i.precio_unitario, personalizacion)
+                          };
+                        }
+                        return i;
+                      });
+                      onItemsChange(nuevosItems);
+                    }}
+                    personalizacionInicial={item.personalizacion}
+                  />
+                  <div className="flex gap-2 mt-6 pt-4 border-t border-gray-200">
+                    <button
+                      onClick={() => setItemPersonalizando(null)}
+                      className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      onClick={() => setItemPersonalizando(null)}
+                      className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
+                    >
+                      Confirmar
+                    </button>
                   </div>
-                );
-              } else if (item.producto.categoria === 'almuerzo') {
-                return (
-                  <div>
-                    <PersonalizacionAlmuerzo
-                      producto={item.producto}
-                      onPersonalizacionChange={(personalizacion) => {
-                        // Actualizar temporalmente sin cerrar el modal
-                        const nuevosItems = items.map(i => {
-                          if (i.id === itemPersonalizando) {
-                            return {
-                              ...i,
-                              personalizacion,
-                              subtotal: calcularSubtotalConPersonalizacion(i.cantidad, i.precio_unitario, personalizacion)
-                            };
-                          }
-                          return i;
-                        });
-                        onItemsChange(nuevosItems);
-                      }}
-                      personalizacionInicial={item.personalizacion}
-                    />
-                    <div className="flex gap-2 mt-6 pt-4 border-t border-gray-200">
-                      <button
-                        onClick={() => setItemPersonalizando(null)}
-                        className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
-                      >
-                        Cancelar
-                      </button>
-                      <button
-                        onClick={() => setItemPersonalizando(null)}
-                        className="flex-1 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary-dark transition-colors"
-                      >
-                        Confirmar
-                      </button>
-                    </div>
-                  </div>
-                );
-              }
-              return null;
+                </div>
+              );
             })()}
           </div>
         </div>

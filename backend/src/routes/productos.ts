@@ -53,7 +53,9 @@ router.get('/categoria/:categoria', (req: Request, res: Response) => {
     
     const productos = rows.map(producto => ({
       ...producto,
-      disponible: Boolean(producto.disponible)
+      disponible: Boolean(producto.disponible),
+      tiene_personalizacion: Boolean(producto.tiene_personalizacion),
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : []
     }));
     
     res.json(productos);
@@ -72,7 +74,9 @@ router.get('/', (req: Request, res: Response) => {
     
     const productos = rows.map(producto => ({
       ...producto,
-      disponible: Boolean(producto.disponible)
+      disponible: Boolean(producto.disponible),
+      tiene_personalizacion: Boolean(producto.tiene_personalizacion),
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : []
     }));
     
     res.json(productos);

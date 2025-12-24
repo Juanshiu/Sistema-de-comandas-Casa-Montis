@@ -1,9 +1,93 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FormularioComanda } from '@/types';
+import { FormularioComanda, PersonalizacionItem } from '@/types';
 import { apiService } from '@/services/api';
 import { Printer, Send, AlertCircle } from 'lucide-react';
+
+// Componente auxiliar para mostrar personalizaciones
+function PersonalizacionDisplay({ personalizacion }: { personalizacion: PersonalizacionItem }) {
+  const [items, setItems] = useState<Array<{ categoria: string; item: string; precio?: number; icono: string }>>([]);
+  
+  useEffect(() => {
+    const cargarPersonalizaciones = async () => {
+      if (!personalizacion || Object.keys(personalizacion).length === 0) {
+        setItems([]);
+        return;
+      }
+      
+      const resultado: Array<{ categoria: string; item: string; precio?: number; icono: string }> = [];
+      
+      try {
+        const categorias = await apiService.getCategoriasPersonalizacion();
+        
+        for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
+          if (categoriaId === 'precio_adicional') continue;
+          
+          const catId = parseInt(categoriaId);
+          const categoria = categorias.find((c: any) => c.id === catId);
+          
+          if (categoria) {
+            const itemsList = await apiService.getItemsPersonalizacion(catId);
+            const item = itemsList.find((i: any) => i.id === itemId);
+            
+            if (item) {
+              // Obtener icono basado en nombre de categoría
+              const nombre = categoria.nombre.toLowerCase();
+              let icono = '🔹';
+              if (nombre.includes('caldo') || nombre.includes('sopa')) icono = '🥄';
+              else if (nombre.includes('principio') || nombre.includes('guarnición')) icono = '🍽️';
+              else if (nombre.includes('proteína') || nombre.includes('proteina') || nombre.includes('carne')) icono = '🥩';
+              else if (nombre.includes('bebida') || nombre.includes('jugo') || nombre.includes('refresco')) icono = '☕';
+              else if (nombre.includes('termino') || nombre.includes('término')) icono = '🔥';
+              else if (nombre.includes('acompañamiento')) icono = '🥘';
+              
+              resultado.push({
+                categoria: categoria.nombre,
+                item: item.nombre,
+                precio: item.precio_adicional > 0 ? item.precio_adicional : undefined,
+                icono
+              });
+            }
+          }
+        }
+      } catch (error) {
+        console.error('Error al cargar personalizaciones:', error);
+      }
+      
+      setItems(resultado);
+    };
+    
+    cargarPersonalizaciones();
+  }, [personalizacion]);
+  
+  if (items.length === 0) return null;
+  
+  return (
+    <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
+      <div className="text-xs font-semibold text-blue-700 uppercase mb-2">
+        📋 Personalización
+      </div>
+      <div className="grid grid-cols-1 gap-2 text-sm">
+        {items.map((p, idx) => (
+          <div key={idx} className="flex items-start">
+            <span className="text-gray-600 mr-2">
+              {p.icono} {p.categoria}:
+            </span>
+            <span className="font-semibold text-gray-800">
+              {p.item}
+              {p.precio && (
+                <span className="text-green-600 ml-1">
+                  (+${p.precio.toLocaleString()})
+                </span>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
 
 interface ResumenComandaProps {
   formulario: FormularioComanda;
@@ -187,17 +271,10 @@ ${modoEdicion ? '⚠️  PARA COMANDA EXISTENTE\n' : ''}
 PRODUCTOS:
 ${itemsParaPrevia.map(item => {
   let itemText = `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString('es-CO')}`;
-  if (item.personalizacion) {
-    const personalizaciones: string[] = [];
-    // Recorrer todas las categorías dinámicamente
-    categoriasPersonalizacion.forEach(categoria => {
-      const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
-      if (valor) {
-        personalizaciones.push(`${categoria.nombre}: ${valor.nombre}`);
-      }
-    });
-    if (personalizaciones.length > 0) {
-      itemText += `\n   ${personalizaciones.join(' | ')}`;
+  if (item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0) {
+    itemText += `\n   🔹 PERSONALIZACIÓN APLICADA`;
+    if (item.personalizacion.precio_adicional && item.personalizacion.precio_adicional > 0) {
+      itemText += ` (+$${item.personalizacion.precio_adicional.toLocaleString('es-CO')})`;
     }
   }
   if (item.observaciones) {
@@ -347,35 +424,9 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
                 ${item.precio_unitario.toLocaleString()} c/u
               </div>
               
-              {/* Personalización - DINÁMICA basada en categorías */}
-              {item.personalizacion && categoriasPersonalizacion.length > 0 && (
-                <div className="mt-3 p-3 bg-white rounded-lg border border-primary-200">
-                  <div className="text-xs font-semibold text-primary-700 uppercase mb-2">
-                    📋 Personalización
-                  </div>
-                  <div className="grid grid-cols-1 gap-2 text-sm">
-                    {categoriasPersonalizacion.map((categoria) => {
-                      const opcion = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
-                      if (!opcion) return null;
-                      
-                      return (
-                        <div key={categoria.id} className="flex items-start">
-                          <span className="text-secondary-600 mr-2">
-                            {getIconoCategoria(categoria.nombre)} {categoria.nombre}:
-                          </span>
-                          <span className="font-medium text-secondary-800">
-                            {opcion.nombre}
-                            {opcion.precio_adicional > 0 && (
-                              <span className="text-green-600 ml-1">
-                                (+${opcion.precio_adicional.toLocaleString()})
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
+              {/* Personalización - DINÁMICA basada en IDs */}
+              {item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0 && (
+                <PersonalizacionDisplay personalizacion={item.personalizacion} />
               )}
               
               {/* Observaciones del item */}
