@@ -10,10 +10,66 @@ const ESC_POS_URL = process.env.ESC_POS_URL || 'http://localhost:8001/imprimir';
 const PRINTER_COCINA_NAME = process.env.PRINTER_COCINA_NAME || 'pos58';
 const PRINTER_CAJA_NAME = process.env.PRINTER_CAJA_NAME || 'pos58';
 
+// Función auxiliar para obtener el nombre de una categoría de personalización
+const obtenerNombreCategoria = (categoriaId: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    db.get(
+      'SELECT nombre FROM categorias_personalizacion WHERE id = ?',
+      [categoriaId],
+      (err: any, row: any) => {
+        if (err) reject(err);
+        else resolve(row?.nombre || 'Personalización');
+      }
+    );
+  });
+};
+
+// Función auxiliar para obtener el nombre de un item de personalización
+const obtenerNombreItem = (itemId: string): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    db.get(
+      'SELECT nombre FROM items_personalizacion WHERE id = ?',
+      [itemId],
+      (err: any, row: any) => {
+        if (err) reject(err);
+        else resolve(row?.nombre || 'Item');
+      }
+    );
+  });
+};
+
+// Función auxiliar para formatear personalizaciones (convierte IDs a nombres)
+const formatearPersonalizaciones = async (personalizacion: any): Promise<string[]> => {
+  const lineas: string[] = [];
+  
+  if (!personalizacion || typeof personalizacion !== 'object') {
+    return lineas;
+  }
+  
+  try {
+    // Obtener todas las claves que no sean precio_adicional
+    const claves = Object.keys(personalizacion).filter(k => k !== 'precio_adicional');
+    
+    for (const categoriaId of claves) {
+      const itemId = personalizacion[categoriaId];
+      if (!itemId) continue;
+      
+      // Obtener solo el nombre del item (sin mostrar la categoría)
+      const nombreItem = await obtenerNombreItem(itemId);
+      
+      lineas.push(`  ${nombreItem}`);
+    }
+  } catch (error) {
+    console.error('Error al formatear personalizaciones:', error);
+  }
+  
+  return lineas;
+};
+
 
   // Impresion de comandas para productos adicionales 
-// Función auxiliar para dividir texto largo en líneas de máximo 32 caracteres
-const dividirTexto = (texto: string, maxLength: number = 32): string[] => {
+// Función auxiliar para dividir texto largo en líneas de máximo 48 caracteres (80mm)
+const dividirTexto = (texto: string, maxLength: number = 48): string[] => {
   if (texto.length <= maxLength) return [texto];
   
   const palabras = texto.split(' ');
@@ -33,8 +89,8 @@ const dividirTexto = (texto: string, maxLength: number = 32): string[] => {
   return lineas;
 };
 
-// Función para crear un archivo de texto con formato de ITEMS ADICIONALES para 58mm
-const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
+// Función para crear un archivo de texto con formato de ITEMS ADICIONALES para 80mm
+const crearArchivoItemsAdicionales = async (comanda: Comanda): Promise<string> => {
   const lineas: string[] = [];
   
   // Encabezado
@@ -71,16 +127,19 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
   lineas.push(`${fecha.toLocaleDateString('es-CO')}`);
   lineas.push(`${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
   lineas.push(`Mesero: ${comanda.mesero}`);
-  lineas.push('================================');
-  lineas.push('');
-  lineas.push('  ** PRODUCTOS ADICIONALES **');
+  lineas.push('========================');
+  // lineas.push('');
+  // lineas.push('** PRODUCTOS ADICIONALES **');
   lineas.push('');
   
   // Items
   if (comanda.items && comanda.items.length > 0) {
-    comanda.items.forEach((item, index) => {
-      if (index > 0) {
-        lineas.push('--------------------------------');
+    for (let i = 0; i < comanda.items.length; i++) {
+      const item = comanda.items[i];
+      
+      // Agregar separador antes de cada item excepto el primero
+      if (i > 0) {
+        lineas.push('------------------------');
       }
       
       // Nombre del producto con cantidad
@@ -99,26 +158,8 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
         }
         
         if (personalizacion) {
-          // Recorrer dinámicamente todas las claves de personalización
-          Object.keys(personalizacion).forEach((clave) => {
-            // Ignorar precio_adicional y claves vacías
-            if (clave === 'precio_adicional' || !personalizacion[clave]) return;
-            
-            const valor = personalizacion[clave];
-            // Verificar que sea un objeto con nombre
-            if (valor && typeof valor === 'object' && valor.nombre) {
-              // Convertir clave a nombre legible (ej: "caldos_sopas" -> "Caldos/Sopas")
-              const nombreCategoria = clave
-                .split('_')
-                .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
-                .join(' ')
-                .replace('-', '/');
-              
-              const textoPersonalizacion = `${nombreCategoria}: ${valor.nombre}`;
-              const lineasPersonalizacion = dividirTexto(textoPersonalizacion, 30);
-              lineasPersonalizacion.forEach(l => lineas.push(`  ${l}`));
-            }
-          });
+          const lineasPersonalizacion = await formatearPersonalizaciones(personalizacion);
+          lineasPersonalizacion.forEach(l => lineas.push(l));
         }
       }
       
@@ -128,16 +169,16 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
         lineas.push(`  Obs:`);
         obsLineas.forEach(l => lineas.push(`  ${l}`));
       }
-    });
+    }
   } else {
     lineas.push('No hay productos');
   }
   
   lineas.push('');
-  lineas.push('================================');
-  lineas.push('         *** URGENTE ***');
-  lineas.push('    SOLO PRODUCTOS NUEVOS');
-  lineas.push('================================');
+  lineas.push('========================');
+  lineas.push('    *** URGENTE ***');
+  lineas.push('PRODUCTOS ADICIONALES');
+  lineas.push('========================');
   lineas.push('');
   lineas.push('');
   lineas.push('');
@@ -146,12 +187,12 @@ const crearArchivoItemsAdicionales = (comanda: Comanda): string => {
 };
 
 
-// COMANDA INICIAL optimizada para 58mm (32 caracteres)
-const crearArchivoComanda = (comanda: Comanda): string => {
+// COMANDA INICIAL optimizada para 80mm (48 caracteres)
+const crearArchivoComanda = async (comanda: Comanda): Promise<string> => {
   const lineas: string[] = [];
-  const ANCHO_LINEA = 32;
-  const separador = '================================';
-  const separadorCorto = '--------------------------------';
+  const ANCHO_LINEA = 48;
+  const separador = '========================';
+  const separadorCorto = '------------------------';
   
   // // Encabezado
   // lineas.push(separador);
@@ -209,13 +250,16 @@ const crearArchivoComanda = (comanda: Comanda): string => {
   lineas.push('');
   // lineas.push(separador);
   // lineas.push('          PRODUCTOS');
-  // lineas.push(separador);
+  lineas.push(separador);
   lineas.push('');
   
   // Items
   if (comanda.items && comanda.items.length > 0) {
-    comanda.items.forEach((item, index) => {
-      if (index > 0) {
+    for (let i = 0; i < comanda.items.length; i++) {
+      const item = comanda.items[i];
+      
+      // Agregar separador antes de cada item excepto el primero
+      if (i > 0) {
         lineas.push(separadorCorto);
       }
       
@@ -244,29 +288,8 @@ const crearArchivoComanda = (comanda: Comanda): string => {
         }
         
         if (personalizacion) {
-          // lineas.push('');
-          // lineas.push('  PERSONALIZACION:');
-          
-          // Recorrer dinámicamente todas las claves de personalización
-          Object.keys(personalizacion).forEach((clave) => {
-            // Ignorar precio_adicional y claves vacías
-            if (clave === 'precio_adicional' || !personalizacion[clave]) return;
-            
-            const valor = personalizacion[clave];
-            // Verificar que sea un objeto con nombre
-            if (valor && typeof valor === 'object' && valor.nombre) {
-              // Convertir clave a nombre legible (ej: "caldos_sopas" -> "Caldos/Sopas")
-              const nombreCategoria = clave
-                .split('_')
-                .map(palabra => palabra.charAt(0).toUpperCase() + palabra.slice(1))
-                .join(' ')
-                .replace('-', '/');
-              
-              const textoPersonalizacion = `${valor.nombre}`; // ${nombreCategoria}: Si quieres mostrar la categoría
-              const lineasPersonalizacion = dividirTexto(textoPersonalizacion, ANCHO_LINEA - 4);
-              lineasPersonalizacion.forEach(l => lineas.push(`    ${l}`));
-            }
-          });
+          const lineasPersonalizacion = await formatearPersonalizaciones(personalizacion);
+          lineasPersonalizacion.forEach(l => lineas.push(l));
         }
       }
       
@@ -277,7 +300,7 @@ const crearArchivoComanda = (comanda: Comanda): string => {
         const obsLineas = dividirTexto(item.observaciones, ANCHO_LINEA - 4);
         obsLineas.forEach(l => lineas.push(`    ${l}`));
       }
-    });
+    }
   } else {
     lineas.push('No hay items');
   }
@@ -399,7 +422,6 @@ const formatearFecha = (fecha: Date): string => {
 // FUNCIÓN PRINCIPAL: IMPRIMIR POR ESC/POS
 // ============================================
 /**
- * Imprime contenido usando el plugin HTTP a ESC/POS de Parzibyte
  * @param contenido - Texto formateado de la comanda
  * @param nombreImpresora - Nombre de la impresora (ej: "pos58")
  */
@@ -466,10 +488,10 @@ export const imprimirComanda = async (comanda: Comanda): Promise<void> => {
     // Si son items adicionales, usar formato especial
     if (comandaCompleta.observaciones_generales && comandaCompleta.observaciones_generales.includes('ITEMS ADICIONALES')) {
       console.log('📄 Generando formato para ITEMS ADICIONALES...');
-      contenidoComanda = crearArchivoItemsAdicionales(comandaCompleta);
+      contenidoComanda = await crearArchivoItemsAdicionales(comandaCompleta);
     } else {
       console.log('📄 Generando formato de comanda completa...');
-      contenidoComanda = crearArchivoComanda(comandaCompleta);
+      contenidoComanda = await crearArchivoComanda(comandaCompleta);
     }
     
     // Imprimir usando el plugin HTTP a ESC/POS

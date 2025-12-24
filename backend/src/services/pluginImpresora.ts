@@ -44,14 +44,19 @@ interface OperacionImpresion {
  * Convierte texto a bytes con encoding específico
  */
 function convertirABytes(texto: string, encoding: string = 'cp850'): Buffer {
-  // CP850 (DOS Latin 1) - Encoding ESTABLE para impresoras térmicas en LATAM
+  // CP850 (DOS Latin 1) - Encoding para impresoras térmicas en LATAM
+  // Para Xprinter: usar mapeo directo ASCII extendido
   if (encoding === 'cp850') {
     const mapaCP850: { [key: string]: number } = {
-      'á': 0xA0, 'é': 0x82, 'í': 0xA1, 'ó': 0xA2, 'ú': 0xA3,
-      'Á': 0xB5, 'É': 0x90, 'Í': 0xD6, 'Ó': 0xE0, 'Ú': 0xE9,
-      'ñ': 0xA4, 'Ñ': 0xA5,
-      '¿': 0xA8, '¡': 0xAD,
-      '°': 0xF8, '€': 0xEE
+      // Minúsculas con tilde - posiciones ASCII extendido
+      'á': 0xE1, 'é': 0xE9, 'í': 0xED, 'ó': 0xF3, 'ú': 0xFA,
+      // Mayúsculas con tilde
+      'Á': 0xC1, 'É': 0xC9, 'Í': 0xCD, 'Ó': 0xD3, 'Ú': 0xDA,
+      // Eñes
+      'ñ': 0xF1, 'Ñ': 0xD1,
+      // Signos especiales
+      '¿': 0xBF, '¡': 0xA1,
+      '°': 0xB0, '€': 0x80
     };
 
     const bytes: number[] = [];
@@ -238,7 +243,8 @@ function convertirABytes(texto: string, encoding: string = 'cp850'): Buffer {
 function comandosInicializar(): Buffer {
   return Buffer.from([
     0x1B, 0x40,        // ESC @ - Inicializar impresora
-    0x1B, 0x74, 0x02,  // ESC t 2 - Establecer tabla de caracteres CP850 (Multilingual Latin 1)
+    0x1B, 0x74, 0x00,  // ESC t 0 - Tabla de caracteres 0 (USA/Standard) - Más compatible con Xprinter
+    0x1D, 0x21, 0x11,  // GS ! 17 - Fuente ligeramente más grande (altura x2, ancho x2)
   ]);
 }
 
