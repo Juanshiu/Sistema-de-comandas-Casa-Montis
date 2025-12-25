@@ -199,15 +199,6 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
             </div>
           </div>
         ))}
-
-        {/* Resumen de precio adicional */}
-        {personalizacion.precio_adicional && personalizacion.precio_adicional > 0 && (
-          <div className="p-3 bg-blue-100 rounded-lg border border-blue-300">
-            <div className="text-sm font-medium text-blue-800">
-              Costo adicional por personalización: +${personalizacion.precio_adicional.toLocaleString()}
-            </div>
-          </div>
-        )}
       </div>
     </>
   );

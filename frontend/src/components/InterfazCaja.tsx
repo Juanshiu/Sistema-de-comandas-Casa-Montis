@@ -21,10 +21,12 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [montoPagado, setMontoPagado] = useState<string>('');
   const [cambio, setCambio] = useState<number>(0);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
+  const [itemsPersonalizacion, setItemsPersonalizacion] = useState<{ [key: string]: any[] }>({});
+  const [facturasImpresas, setFacturasImpresas] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     cargarComandasActivas();
-    cargarCategoriasPersonalizacion();
+    cargarCategoriasYItemsPersonalizacion();
     // Actualizar cada 5 segundos para tiempo real
     const interval = setInterval(cargarComandasActivas, 5000);
     return () => clearInterval(interval);
@@ -38,10 +40,24 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     }
   }, [montoPagado, comandaSeleccionada]);
 
-  const cargarCategoriasPersonalizacion = async () => {
+  const cargarCategoriasYItemsPersonalizacion = async () => {
     try {
       const categorias = await apiService.getCategoriasPersonalizacion();
-      setCategoriasPersonalizacion(categorias.filter((cat: any) => cat.activo));
+      const categoriasActivas = categorias.filter((cat: any) => cat.activo);
+      setCategoriasPersonalizacion(categoriasActivas);
+      
+      // Cargar items para cada categoría
+      const itemsPorCategoria: { [key: string]: any[] } = {};
+      for (const categoria of categoriasActivas) {
+        try {
+          const items = await apiService.getItemsPersonalizacion(categoria.id);
+          itemsPorCategoria[categoria.id] = items;
+        } catch (error) {
+          console.error(`Error al cargar items de categoría ${categoria.nombre}:`, error);
+          itemsPorCategoria[categoria.id] = [];
+        }
+      }
+      setItemsPersonalizacion(itemsPorCategoria);
     } catch (error) {
       console.error('Error al cargar categorías de personalización:', error);
     }
@@ -130,8 +146,15 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   };
 
   // FACTURA DETALLADA
+  const marcarFacturaImpresa = (comandaId: string) => {
+    setFacturasImpresas(prev => new Set(prev).add(comandaId));
+  };
+
   const generarFactura = () => {
     if (!comandaSeleccionada) return;
+    
+    // Marcar como impresa
+    marcarFacturaImpresa(comandaSeleccionada.id);
     
     // Información de mesa o cliente según tipo
     let mesaInfo = '';
@@ -168,24 +191,29 @@ ${(comandaSeleccionada.items || []).map(item => {
   let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
   
   // Agregar personalización si existe
-  if (item.personalizacion && categoriasPersonalizacion.length > 0) {
+  if (item.personalizacion && Object.keys(item.personalizacion).length > 0) {
     const personalizaciones: string[] = [];
     
-    // Recorrer dinámicamente todas las categorías
-    categoriasPersonalizacion.forEach((categoria) => {
-      const valor = getPersonalizacionPorCategoria(item.personalizacion, categoria.nombre);
-      if (valor) {
-        personalizaciones.push(` ${valor.nombre}`); // ${categoria.nombre}: Para mostrar el nombre de la categoría si se desea
+    // Recorrer dinámicamente por ID
+    Object.entries(item.personalizacion).forEach(([key, value]) => {
+      if (key === 'precio_adicional') return;
+      
+      const categoriaId = parseInt(key);
+      const itemId = value as number;
+      
+      const categoria = categoriasPersonalizacion.find(c => c.id === categoriaId);
+      if (!categoria) return;
+      
+      const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
+      const itemSeleccionado = itemsDeCategoria.find(it => it.id === itemId);
+      
+      if (itemSeleccionado) {
+        personalizaciones.push(itemSeleccionado.nombre.trim());
       }
     });
     
     if (personalizaciones.length > 0) {
       itemText += `\n     ${personalizaciones.join(' | ')}`;
-      
-      // Agregar precio adicional de personalización
-      // if (item.personalizacion.precio_adicional && item.personalizacion.precio_adicional > 0) {
-      //   itemText += `\n     +$${item.personalizacion.precio_adicional.toLocaleString()}`;
-      // }
     }
   }
   
@@ -362,90 +390,129 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
               No hay comandas activas
             </p>
           ) : (
-            <div className="space-y-3">
-              {comandasActivas.map((comanda) => (
-                <div
-                  key={comanda.id}
-                  className={`p-4 border rounded-lg cursor-pointer transition-colors ${
-                    comandaSeleccionada?.id === comanda.id
-                      ? 'border-primary-500 bg-primary-50'
-                      : 'border-secondary-200 hover:border-secondary-300'
-                  }`}
-                  onClick={() => setComandaSeleccionada(comanda)}
-                >
-                  <div className="flex justify-between items-start mb-2">
-                    <div className="flex-1">
-                      {comanda.tipo_pedido === 'domicilio' ? (
-                        <>
-                          <h3 className="font-semibold text-secondary-800 flex items-center">
-                            {comanda.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'} 
-                            <span className="ml-2">- {comanda.datos_cliente?.nombre}</span>
-                          </h3>
-                          {!comanda.datos_cliente?.es_para_llevar && comanda.datos_cliente?.direccion && (
-                            <p className="text-sm text-secondary-600 mt-1">
-                              📍 {comanda.datos_cliente.direccion}
-                            </p>
-                          )}
-                          {comanda.datos_cliente?.telefono && (
-                            <p className="text-sm text-secondary-600">
-                              📞 {comanda.datos_cliente.telefono}
-                            </p>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <h3 className="font-semibold text-secondary-800">
-                            Mesas: {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
-                          </h3>
-                        </>
-                      )}
-                      <p className="text-sm text-secondary-600">
-                        {new Date(comanda.fecha_creacion).toLocaleString()}
-                      </p>
-                    </div>
-                    <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${getEstadoColor(comanda.estado)}`}>
-                      {getEstadoIcon(comanda.estado)}
-                      <span className="capitalize">{comanda.estado}</span>
-                    </div>
-                  </div>
+            <div className="space-y-6">
+              {/* Agrupar comandas por salón */}
+              {(() => {
+                // Agrupar comandas por salón o tipo especial
+                const comandasPorSalon = comandasActivas.reduce((acc: { [key: string]: Comanda[] }, comanda) => {
+                  let clave: string;
                   
-                  <div className="text-sm text-secondary-600 mb-2">
-                    {comanda.items?.length || 0} item(s) - Mesero: {comanda.mesero}
-                  </div>
+                  if (comanda.tipo_pedido === 'domicilio') {
+                    clave = comanda.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🏠 Domicilios';
+                  } else if (comanda.mesas && comanda.mesas.length > 0) {
+                    // Usar el salón de la primera mesa
+                    clave = comanda.mesas[0].salon;
+                  } else {
+                    clave = 'Sin salón';
+                  }
                   
-                  <div className="flex justify-between items-center">
-                    <span className="text-lg font-bold text-primary-600">
-                      ${comanda.total.toLocaleString()}
-                    </span>
-                    
-                    <div className="flex space-x-2">
-                      {comanda.estado === 'pendiente' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            actualizarEstadoComanda(comanda.id, 'preparando');
-                          }}
-                          className="text-yellow-600 hover:text-yellow-800 text-xs px-2 py-1 border border-yellow-600 rounded"
+                  if (!acc[clave]) {
+                    acc[clave] = [];
+                  }
+                  acc[clave].push(comanda);
+                  return acc;
+                }, {});
+
+                // Ordenar las claves para mostrar domicilios al final
+                const clavesOrdenadas = Object.keys(comandasPorSalon).sort((a, b) => {
+                  if (a.startsWith('🏠') || a.startsWith('🛍️')) return 1;
+                  if (b.startsWith('🏠') || b.startsWith('🛍️')) return -1;
+                  return a.localeCompare(b);
+                });
+
+                return clavesOrdenadas.map((salon) => (
+                  <div key={salon} className="border rounded-lg p-4 bg-secondary-25">
+                    <h3 className="font-semibold text-lg text-secondary-800 mb-3 border-b pb-2">
+                      {salon}
+                    </h3>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                      {comandasPorSalon[salon].map((comanda) => (
+                        <div
+                          key={comanda.id}
+                          className={`p-3 border rounded-lg cursor-pointer transition-all ${
+                            comandaSeleccionada?.id === comanda.id
+                              ? 'border-primary-500 bg-primary-50 shadow-md'
+                              : 'border-secondary-200 bg-white hover:border-secondary-300 hover:shadow'
+                          }`}
+                          onClick={() => setComandaSeleccionada(comanda)}
                         >
-                          Preparando
-                        </button>
-                      )}
-                      
-                      {comanda.estado === 'preparando' && (
-                        <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            actualizarEstadoComanda(comanda.id, 'lista');
-                          }}
-                          className="text-green-600 hover:text-green-800 text-xs px-2 py-1 border border-green-600 rounded"
-                        >
-                          Marcar Lista
-                        </button>
-                      )}
+                          <div className="flex justify-between items-start mb-2">
+                            <div className="flex-1 min-w-0">
+                              {comanda.tipo_pedido === 'domicilio' ? (
+                                <>
+                                  <h4 className="font-semibold text-sm text-secondary-800 truncate">
+                                    {comanda.datos_cliente?.nombre}
+                                  </h4>
+                                  {comanda.datos_cliente?.telefono && (
+                                    <p className="text-xs text-secondary-600">
+                                      📞 {comanda.datos_cliente.telefono}
+                                    </p>
+                                  )}
+                                </>
+                              ) : (
+                                <>
+                                  <h4 className="font-semibold text-sm text-secondary-800">
+                                    {comanda.mesas.map(m => m.numero).join(', ')}
+                                  </h4>
+                                </>
+                              )}
+                              <p className="text-xs text-secondary-500 truncate">
+                                {comanda.mesero}
+                              </p>
+                            </div>
+                            <div className="flex flex-col items-end space-y-1 ml-2">
+                              <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center space-x-0.5 ${getEstadoColor(comanda.estado)}`}>
+                                {getEstadoIcon(comanda.estado)}
+                                <span>{comanda.estado === 'pendiente' ? 'Pend' : comanda.estado === 'preparando' ? 'Prep' : 'Lista'}</span>
+                              </div>
+                              {facturasImpresas.has(comanda.id) && (
+                                <div className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">
+                                  ✓ Fact
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <div className="flex justify-between items-center mt-2">
+                            <span className="text-xs text-secondary-600">
+                              {comanda.items?.length || 0} item(s)
+                            </span>
+                            <span className="text-sm font-bold text-primary-600">
+                              ${comanda.total.toLocaleString()}
+                            </span>
+                          </div>
+                          
+                          <div className="flex space-x-1 mt-2">
+                            {comanda.estado === 'pendiente' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  actualizarEstadoComanda(comanda.id, 'preparando');
+                                }}
+                                className="text-yellow-600 hover:text-yellow-800 text-[10px] px-1.5 py-0.5 border border-yellow-600 rounded flex-1"
+                              >
+                                Preparando
+                              </button>
+                            )}
+                            
+                            {comanda.estado === 'preparando' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  actualizarEstadoComanda(comanda.id, 'lista');
+                                }}
+                                className="text-green-600 hover:text-green-800 text-[10px] px-1.5 py-0.5 border border-green-600 rounded flex-1"
+                              >
+                                Marcar Lista
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                </div>
-              ))}
+                ));
+              })()}
             </div>
           )}
         </div>
@@ -498,28 +565,83 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                 <p className="text-sm text-secondary-600">
                   Fecha: {new Date(comandaSeleccionada.fecha_creacion).toLocaleString()}
                 </p>
+                {comandaSeleccionada.observaciones_generales && (
+                  <div className="mt-2 pt-2 border-t border-secondary-200">
+                    <p className="text-xs font-medium text-secondary-700">Observaciones generales:</p>
+                    <p className="text-xs text-secondary-600 italic">{comandaSeleccionada.observaciones_generales}</p>
+                  </div>
+                )}
               </div>
 
               <div>
                 <h4 className="font-medium text-secondary-800 mb-2">Items:</h4>
-                <div className="space-y-2">
+                <div className="space-y-3">
                   {comandaSeleccionada.items && comandaSeleccionada.items.length > 0 ? (
-                    comandaSeleccionada.items.map((item) => (
-                      <div key={item.id} className="flex justify-between text-sm">
-                        <span>
-                          {item.producto.nombre} x {item.cantidad}
-                          {item.personalizacion && (
-                            <div className="text-xs text-secondary-500">
-                              {item.personalizacion.caldo && `Caldo: ${item.personalizacion.caldo.nombre}`}
-                              {item.personalizacion.principio && ` | Principio: ${item.personalizacion.principio.nombre}`}
-                              {item.personalizacion.proteina && ` | Proteína: ${item.personalizacion.proteina.nombre}`}
-                              {item.personalizacion.bebida && ` | Bebida: ${item.personalizacion.bebida.nombre}`}
+                    comandaSeleccionada.items.map((item) => {
+                      // Debug: ver estructura de personalización
+                      if (item.personalizacion) {
+                        console.log('🔍 Personalización del item:', item.producto.nombre, item.personalizacion);
+                      }
+                      
+                      return (
+                        <div key={item.id} className="border-l-2 border-primary-300 pl-3 py-1">
+                          <div className="flex justify-between text-sm">
+                            <span className="font-medium">
+                              {item.producto.nombre} x {item.cantidad}
+                            </span>
+                            <span className="font-semibold">${item.subtotal.toLocaleString()}</span>
+                          </div>
+                          
+                          {/* Mostrar personalización */}
+                          {item.personalizacion && Object.keys(item.personalizacion).length > 0 && (
+                            <div className="mt-1 space-y-0.5">
+                              {Object.entries(item.personalizacion).map(([key, value]: [string, any]) => {
+                                // Ignorar precio_adicional, lo manejamos aparte
+                                if (key === 'precio_adicional') return null;
+                                
+                                // key es el ID de la categoría, value es el ID del item seleccionado
+                                const categoriaId = parseInt(key);
+                                const itemId = value;
+                                
+                                // Buscar la categoría por ID
+                                const categoria = categoriasPersonalizacion.find(cat => cat.id === categoriaId);
+                                if (!categoria) return null;
+                                
+                                // Buscar el item en los items de esa categoría
+                                const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
+                                const itemSeleccionado = itemsDeCategoria.find(it => it.id === itemId);
+                                
+                                if (!itemSeleccionado) return null;
+                                
+                                // Limpiar el nombre removiendo espacios y números al final si existen
+                                const nombreLimpio = itemSeleccionado.nombre.trim();
+                                
+                                return (
+                                  <div key={key} className="text-xs text-secondary-600">
+                                    <span className="font-medium">{categoria.nombre}:</span>{' '}
+                                    <span>{nombreLimpio}</span>
+                                    {Number(itemSeleccionado.precio_adicional) > 0 && (
+                                      <span className="text-primary-600 ml-1">
+                                        (+${Number(itemSeleccionado.precio_adicional).toLocaleString()})
+                                      </span>
+                                    )}
+                                  </div>
+                                );
+                              })}
                             </div>
                           )}
-                        </span>
-                        <span>${item.subtotal.toLocaleString()}</span>
-                      </div>
-                    ))
+                          
+                          {/* Mostrar observaciones del item */}
+                          {item.observaciones && (
+                            <div className="mt-1">
+                              <p className="text-xs text-amber-700 italic">
+                                📝 {item.observaciones}
+                              </p>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })
                   ) : (
                     <p className="text-sm text-secondary-500 italic">No hay items en esta comanda</p>
                   )}
