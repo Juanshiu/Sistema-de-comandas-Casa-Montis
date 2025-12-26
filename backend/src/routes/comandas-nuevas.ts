@@ -786,9 +786,10 @@ router.put('/:id', (req: Request, res: Response) => {
 
     console.log('📋 Items existentes en BD:', itemsExistentesDB.length);
 
-    // FILTRAR ITEMS NUEVOS Y DETECTAR INCREMENTOS EN CANTIDAD
+    // FILTRAR ITEMS NUEVOS Y DETECTAR INCREMENTOS EN CANTIDAD Y CAMBIOS EN PERSONALIZACIÓN
     const itemsNuevos: any[] = [];
     const itemsIncrementados: any[] = [];
+    const itemsConCambios: any[] = [];
 
     items.forEach(item => {
       // Si no tiene id, es nuevo
@@ -819,29 +820,59 @@ router.put('/:id', (req: Request, res: Response) => {
         return;
       }
       
-      // Verificar si la cantidad aumentó
+      // Verificar si el item existe en la BD
       const itemExistente = itemsExistentesDB.find(ie => ie.id === item.id);
-      if (itemExistente && item.cantidad > itemExistente.cantidad) {
-        const cantidadAdicional = item.cantidad - itemExistente.cantidad;
-        // Crear un item nuevo con la cantidad adicional
-        const itemAdicional = {
-          ...item,
-          id: `temp_inc_${Date.now()}_${Math.random()}`,
-          cantidad: cantidadAdicional,
-          subtotal: cantidadAdicional * item.precio_unitario
-        };
-        itemsIncrementados.push(itemAdicional);
-        console.log(`   📈 Item INCREMENTADO: ${item.producto.nombre}, cantidad adicional: ${cantidadAdicional}`);
+      if (itemExistente) {
+        // Verificar si la cantidad aumentó
+        if (item.cantidad > itemExistente.cantidad) {
+          const cantidadAdicional = item.cantidad - itemExistente.cantidad;
+          // Crear un item nuevo con la cantidad adicional
+          const itemAdicional = {
+            ...item,
+            id: `temp_inc_${Date.now()}_${Math.random()}`,
+            cantidad: cantidadAdicional,
+            subtotal: cantidadAdicional * item.precio_unitario
+          };
+          itemsIncrementados.push(itemAdicional);
+          console.log(`   📈 Item INCREMENTADO: ${item.producto.nombre}, cantidad adicional: ${cantidadAdicional}`);
+          
+          // También actualizar el item existente con la nueva cantidad
+          const updateItemQuery = `
+            UPDATE comanda_items 
+            SET cantidad = ?, subtotal = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
+            WHERE id = ?
+          `;
+          db.run(updateItemQuery, [item.cantidad, item.subtotal, item.id], (err: any) => {
+            if (err) console.error('Error al actualizar cantidad del item:', err);
+          });
+        }
         
-        // También actualizar el item existente con la nueva cantidad
-        const updateItemQuery = `
-          UPDATE comanda_items 
-          SET cantidad = ?, subtotal = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-          WHERE id = ?
-        `;
-        db.run(updateItemQuery, [item.cantidad, item.subtotal, item.id], (err: any) => {
-          if (err) console.error('Error al actualizar cantidad del item:', err);
-        });
+        // Verificar si cambió la personalización
+        const personalizacionExistente = itemExistente.personalizacion ? 
+          (typeof itemExistente.personalizacion === 'string' ? 
+            JSON.parse(itemExistente.personalizacion) : 
+            itemExistente.personalizacion) : 
+          null;
+        const personalizacionNueva = item.personalizacion;
+        
+        const hayCambioPersonalizacion = JSON.stringify(personalizacionExistente) !== JSON.stringify(personalizacionNueva);
+        
+        if (hayCambioPersonalizacion) {
+          itemsConCambios.push(item);
+          console.log(`   🔄 Item CON CAMBIOS en personalización: ${item.producto.nombre}`);
+          
+          // Actualizar el item con la nueva personalización
+          const updatePersonalizacionQuery = `
+            UPDATE comanda_items 
+            SET personalizacion = ?, subtotal = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
+            WHERE id = ?
+          `;
+          const personalizacionJSON = personalizacionNueva ? JSON.stringify(personalizacionNueva) : null;
+          db.run(updatePersonalizacionQuery, [personalizacionJSON, item.subtotal, item.id], (err: any) => {
+            if (err) console.error('Error al actualizar personalización del item:', err);
+            else console.log(`   ✅ Personalización actualizada para: ${item.producto.nombre}`);
+          });
+        }
       }
     });
 
@@ -850,9 +881,10 @@ router.put('/:id', (req: Request, res: Response) => {
 
     console.log('✅ Items NUEVOS filtrados:', todosLosItemsNuevos.length);
     console.log('✅ Items NUEVOS:', todosLosItemsNuevos.map(i => `${i.producto.nombre} x${i.cantidad}`).join(', '));
+    console.log('🔄 Items CON CAMBIOS:', itemsConCambios.length);
 
-    if (todosLosItemsNuevos.length === 0 && !imprimirCompleta) {
-      return res.status(400).json({ error: 'No hay items nuevos para agregar' });
+    if (todosLosItemsNuevos.length === 0 && itemsConCambios.length === 0 && !imprimirCompleta) {
+      return res.status(400).json({ error: 'No hay cambios para actualizar' });
     }
 
     procesarEdicionComanda(id, items, todosLosItemsNuevos, observaciones_generales, imprimir, imprimirCompleta, res);
@@ -868,6 +900,96 @@ function procesarEdicionComanda(
   imprimirCompleta: boolean | undefined,
   res: Response
 ) {
+  
+  // Si solo se quiere imprimir la comanda completa sin agregar items nuevos
+  if (itemsNuevos.length === 0 && imprimirCompleta) {
+    console.log('🖨️  Solo imprimir comanda completa, sin items nuevos');
+    
+    // Obtener la comanda actual
+    const getComandaQuery = 'SELECT * FROM comandas WHERE id = ?';
+    db.get(getComandaQuery, [id], (err: any, comandaRow: any) => {
+      if (err) {
+        console.error('Error al obtener comanda:', err);
+        return res.status(500).json({ error: 'Error al obtener comanda' });
+      }
+      
+      if (!comandaRow) {
+        return res.status(404).json({ error: 'Comanda no encontrada' });
+      }
+      
+      // Obtener TODOS los items de la comanda con las personalizaciones actualizadas
+      const queryTodosItems = `
+        SELECT 
+          ci.*,
+          p.nombre as producto_nombre,
+          p.precio as producto_precio,
+          p.categoria as producto_categoria
+        FROM comanda_items ci
+        JOIN productos p ON ci.producto_id = p.id
+        WHERE ci.comanda_id = ?
+      `;
+      
+      db.all(queryTodosItems, [id], (err: any, todosItemsRows: any[]) => {
+        if (err) {
+          console.error('Error al obtener todos los items:', err);
+          return res.status(500).json({ error: 'Error al obtener items' });
+        }
+        
+        const itemsParaImprimir = todosItemsRows.map(item => ({
+          id: item.id,
+          comanda_id: id,
+          producto_id: item.producto_id,
+          cantidad: item.cantidad,
+          precio_unitario: item.precio_unitario,
+          subtotal: item.subtotal,
+          observaciones: item.observaciones,
+          personalizacion: item.personalizacion ? JSON.parse(item.personalizacion) : undefined,
+          producto: {
+            id: item.producto_id,
+            nombre: item.producto_nombre,
+            precio: item.producto_precio,
+            categoria: item.producto_categoria,
+            disponible: true
+          }
+        }));
+        
+        // Recalcular totales
+        const nuevoSubtotal = itemsParaImprimir.reduce((sum, item) => sum + item.subtotal, 0);
+        
+        // Actualizar totales en la BD
+        const updateTotalesQuery = `
+          UPDATE comandas 
+          SET subtotal = ?,
+              total = ?,
+              fecha_actualizacion = CURRENT_TIMESTAMP
+          WHERE id = ?
+        `;
+        
+        db.run(updateTotalesQuery, [nuevoSubtotal, nuevoSubtotal, id], (err: any) => {
+          if (err) {
+            console.error('Error al actualizar totales:', err);
+            return res.status(500).json({ error: 'Error al actualizar totales' });
+          }
+          
+          // Actualizar el total en comandaRow para la impresión
+          comandaRow.total = nuevoSubtotal;
+          comandaRow.subtotal = nuevoSubtotal;
+          
+          // Imprimir la comanda completa
+          imprimirComandaCompleta(id, comandaRow, itemsParaImprimir);
+          
+          // Responder éxito
+          return res.json({ 
+            mensaje: 'Comanda actualizada e impresa exitosamente',
+            comanda_id: id,
+            items_actualizados: itemsParaImprimir.length
+          });
+        });
+      });
+    });
+    
+    return;
+  }
 
   db.serialize(() => {
     db.run('BEGIN TRANSACTION');

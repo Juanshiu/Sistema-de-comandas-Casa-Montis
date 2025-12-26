@@ -561,7 +561,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                       onClick={() => setItemPersonalizando(null)}
                       className="flex-1 px-4 py-2 bg-gray-500 text-white rounded-lg hover:bg-gray-600 transition-colors"
                     >
-                      Cancelar
+                      Salir
                     </button>
                     <button
                       onClick={() => setItemPersonalizando(null)}
