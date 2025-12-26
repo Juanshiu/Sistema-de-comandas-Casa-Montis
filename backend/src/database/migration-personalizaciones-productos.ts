@@ -2,7 +2,7 @@ import { db } from './init';
 
 /**
  * Migración para agregar campos de personalización a productos
- * y crear tabla de categorías de personalización
+ * y asegurar tabla de categorías de personalización
  */
 export const migrarPersonalizacionesProductos = () => {
   console.log('Iniciando migración de personalizaciones en productos...');
@@ -25,7 +25,7 @@ export const migrarPersonalizacionesProductos = () => {
       }
     });
 
-    // Crear tabla de categorías de personalización
+    // Crear tabla de categorías de personalización si no existe
     db.run(`
       CREATE TABLE IF NOT EXISTS categorias_personalizacion (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -57,29 +57,25 @@ export const migrarPersonalizacionesProductos = () => {
       });
     });
 
-    // Agregar campo categoria_id a las tablas de personalizaciones existentes
-    const tablasPersonalizacion = [
-      'caldos',
-      'principios', 
-      'proteinas',
-      'bebidas'
-    ];
-
-    tablasPersonalizacion.forEach(tabla => {
-      db.run(`
-        ALTER TABLE ${tabla} ADD COLUMN categoria_id INTEGER
-      `, (err: any) => {
-        if (err && !err.message.includes('duplicate column name')) {
-          console.error(`Error al agregar categoria_id a ${tabla}:`, err);
-        }
-      });
+    // Crear tabla de items de personalización si no existe
+    db.run(`
+      CREATE TABLE IF NOT EXISTS items_personalizacion (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        categoria_id INTEGER NOT NULL,
+        nombre TEXT NOT NULL,
+        descripcion TEXT,
+        precio_adicional REAL DEFAULT 0,
+        activo INTEGER DEFAULT 1,
+        disponible INTEGER DEFAULT 1,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (categoria_id) REFERENCES categorias_personalizacion(id) ON DELETE CASCADE
+      )
+    `, (err: any) => {
+      if (err) {
+        console.error('Error al crear tabla items_personalizacion:', err);
+      }
     });
-
-    // Actualizar categoria_id para las personalizaciones existentes
-    db.run(`UPDATE caldos SET categoria_id = (SELECT id FROM categorias_personalizacion WHERE nombre = 'Caldos/Sopas')`);
-    db.run(`UPDATE principios SET categoria_id = (SELECT id FROM categorias_personalizacion WHERE nombre = 'Principios')`);
-    db.run(`UPDATE proteinas SET categoria_id = (SELECT id FROM categorias_personalizacion WHERE nombre = 'Proteínas')`);
-    db.run(`UPDATE bebidas SET categoria_id = (SELECT id FROM categorias_personalizacion WHERE nombre = 'Bebidas')`);
 
     console.log('✅ Migración de personalizaciones completada');
   });
