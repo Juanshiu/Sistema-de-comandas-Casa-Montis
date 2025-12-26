@@ -117,7 +117,7 @@ const crearArchivoItemsAdicionales = async (comanda: Comanda): Promise<string> =
     }
   } else {
     const mesasTexto = comanda.mesas && comanda.mesas.length > 0 ? 
-      comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ') : 'N/A';
+      comanda.mesas.map(m => `${m.numero}`).join(', ') : 'N/A';  // ${m.salon}- El salon se omite para ahorrar espacio o por gusto
     lineas.push(`MESA: ${mesasTexto}`);
   }
   lineas.push('');
@@ -237,7 +237,7 @@ const crearArchivoComanda = async (comanda: Comanda): Promise<string> => {
       direccionLineas.forEach(l => lineas.push(`  ${l}`));
     }
   } else if (comanda.mesas && comanda.mesas.length > 0) {
-    const mesasTexto = comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ');
+    const mesasTexto = comanda.mesas.map(m => `${m.numero}`).join(', '); // ${m.salon}- El salon se omite para ahorrar espacio o por gusto
     if (mesasTexto.length <= 24) {
       lineas.push(`Mesa(s): ${mesasTexto}`);
     } else {
