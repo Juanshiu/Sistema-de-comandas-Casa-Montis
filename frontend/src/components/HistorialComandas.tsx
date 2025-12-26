@@ -11,10 +11,36 @@ export default function HistorialComandas() {
   const [cargando, setCargando] = useState(false);
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
   const [comandasVisibles, setComandasVisibles] = useState(20);
+  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
+  const [itemsPersonalizacion, setItemsPersonalizacion] = useState<{ [key: string]: any[] }>({});
 
   useEffect(() => {
     cargarHistorial();
+    cargarCategoriasYItemsPersonalizacion();
   }, []);
+
+  const cargarCategoriasYItemsPersonalizacion = async () => {
+    try {
+      const categorias = await apiService.getCategoriasPersonalizacion();
+      const categoriasActivas = categorias.filter((cat: any) => cat.activo);
+      setCategoriasPersonalizacion(categoriasActivas);
+      
+      // Cargar items para cada categoría
+      const itemsPorCategoria: { [key: string]: any[] } = {};
+      for (const categoria of categoriasActivas) {
+        try {
+          const items = await apiService.getItemsPersonalizacion(categoria.id);
+          itemsPorCategoria[categoria.id] = items;
+        } catch (error) {
+          console.error(`Error al cargar items de categoría ${categoria.nombre}:`, error);
+          itemsPorCategoria[categoria.id] = [];
+        }
+      }
+      setItemsPersonalizacion(itemsPorCategoria);
+    } catch (error) {
+      console.error('Error al cargar categorías de personalización:', error);
+    }
+  };
 
   const cargarHistorial = async (fecha?: string) => {
     try {
@@ -244,20 +270,29 @@ export default function HistorialComandas() {
                                     {item.cantidad}x {item.producto?.nombre || 'Producto'}
                                   </p>
                                   
-                                  {item.personalizacion && (
-                                    <div className="mt-1 text-sm text-gray-600">
-                                      {item.personalizacion.caldo && (
-                                        <span className="mr-2">Caldo: {item.personalizacion.caldo.nombre}</span>
-                                      )}
-                                      {item.personalizacion.principio && (
-                                        <span className="mr-2">Principio: {item.personalizacion.principio.nombre}</span>
-                                      )}
-                                      {item.personalizacion.proteina && (
-                                        <span className="mr-2">Proteína: {item.personalizacion.proteina.nombre}</span>
-                                      )}
-                                      {item.personalizacion.bebida && (
-                                        <span>Bebida: {item.personalizacion.bebida.nombre}</span>
-                                      )}
+                                  {item.personalizacion && Object.keys(item.personalizacion).length > 0 && (
+                                    <div className="mt-2 text-sm text-gray-600 space-y-1">
+                                      {Object.entries(item.personalizacion).map(([key, value]) => {
+                                        if (key === 'precio_adicional') return null;
+                                        
+                                        const categoriaId = parseInt(key);
+                                        const itemId = value as number;
+                                        
+                                        const categoria = categoriasPersonalizacion.find(c => c.id === categoriaId);
+                                        if (!categoria) return null;
+                                        
+                                        const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
+                                        const itemSeleccionado = itemsDeCategoria.find(it => it.id === itemId);
+                                        
+                                        if (!itemSeleccionado) return null;
+                                        
+                                        return (
+                                          <div key={key} className="flex items-center gap-1">
+                                            <span className="font-medium">{categoria.nombre}:</span>
+                                            <span>{itemSeleccionado.nombre}</span>
+                                          </div>
+                                        );
+                                      })}
                                     </div>
                                   )}
                                   
