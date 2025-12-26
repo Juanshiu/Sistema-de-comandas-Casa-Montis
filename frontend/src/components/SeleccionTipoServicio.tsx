@@ -87,7 +87,7 @@ export default function SeleccionTipoServicio({ onTipoSelect, tipoSeleccionado }
     <div className="card">
       <h2 className="text-xl font-semibold text-secondary-800 mb-6">Seleccionar Tipo de Servicio</h2>
       
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
         {tiposServicio.map((tipo) => (
           <button
             key={tipo.key}
