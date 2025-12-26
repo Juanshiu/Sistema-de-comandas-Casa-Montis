@@ -579,9 +579,9 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                   {comandaSeleccionada.items && comandaSeleccionada.items.length > 0 ? (
                     comandaSeleccionada.items.map((item) => {
                       // Debug: ver estructura de personalización
-                      if (item.personalizacion) {
-                        console.log('🔍 Personalización del item:', item.producto.nombre, item.personalizacion);
-                      }
+                      // if (item.personalizacion) {
+                      //   console.log('🔍 Personalización del item:', item.producto.nombre, item.personalizacion);
+                      // }
                       
                       return (
                         <div key={item.id} className="border-l-2 border-primary-300 pl-3 py-1">
