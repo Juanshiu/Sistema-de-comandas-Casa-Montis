@@ -6,65 +6,7 @@ import { apiService } from '@/services/api';
 import { Plus, Minus, Trash2, Settings } from 'lucide-react';
 
 import PersonalizacionProducto from './PersonalizacionProducto';
-// Componente auxiliar para mostrar personalizaciones
-function PersonalizacionDisplay({ personalizacion }: { personalizacion: PersonalizacionItem }) {
-  const [texto, setTexto] = useState<string[]>([]);
-  
-  useEffect(() => {
-    const cargarPersonalizaciones = async () => {
-      if (!personalizacion || Object.keys(personalizacion).length === 0) {
-        setTexto([]);
-        return;
-      }
-      
-      const resultado: string[] = [];
-      
-      try {
-        const categorias = await apiService.getCategoriasPersonalizacion();
-        const categoriasOrdenadas = categorias.sort((a: any, b: any) => a.orden - b.orden);
-        
-        // Ordenar las entradas de personalización según el orden de las categorías
-        const entradasOrdenadas = Object.entries(personalizacion)
-          .filter(([key]) => key !== 'precio_adicional')
-          .sort(([catIdA], [catIdB]) => {
-            const catA = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdA));
-            const catB = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdB));
-            return (catA?.orden || 999) - (catB?.orden || 999);
-          });
-        
-        for (const [categoriaId, itemId] of entradasOrdenadas) {
-          const catId = parseInt(categoriaId);
-          const categoria = categoriasOrdenadas.find((c: any) => c.id === catId);
-          
-          if (categoria) {
-            const items = await apiService.getItemsPersonalizacion(catId);
-            const item = items.find((i: any) => i.id === itemId);
-            
-            if (item) {
-              resultado.push(`${categoria.nombre}: ${item.nombre}`);
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error al cargar personalizaciones:', error);
-      }
-      
-      setTexto(resultado);
-    };
-    
-    cargarPersonalizaciones();
-  }, [personalizacion]);
-  
-  if (texto.length === 0) return null;
-  
-  return (
-    <div className="text-xs space-y-1">
-      {texto.map((t, idx) => (
-        <div key={idx} className="text-blue-700 font-medium">• {t}</div>
-      ))}
-    </div>
-  );
-}
+import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
 interface SeleccionProductosProps {
   tipoServicio: TipoServicio;
   items: ItemComanda[];

@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { Comanda, Factura, EstadoComanda } from '@/types';
 import { apiService } from '@/services/api';
 import { CreditCard, DollarSign, Receipt, CheckCircle, Clock, AlertCircle, ArrowRightLeft, Smartphone } from 'lucide-react';
+import { usePersonalizaciones, getPersonalizacionesParaImpresion } from '@/components/shared';
 
 interface InterfazCajaProps {
   onMesaLiberada?: () => void;
@@ -20,13 +21,11 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [facturaParaRecibo, setFacturaParaRecibo] = useState<any>(null);
   const [montoPagado, setMontoPagado] = useState<string>('');
   const [cambio, setCambio] = useState<number>(0);
-  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
-  const [itemsPersonalizacion, setItemsPersonalizacion] = useState<{ [key: string]: any[] }>({});
   const [facturasImpresas, setFacturasImpresas] = useState<Set<string>>(new Set());
+  const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
 
   useEffect(() => {
     cargarComandasActivas();
-    cargarCategoriasYItemsPersonalizacion();
     // Actualizar cada 5 segundos para tiempo real
     const interval = setInterval(cargarComandasActivas, 5000);
     return () => clearInterval(interval);
@@ -39,31 +38,6 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       setCambio(Math.max(0, pago - total));
     }
   }, [montoPagado, comandaSeleccionada]);
-
-  const cargarCategoriasYItemsPersonalizacion = async () => {
-    try {
-      const categorias = await apiService.getCategoriasPersonalizacion();
-      const categoriasActivas = categorias
-        .filter((cat: any) => cat.activo)
-        .sort((a: any, b: any) => a.orden - b.orden);
-      setCategoriasPersonalizacion(categoriasActivas);
-      
-      // Cargar items para cada categoría
-      const itemsPorCategoria: { [key: string]: any[] } = {};
-      for (const categoria of categoriasActivas) {
-        try {
-          const items = await apiService.getItemsPersonalizacion(categoria.id);
-          itemsPorCategoria[categoria.id] = items;
-        } catch (error) {
-          console.error(`Error al cargar items de categoría ${categoria.nombre}:`, error);
-          itemsPorCategoria[categoria.id] = [];
-        }
-      }
-      setItemsPersonalizacion(itemsPorCategoria);
-    } catch (error) {
-      console.error('Error al cargar categorías de personalización:', error);
-    }
-  };
 
   const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
     if (!personalizacion) return null;
@@ -194,25 +168,11 @@ ${(comandaSeleccionada.items || []).map(item => {
   
   // Agregar personalización si existe
   if (item.personalizacion && Object.keys(item.personalizacion).length > 0) {
-    const personalizaciones: string[] = [];
-    
-    // Recorrer dinámicamente por ID
-    Object.entries(item.personalizacion).forEach(([key, value]) => {
-      if (key === 'precio_adicional') return;
-      
-      const categoriaId = parseInt(key);
-      const itemId = value as number;
-      
-      const categoria = categoriasPersonalizacion.find(c => c.id === categoriaId);
-      if (!categoria) return;
-      
-      const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
-      const itemSeleccionado = itemsDeCategoria.find(it => it.id === itemId);
-      
-      if (itemSeleccionado) {
-        personalizaciones.push(itemSeleccionado.nombre.trim());
-      }
-    });
+    const personalizaciones = getPersonalizacionesParaImpresion(
+      item.personalizacion,
+      categoriasPersonalizacion,
+      itemsPersonalizacion
+    );
     
     if (personalizaciones.length > 0) {
       itemText += `\n     ${personalizaciones.join(' | ')}`;
@@ -597,39 +557,41 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                           {/* Mostrar personalización */}
                           {item.personalizacion && Object.keys(item.personalizacion).length > 0 && (
                             <div className="mt-1 space-y-0.5">
-                              {Object.entries(item.personalizacion).map(([key, value]: [string, any]) => {
-                                // Ignorar precio_adicional, lo manejamos aparte
-                                if (key === 'precio_adicional') return null;
+                              {(() => {
+                                // Ordenar las entradas según el orden de las categorías
+                                const entradasOrdenadas = ordenarPersonalizaciones(item.personalizacion);
                                 
-                                // key es el ID de la categoría, value es el ID del item seleccionado
-                                const categoriaId = parseInt(key);
-                                const itemId = value;
-                                
-                                // Buscar la categoría por ID
-                                const categoria = categoriasPersonalizacion.find(cat => cat.id === categoriaId);
-                                if (!categoria) return null;
-                                
-                                // Buscar el item en los items de esa categoría
-                                const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
-                                const itemSeleccionado = itemsDeCategoria.find(it => it.id === itemId);
-                                
-                                if (!itemSeleccionado) return null;
-                                
-                                // Limpiar el nombre removiendo espacios y números al final si existen
-                                const nombreLimpio = itemSeleccionado.nombre.trim();
-                                
-                                return (
-                                  <div key={key} className="text-xs text-secondary-600">
-                                    <span className="font-medium">{categoria.nombre}:</span>{' '}
-                                    <span>{nombreLimpio}</span>
-                                    {Number(itemSeleccionado.precio_adicional) > 0 && (
-                                      <span className="text-primary-600 ml-1">
-                                        (+${Number(itemSeleccionado.precio_adicional).toLocaleString()})
-                                      </span>
-                                    )}
-                                  </div>
-                                );
-                              })}
+                                return entradasOrdenadas.map(([key, value]: [string, any]) => {
+                                  // key es el ID de la categoría, value es el ID del item seleccionado
+                                  const categoriaId = parseInt(key);
+                                  const itemId = value;
+                                  
+                                  // Buscar la categoría por ID
+                                  const categoria = categoriasPersonalizacion.find((cat: any) => cat.id === categoriaId);
+                                  if (!categoria) return null;
+                                  
+                                  // Buscar el item en los items de esa categoría
+                                  const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
+                                  const itemSeleccionado = itemsDeCategoria.find((it: any) => it.id === itemId);
+                                  
+                                  if (!itemSeleccionado) return null;
+                                  
+                                  // Limpiar el nombre removiendo espacios y números al final si existen
+                                  const nombreLimpio = itemSeleccionado.nombre.trim();
+                                  
+                                  return (
+                                    <div key={key} className="text-xs text-secondary-600">
+                                      <span className="font-medium">{categoria.nombre}:</span>{' '}
+                                      <span>{nombreLimpio}</span>
+                                      {Number(itemSeleccionado.precio_adicional) > 0 && (
+                                        <span className="text-primary-600 ml-1">
+                                          (+${Number(itemSeleccionado.precio_adicional).toLocaleString()})
+                                        </span>
+                                      )}
+                                    </div>
+                                  );
+                                });
+                              })()}
                             </div>
                           )}
                           

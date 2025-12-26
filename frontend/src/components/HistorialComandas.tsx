@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { ComandaHistorial } from '@/types';
 import { apiService } from '@/services/api';
 import { Calendar, Clock, User, MapPin, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { usePersonalizaciones } from '@/components/shared';
 
 export default function HistorialComandas() {
   const [comandas, setComandas] = useState<ComandaHistorial[]>([]);
@@ -11,38 +12,11 @@ export default function HistorialComandas() {
   const [cargando, setCargando] = useState(false);
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
   const [comandasVisibles, setComandasVisibles] = useState(20);
-  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
-  const [itemsPersonalizacion, setItemsPersonalizacion] = useState<{ [key: string]: any[] }>({});
+  const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
 
   useEffect(() => {
     cargarHistorial();
-    cargarCategoriasYItemsPersonalizacion();
   }, []);
-
-  const cargarCategoriasYItemsPersonalizacion = async () => {
-    try {
-      const categorias = await apiService.getCategoriasPersonalizacion();
-      const categoriasActivas = categorias
-        .filter((cat: any) => cat.activo)
-        .sort((a: any, b: any) => a.orden - b.orden);
-      setCategoriasPersonalizacion(categoriasActivas);
-      
-      // Cargar items para cada categoría
-      const itemsPorCategoria: { [key: string]: any[] } = {};
-      for (const categoria of categoriasActivas) {
-        try {
-          const items = await apiService.getItemsPersonalizacion(categoria.id);
-          itemsPorCategoria[categoria.id] = items;
-        } catch (error) {
-          console.error(`Error al cargar items de categoría ${categoria.nombre}:`, error);
-          itemsPorCategoria[categoria.id] = [];
-        }
-      }
-      setItemsPersonalizacion(itemsPorCategoria);
-    } catch (error) {
-      console.error('Error al cargar categorías de personalización:', error);
-    }
-  };
 
   const cargarHistorial = async (fecha?: string) => {
     try {
@@ -274,27 +248,30 @@ export default function HistorialComandas() {
                                   
                                   {item.personalizacion && Object.keys(item.personalizacion).length > 0 && (
                                     <div className="mt-2 text-sm text-gray-600 space-y-1">
-                                      {Object.entries(item.personalizacion).map(([key, value]) => {
-                                        if (key === 'precio_adicional') return null;
+                                      {(() => {
+                                        // Ordenar las entradas según el orden de las categorías
+                                        const entradasOrdenadas = ordenarPersonalizaciones(item.personalizacion);
                                         
-                                        const categoriaId = parseInt(key);
-                                        const itemId = value as number;
-                                        
-                                        const categoria = categoriasPersonalizacion.find(c => c.id === categoriaId);
-                                        if (!categoria) return null;
-                                        
-                                        const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
-                                        const itemSeleccionado = itemsDeCategoria.find(it => it.id === itemId);
-                                        
-                                        if (!itemSeleccionado) return null;
-                                        
-                                        return (
-                                          <div key={key} className="flex items-center gap-1">
-                                            <span className="font-medium">{categoria.nombre}:</span>
-                                            <span>{itemSeleccionado.nombre}</span>
-                                          </div>
-                                        );
-                                      })}
+                                        return entradasOrdenadas.map(([key, value]) => {
+                                          const categoriaId = parseInt(key);
+                                          const itemId = value as number;
+                                          
+                                          const categoria = categoriasPersonalizacion.find((c: any) => c.id === categoriaId);
+                                          if (!categoria) return null;
+                                          
+                                          const itemsDeCategoria = itemsPersonalizacion[categoriaId] || [];
+                                          const itemSeleccionado = itemsDeCategoria.find((it: any) => it.id === itemId);
+                                          
+                                          if (!itemSeleccionado) return null;
+                                          
+                                          return (
+                                            <div key={key} className="flex items-center gap-1">
+                                              <span className="font-medium">{categoria.nombre}:</span>
+                                              <span>{itemSeleccionado.nombre}</span>
+                                            </div>
+                                          );
+                                        });
+                                      })()}
                                     </div>
                                   )}
                                   

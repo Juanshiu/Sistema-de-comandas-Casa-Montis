@@ -47,10 +47,28 @@ const formatearPersonalizaciones = async (personalizacion: any): Promise<string[
   }
   
   try {
-    // Obtener todas las claves que no sean precio_adicional
-    const claves = Object.keys(personalizacion).filter(k => k !== 'precio_adicional');
+    // Obtener todas las categorías y ordenarlas por el campo orden
+    const categorias: any[] = await new Promise((resolve, reject) => {
+      db.all(
+        'SELECT id, nombre, orden FROM categorias_personalizacion ORDER BY orden ASC',
+        [],
+        (err: any, rows: any[]) => {
+          if (err) reject(err);
+          else resolve(rows || []);
+        }
+      );
+    });
     
-    for (const categoriaId of claves) {
+    // Filtrar y ordenar las claves de personalización según el orden de las categorías
+    const clavesOrdenadas = Object.keys(personalizacion)
+      .filter(k => k !== 'precio_adicional')
+      .sort((a, b) => {
+        const catA = categorias.find(c => c.id === parseInt(a));
+        const catB = categorias.find(c => c.id === parseInt(b));
+        return (catA?.orden || 999) - (catB?.orden || 999);
+      });
+    
+    for (const categoriaId of clavesOrdenadas) {
       const itemId = personalizacion[categoriaId];
       if (!itemId) continue;
       

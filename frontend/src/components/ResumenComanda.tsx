@@ -4,90 +4,7 @@ import { useState, useEffect } from 'react';
 import { FormularioComanda, PersonalizacionItem } from '@/types';
 import { apiService } from '@/services/api';
 import { Printer, Send, AlertCircle } from 'lucide-react';
-
-// Componente auxiliar para mostrar personalizaciones
-function PersonalizacionDisplay({ personalizacion }: { personalizacion: PersonalizacionItem }) {
-  const [items, setItems] = useState<Array<{ categoria: string; item: string; precio?: number; icono: string }>>([]);
-  
-  useEffect(() => {
-    const cargarPersonalizaciones = async () => {
-      if (!personalizacion || Object.keys(personalizacion).length === 0) {
-        setItems([]);
-        return;
-      }
-      
-      const resultado: Array<{ categoria: string; item: string; precio?: number; icono: string }> = [];
-      
-      try {
-        const categorias = await apiService.getCategoriasPersonalizacion();
-        
-        for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
-          if (categoriaId === 'precio_adicional') continue;
-          
-          const catId = parseInt(categoriaId);
-          const categoria = categorias.find((c: any) => c.id === catId);
-          
-          if (categoria) {
-            const itemsList = await apiService.getItemsPersonalizacion(catId);
-            const item = itemsList.find((i: any) => i.id === itemId);
-            
-            if (item) {
-              // Obtener icono basado en nombre de categoría
-              const nombre = categoria.nombre.toLowerCase();
-              let icono = '🔹';
-              if (nombre.includes('caldo') || nombre.includes('sopa')) icono = '🥄';
-              else if (nombre.includes('principio') || nombre.includes('guarnición')) icono = '🍽️';
-              else if (nombre.includes('proteína') || nombre.includes('proteina') || nombre.includes('carne')) icono = '🥩';
-              else if (nombre.includes('bebida') || nombre.includes('jugo') || nombre.includes('refresco')) icono = '☕';
-              else if (nombre.includes('termino') || nombre.includes('término')) icono = '🔥';
-              else if (nombre.includes('acompañamiento')) icono = '🥘';
-              
-              resultado.push({
-                categoria: categoria.nombre,
-                item: item.nombre,
-                precio: item.precio_adicional > 0 ? item.precio_adicional : undefined,
-                icono
-              });
-            }
-          }
-        }
-      } catch (error) {
-        console.error('Error al cargar personalizaciones:', error);
-      }
-      
-      setItems(resultado);
-    };
-    
-    cargarPersonalizaciones();
-  }, [personalizacion]);
-  
-  if (items.length === 0) return null;
-  
-  return (
-    <div className="mt-3 p-3 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200">
-      <div className="text-xs font-semibold text-blue-700 uppercase mb-2">
-        📋 Personalización
-      </div>
-      <div className="grid grid-cols-1 gap-2 text-sm">
-        {items.map((p, idx) => (
-          <div key={idx} className="flex items-start">
-            <span className="text-gray-600 mr-2">
-              {p.icono} {p.categoria}:
-            </span>
-            <span className="font-semibold text-gray-800">
-              {p.item}
-              {p.precio && (
-                <span className="text-green-600 ml-1">
-                  (+${p.precio.toLocaleString()})
-                </span>
-              )}
-            </span>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
 
 interface ResumenComandaProps {
   formulario: FormularioComanda;
@@ -110,7 +27,11 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   const cargarCategoriasPersonalizacion = async () => {
     try {
       const categorias = await apiService.getCategoriasPersonalizacion();
-      setCategoriasPersonalizacion(categorias.filter((cat: any) => cat.activo));
+      setCategoriasPersonalizacion(
+        categorias
+          .filter((cat: any) => cat.activo)
+          .sort((a: any, b: any) => a.orden - b.orden)
+      );
     } catch (error) {
       console.error('Error al cargar categorías de personalización:', error);
     }
@@ -459,7 +380,11 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
               
               {/* Personalización - DINÁMICA basada en IDs */}
               {item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0 && (
-                <PersonalizacionDisplay personalizacion={item.personalizacion} />
+                <PersonalizacionDisplay 
+                  personalizacion={item.personalizacion} 
+                  mostrarPrecios={true}
+                  className="text-xs text-secondary-600 space-y-0.5 mt-2"
+                />
               )}
               
               {/* Observaciones del item */}
