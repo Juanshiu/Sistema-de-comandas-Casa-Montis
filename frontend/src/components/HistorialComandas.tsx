@@ -22,7 +22,9 @@ export default function HistorialComandas() {
   const cargarCategoriasYItemsPersonalizacion = async () => {
     try {
       const categorias = await apiService.getCategoriasPersonalizacion();
-      const categoriasActivas = categorias.filter((cat: any) => cat.activo);
+      const categoriasActivas = categorias
+        .filter((cat: any) => cat.activo)
+        .sort((a: any, b: any) => a.orden - b.orden);
       setCategoriasPersonalizacion(categoriasActivas);
       
       // Cargar items para cada categoría

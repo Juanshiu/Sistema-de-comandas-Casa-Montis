@@ -72,11 +72,11 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
       // Obtener todas las categorías activas
       const todasCategorias = await apiService.getCategoriasPersonalizacion();
       
-      // Filtrar por las categorías habilitadas en el producto
+      // Filtrar por las categorías habilitadas en el producto y ordenar por el campo orden
       const categoriasHabilitadas = producto?.personalizaciones_habilitadas || [];
-      const categoriasParaCargar = todasCategorias.filter(cat => 
-        categoriasHabilitadas.includes(cat.nombre)
-      );
+      const categoriasParaCargar = todasCategorias
+        .filter(cat => categoriasHabilitadas.includes(cat.nombre))
+        .sort((a, b) => a.orden - b.orden);
       
       // Cargar items de cada categoría desde items_personalizacion
       const categoriasCompletas = await Promise.all(

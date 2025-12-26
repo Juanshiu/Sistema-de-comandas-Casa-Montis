@@ -21,12 +21,20 @@ function PersonalizacionDisplay({ personalizacion }: { personalizacion: Personal
       
       try {
         const categorias = await apiService.getCategoriasPersonalizacion();
+        const categoriasOrdenadas = categorias.sort((a: any, b: any) => a.orden - b.orden);
         
-        for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
-          if (categoriaId === 'precio_adicional') continue;
-          
+        // Ordenar las entradas de personalización según el orden de las categorías
+        const entradasOrdenadas = Object.entries(personalizacion)
+          .filter(([key]) => key !== 'precio_adicional')
+          .sort(([catIdA], [catIdB]) => {
+            const catA = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdA));
+            const catB = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdB));
+            return (catA?.orden || 999) - (catB?.orden || 999);
+          });
+        
+        for (const [categoriaId, itemId] of entradasOrdenadas) {
           const catId = parseInt(categoriaId);
-          const categoria = categorias.find((c: any) => c.id === catId);
+          const categoria = categoriasOrdenadas.find((c: any) => c.id === catId);
           
           if (categoria) {
             const items = await apiService.getItemsPersonalizacion(catId);
@@ -87,7 +95,11 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   const cargarCategoriasPersonalizacion = async () => {
     try {
       const categorias = await apiService.getCategoriasPersonalizacion();
-      setCategoriasPersonalizacion(categorias.filter((c: CategoriaPersonalizacion) => c.activo));
+      setCategoriasPersonalizacion(
+        categorias
+          .filter((c: CategoriaPersonalizacion) => c.activo)
+          .sort((a: CategoriaPersonalizacion, b: CategoriaPersonalizacion) => a.orden - b.orden)
+      );
     } catch (err) {
       console.error('Error al cargar categorías de personalización:', err);
     }
@@ -123,16 +135,23 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
     const resultado: string[] = [];
     
     try {
-      // Obtener todas las categorías
+      // Obtener todas las categorías y ordenarlas
       const categorias = await apiService.getCategoriasPersonalizacion();
+      const categoriasOrdenadas = categorias.sort((a: any, b: any) => a.orden - b.orden);
       
-      // Para cada categoría ID en la personalización
-      for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
-        // Saltar precio_adicional
-        if (categoriaId === 'precio_adicional') continue;
-        
+      // Ordenar las entradas de personalización según el orden de las categorías
+      const entradasOrdenadas = Object.entries(personalizacion)
+        .filter(([key]) => key !== 'precio_adicional')
+        .sort(([catIdA], [catIdB]) => {
+          const catA = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdA));
+          const catB = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdB));
+          return (catA?.orden || 999) - (catB?.orden || 999);
+        });
+      
+      // Para cada categoría ID en la personalización (ya ordenadas)
+      for (const [categoriaId, itemId] of entradasOrdenadas) {
         const catId = parseInt(categoriaId);
-        const categoria = categorias.find((c: any) => c.id === catId);
+        const categoria = categoriasOrdenadas.find((c: any) => c.id === catId);
         
         if (categoria) {
           // Obtener los items de esta categoría
@@ -448,8 +467,9 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                     : 'border-green-400 bg-green-50'
                 }`}
               >
-                <div className="flex items-start justify-between mb-3">
-                  <div className="flex-1">
+                {/* Primera fila: Información y botones */}
+                <div className="flex items-start justify-between mb-2">
+                  <div>
                     <div className="flex items-center gap-2 font-medium text-secondary-800">
                       <span>{item.producto.nombre} x {item.cantidad}</span>
                       {esItemAdicional && (
@@ -467,13 +487,6 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                       )}
                       {' '}= ${item.subtotal.toLocaleString()}
                     </div>
-                    
-                    {item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0 && (
-                      <div className="mt-2 p-2 bg-white rounded border border-blue-200">
-                        <div className="text-xs font-semibold text-blue-700 mb-1">🔹 PERSONALIZACIÓN</div>
-                        <PersonalizacionDisplay personalizacion={item.personalizacion} />
-                      </div>
-                    )}
                   </div>
                   
                   <div className="ml-4 flex items-center space-x-2">
@@ -515,7 +528,16 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
                   </div>
                 </div>
                 
-                <div className="mt-2">
+                {/* Segunda fila: Personalización - ahora ocupa todo el ancho */}
+                {item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0 && (
+                  <div className="mb-2 p-2 bg-white rounded border border-blue-200">
+                    <div className="text-xs font-semibold text-blue-700 mb-1">🔹 PERSONALIZACIÓN</div>
+                    <PersonalizacionDisplay personalizacion={item.personalizacion} />
+                  </div>
+                )}
+                
+                {/* Tercera fila: Observaciones */}
+                <div>
                   <input
                     type="text"
                     placeholder="Observaciones para este item..."
