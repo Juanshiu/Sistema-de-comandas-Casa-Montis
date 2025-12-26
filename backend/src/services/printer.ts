@@ -524,8 +524,52 @@ export const imprimirComandaPorId = async (comandaId: string): Promise<void> => 
   }
 };
 
-// Función para imprimir factura
-export const imprimirFactura = async (comandaId: string): Promise<void> => {
+// Función para imprimir factura (recibe el objeto factura directamente)
+export const imprimirFactura = (factura: any): void => {
+  try {
+    console.log('\n' + '='.repeat(50));
+    console.log('           CASA MONTIS');
+    console.log('            FACTURA');
+    console.log('='.repeat(50));
+    
+    console.log(`ID Factura: ${factura.id}`);
+    console.log(`ID Comanda: ${factura.comanda_id}`);
+    console.log(`Fecha: ${factura.fecha_creacion?.toLocaleString('es-CO')}`);
+    console.log(`Cajero: ${factura.cajero}`);
+    console.log(`Método de pago: ${factura.metodo_pago.toUpperCase()}`);
+    
+    // Mostrar información de mesas
+    if (factura.mesas && factura.mesas.length > 0) {
+      console.log(`Mesa(s): ${factura.mesas.map((m: any) => `${m.salon} - ${m.numero}`).join(', ')}`);
+    }
+    
+    console.log('-'.repeat(50));
+    
+    // Mostrar items
+    if (factura.items && factura.items.length > 0) {
+      console.log('PRODUCTOS:');
+      factura.items.forEach((item: any) => {
+        console.log(`${item.cantidad}x ${item.producto?.nombre || 'Producto desconocido'}`);
+        console.log(`   $${item.precio_unitario.toLocaleString('es-CO')} c/u = $${item.subtotal.toLocaleString('es-CO')}`);
+        console.log('');
+      });
+    }
+    
+    console.log('-'.repeat(50));
+    console.log(`Subtotal: $${factura.subtotal.toLocaleString('es-CO')}`);
+    console.log(`TOTAL: $${factura.total.toLocaleString('es-CO')}`);
+    console.log('='.repeat(50));
+    console.log('           GRACIAS POR SU VISITA');
+    console.log('='.repeat(50));
+    console.log('');
+    
+  } catch (error) {
+    console.error('Error al imprimir factura:', error);
+  }
+};
+
+// Función legacy para imprimir factura por ID de comanda
+export const imprimirFacturaPorComandaId = async (comandaId: string): Promise<void> => {
   try {
     const comanda = await obtenerComandaCompleta(comandaId);
     imprimirFacturaEnConsola(comanda);

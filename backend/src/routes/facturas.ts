@@ -2,7 +2,7 @@ import { Router, Request, Response } from 'express';
 import { convertirAHoraColombia, getFechaISO_Colombia } from '../utils/dateUtils';
 import { db } from '../database/init';
 import { v4 as uuidv4 } from 'uuid';
-import { imprimirFactura } from '../services/printer-nuevo';
+import { imprimirFactura } from '../services/printer';
 
 const router = Router();
 
