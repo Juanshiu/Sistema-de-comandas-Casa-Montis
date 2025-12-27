@@ -134,6 +134,7 @@ router.get('/activas', (req: Request, res: Response) => {
             FROM comanda_items ci
             JOIN productos p ON ci.producto_id = p.id
             WHERE ci.comanda_id = ?
+            ORDER BY ci.rowid
           `;
           
           db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
@@ -208,6 +209,7 @@ router.get('/activas', (req: Request, res: Response) => {
             FROM comanda_items ci
             JOIN productos p ON ci.producto_id = p.id
             WHERE ci.comanda_id = ?
+            ORDER BY ci.rowid
           `;
           
           db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
@@ -301,6 +303,7 @@ router.get('/historial', (req: Request, res: Response) => {
           FROM comanda_items ci
           JOIN productos p ON ci.producto_id = p.id
           WHERE ci.comanda_id = ?
+          ORDER BY ci.rowid
         `;
         
         db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
@@ -442,6 +445,7 @@ router.get('/:id', (req: Request, res: Response) => {
         FROM comanda_items ci
         JOIN productos p ON ci.producto_id = p.id
         WHERE ci.comanda_id = ?
+        ORDER BY ci.rowid
       `;
       
       db.all(itemsQuery, [id], (err: any, itemsRows: any[]) => {
@@ -634,6 +638,7 @@ router.post('/', (req: Request, res: Response) => {
                     FROM comanda_items ci
                     JOIN productos p ON ci.producto_id = p.id
                     WHERE ci.comanda_id = ?
+                    ORDER BY ci.rowid
                   `;
                   
                   db.all(getItemsQuery, [comandaId], (err: any, itemsRows: any[]) => {
@@ -927,6 +932,7 @@ function procesarEdicionComanda(
         FROM comanda_items ci
         JOIN productos p ON ci.producto_id = p.id
         WHERE ci.comanda_id = ?
+        ORDER BY ci.rowid
       `;
       
       db.all(queryTodosItems, [id], (err: any, todosItemsRows: any[]) => {
@@ -1098,6 +1104,7 @@ function procesarEdicionComanda(
                       FROM comanda_items ci
                       JOIN productos p ON ci.producto_id = p.id
                       WHERE ci.comanda_id = ?
+                      ORDER BY ci.rowid
                     `;
                     
                     db.all(queryTodosItems, [id], (err: any, todosItemsRows: any[]) => {

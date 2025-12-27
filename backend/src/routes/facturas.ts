@@ -67,6 +67,7 @@ router.post('/', (req: Request, res: Response) => {
         FROM comanda_items ci
         JOIN productos p ON ci.producto_id = p.id
         WHERE ci.comanda_id = ?
+        ORDER BY ci.rowid
       `;
 
       db.all(itemsQuery, [comanda_id], (err: any, itemsRows: any[]) => {
@@ -342,6 +343,7 @@ router.get('/:id', (req: Request, res: Response) => {
         FROM comanda_items ci
         JOIN productos p ON ci.producto_id = p.id
         WHERE ci.comanda_id = ?
+        ORDER BY ci.rowid
       `;
 
       db.all(itemsQuery, [facturaRow.comanda_id], (err: any, itemsRows: any[]) => {

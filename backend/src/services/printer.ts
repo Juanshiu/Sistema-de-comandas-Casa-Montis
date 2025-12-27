@@ -394,6 +394,7 @@ const obtenerComandaCompleta = (comandaId: string): Promise<any> => {
           FROM comanda_items ci
           JOIN productos p ON ci.producto_id = p.id
           WHERE ci.comanda_id = ?
+          ORDER BY ci.rowid
         `;
         
         db.all(itemsQuery, [comandaId], (err: any, itemsRows: any[]) => {
