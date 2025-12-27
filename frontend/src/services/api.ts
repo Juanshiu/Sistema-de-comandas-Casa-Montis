@@ -120,11 +120,6 @@ export const apiService = {
     return response.data;
   },
 
-  async updateComandaEstado(comandaId: string, estado: string): Promise<Comanda> {
-    const response = await api.patch(`/comandas/${comandaId}/estado`, { estado });
-    return response.data;
-  },
-
   async actualizarEstadoComanda(comandaId: string, estado: EstadoComanda): Promise<Comanda> {
     const response = await api.patch(`/comandas/${comandaId}/estado`, { estado });
     return response.data;
@@ -143,17 +138,10 @@ export const apiService = {
     return response.data;
   },
 
-  async imprimirNuevosItems(comandaId: string, nuevosItems: ItemComanda[]): Promise<void> {
-    await api.post(`/comandas/${comandaId}/imprimir-nuevos`, { nuevosItems });
-  },
-
-  // Impresión
-  async imprimirComanda(comandaId: string): Promise<void> {
-    await api.post(`/comandas/${comandaId}/imprimir`);
-  },
-
-  async imprimirFactura(comandaId: string): Promise<void> {
-    await api.post(`/comandas/${comandaId}/factura`);
+  async getHistorialComandas(fecha?: string): Promise<ComandaHistorial[]> {
+    const params = fecha ? `?fecha=${fecha}` : '';
+    const response = await api.get(`/comandas/historial${params}`);
+    return response.data;
   },
 
   // Facturas
@@ -223,89 +211,6 @@ export const apiService = {
 
   async updateDisponibilidadItem(categoriaId: number, itemId: number, disponible: boolean): Promise<any> {
     const response = await api.patch(`/personalizaciones/categorias/${categoriaId}/items/${itemId}/disponibilidad`, { disponible });
-    return response.data;
-  },
-
-  // Personalizaciones (endpoints legacy - se mantienen por compatibilidad)
-  async getCaldos(): Promise<any[]> {
-    const response = await api.get('/personalizaciones/caldos');
-    return response.data;
-  },
-
-  async createCaldo(caldo: any): Promise<any> {
-    const response = await api.post('/personalizaciones/caldos', caldo);
-    return response.data;
-  },
-
-  async updateCaldo(id: string, caldo: any): Promise<any> {
-    const response = await api.patch(`/personalizaciones/caldos/${id}`, caldo);
-    return response.data;
-  },
-
-  async deleteCaldo(id: string): Promise<void> {
-    await api.delete(`/personalizaciones/caldos/${id}`);
-  },
-
-  async getPrincipios(): Promise<any[]> {
-    const response = await api.get('/personalizaciones/principios');
-    return response.data;
-  },
-
-  async createPrincipio(principio: any): Promise<any> {
-    const response = await api.post('/personalizaciones/principios', principio);
-    return response.data;
-  },
-
-  async updatePrincipio(id: string, principio: any): Promise<any> {
-    const response = await api.patch(`/personalizaciones/principios/${id}`, principio);
-    return response.data;
-  },
-
-  async deletePrincipio(id: string): Promise<void> {
-    await api.delete(`/personalizaciones/principios/${id}`);
-  },
-
-  async getProteinas(): Promise<any[]> {
-    const response = await api.get('/personalizaciones/proteinas');
-    return response.data;
-  },
-
-  async createProteina(proteina: any): Promise<any> {
-    const response = await api.post('/personalizaciones/proteinas', proteina);
-    return response.data;
-  },
-
-  async updateProteina(id: string, proteina: any): Promise<any> {
-    const response = await api.patch(`/personalizaciones/proteinas/${id}`, proteina);
-    return response.data;
-  },
-
-  async deleteProteina(id: string): Promise<void> {
-    await api.delete(`/personalizaciones/proteinas/${id}`);
-  },
-
-  async getBebidas(): Promise<any[]> {
-    const response = await api.get('/personalizaciones/bebidas');
-    return response.data;
-  },
-
-  async createBebida(bebida: any): Promise<any> {
-    const response = await api.post('/personalizaciones/bebidas', bebida);
-    return response.data;
-  },
-
-  async updateBebida(id: string, bebida: any): Promise<any> {
-    const response = await api.patch(`/personalizaciones/bebidas/${id}`, bebida);
-    return response.data;
-  },
-
-  async deleteBebida(id: string): Promise<void> {
-    await api.delete(`/personalizaciones/bebidas/${id}`);
-  },
-
-  async getHistorialComandas(fecha?: string): Promise<ComandaHistorial[]> {
-    const params = fecha ? `?fecha=${fecha}` : '';
-    const response = await api.get(`/comandas/historial${params}`);
     return response.data;
   },
 };

@@ -1,7 +1,6 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { OpcionCaldo, OpcionPrincipio, OpcionProteina, OpcionBebida } from '@/types';
 import { apiService } from '@/services/api';
 import { Plus, Edit2, Trash2, Save, X, CheckCircle2, XCircle } from 'lucide-react';
 

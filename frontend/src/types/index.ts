@@ -77,38 +77,10 @@ export interface ItemPersonalizacion {
 }
 
 export interface PersonalizacionItem {
-  // Para desayunos y almuerzos
-  caldo?: OpcionCaldo;
-  principio?: OpcionPrincipio;
-  proteina?: OpcionProteina;
-  bebida?: OpcionBebida;
+  // Sistema dinámico de personalizaciones
+  // Las propiedades se crean dinámicamente según las categorías configuradas
   precio_adicional?: number;
-  // Permitir propiedades dinámicas para categorías personalizadas
-  [key: string]: any;
-}
-
-export interface OpcionCaldo {
-  id: string;
-  nombre: string;
-  precio_adicional: number;
-}
-
-export interface OpcionPrincipio {
-  id: string;
-  nombre: string;
-  precio_adicional: number;
-}
-
-export interface OpcionProteina {
-  id: string;
-  nombre: string;
-  precio_adicional: number;
-}
-
-export interface OpcionBebida {
-  id: string;
-  nombre: string;
-  precio_adicional: number;
+  [key: string]: any; // Permite cualquier categoría de personalización
 }
 
 export interface CategoriaPersonalizacion {
@@ -200,18 +172,6 @@ export interface VentaPorHora {
   comandas: number;
   es_pico?: boolean;
   es_muerta?: boolean;
-}
-
-export interface DesayunoConfig {
-  solo_bandeja: number;
-  bandeja_con_caldo: number;
-  con_caldo_bagre: number;
-}
-
-export interface AlmuerzoConfig {
-  solo_bandeja: number;
-  bandeja_con_sopa: number;
-  con_caldo_bagre: number;
 }
 
 export interface PasoComanda {
