@@ -395,14 +395,13 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                             {comanda.tipo_pedido === 'domicilio' ? (
                               <>
                                 <div className="flex items-center mb-1">
-                                  <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 mr-2">
-                                    🏠 Domicilio
+                                  <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                                    comanda.datos_cliente?.es_para_llevar 
+                                      ? 'bg-amber-100 text-amber-800' 
+                                      : 'bg-purple-100 text-purple-800'
+                                  }`}>
+                                    {comanda.datos_cliente?.es_para_llevar ? '🛍️ Para llevar' : '🏠 Domicilio'}
                                   </span>
-                                  {comanda.datos_cliente?.es_para_llevar && (
-                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800">
-                                      🛍️ Para llevar
-                                    </span>
-                                  )}
                                 </div>
                                 <h3 className="font-semibold text-secondary-800">
                                   {comanda.datos_cliente?.nombre || 'Cliente'}
