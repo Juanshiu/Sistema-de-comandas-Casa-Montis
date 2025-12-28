@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Mesa, Comanda } from '@/types';
 import { apiService } from '@/services/api';
 import { Users, Check, X, User, Edit, Clock, AlertCircle } from 'lucide-react';
@@ -24,6 +24,30 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoMesero, setEditandoMesero] = useState(false);
+  
+  // Ref para preservar posición del scroll
+  const scrollPosRef = useRef(0);
+  const isFirstLoadRef = useRef(true);
+  
+  // Guardar posición del scroll continuamente
+  useEffect(() => {
+    const handleScroll = () => {
+      scrollPosRef.current = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Restaurar scroll después de actualizaciones (pero NO en la primera carga)
+  useLayoutEffect(() => {
+    if (!isFirstLoadRef.current && !loading) {
+      // Solo restaurar si no estamos en estado de carga
+      window.scrollTo(0, scrollPosRef.current);
+    }
+    if (isFirstLoadRef.current && !loading) {
+      isFirstLoadRef.current = false;
+    }
+  }, [mesas, comandasActivas, loading]);
 
   useEffect(() => {
     cargarMesas();
@@ -79,49 +103,52 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
     setEditandoMesero(false);
   };
 
+  // Optimizar agrupación de mesas con useMemo
+  const mesasAgrupadasYOrdenadas = useMemo(() => {
+    const agrupadas = mesas.reduce((acc: MesasPorSalon, mesa) => {
+      if (!acc[mesa.salon]) {
+        acc[mesa.salon] = [];
+      }
+      acc[mesa.salon].push(mesa);
+      return acc;
+    }, {});
+    
+    // Ordenar las mesas dentro de cada salón
+    Object.keys(agrupadas).forEach(salon => {
+      agrupadas[salon].sort((a, b) => {
+        const numA = parseInt(a.numero);
+        const numB = parseInt(b.numero);
+        
+        if (!isNaN(numA) && !isNaN(numB)) {
+          return numA - numB;
+        }
+        
+        if (!isNaN(numA) && isNaN(numB)) return -1;
+        if (isNaN(numA) && !isNaN(numB)) return 1;
+        
+        return a.numero.localeCompare(b.numero);
+      });
+    });
+    
+    return agrupadas;
+  }, [mesas]);
+
   const cargarMesas = async () => {
     try {
-      setLoading(true);
+      // Solo cambiar loading en la primera carga
+      if (isFirstLoadRef.current) {
+        setLoading(true);
+      }
       const mesasData = await apiService.getMesas();
       setMesas(mesasData);
-      
-      // Agrupar mesas por salón y ordenar cada grupo
-      const agrupadas = mesasData.reduce((acc: MesasPorSalon, mesa) => {
-        if (!acc[mesa.salon]) {
-          acc[mesa.salon] = [];
-        }
-        acc[mesa.salon].push(mesa);
-        return acc;
-      }, {});
-      
-      // Ordenar las mesas dentro de cada salón
-      Object.keys(agrupadas).forEach(salon => {
-        agrupadas[salon].sort((a, b) => {
-          // Intentar ordenar numéricamente primero
-          const numA = parseInt(a.numero);
-          const numB = parseInt(b.numero);
-          
-          // Si ambos son números válidos, ordenar numéricamente
-          if (!isNaN(numA) && !isNaN(numB)) {
-            return numA - numB;
-          }
-          
-          // Si uno es número y otro no, el número va primero
-          if (!isNaN(numA) && isNaN(numB)) return -1;
-          if (isNaN(numA) && !isNaN(numB)) return 1;
-          
-          // Si ninguno es número, ordenar alfabéticamente
-          return a.numero.localeCompare(b.numero);
-        });
-      });
-      
-      setMesasPorSalon(agrupadas);
       setError(null);
     } catch (err) {
       setError('Error al cargar las mesas');
       console.error('Error:', err);
     } finally {
-      setLoading(false);
+      if (isFirstLoadRef.current) {
+        setLoading(false);
+      }
     }
   };
 
@@ -265,7 +292,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
         </div>
 
         <div className="space-y-6">
-          {Object.entries(mesasPorSalon).map(([salon, mesasSalon]) => (
+          {Object.entries(mesasAgrupadasYOrdenadas).map(([salon, mesasSalon]) => (
             <div key={salon} className="border rounded-lg p-4 bg-secondary-25">
               <h3 className="font-semibold text-lg text-secondary-800 mb-3 border-b pb-2">
                 {salon}

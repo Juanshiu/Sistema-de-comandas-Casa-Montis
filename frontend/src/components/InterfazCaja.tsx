@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Comanda, Factura, EstadoComanda } from '@/types';
 import { apiService } from '@/services/api';
 import { CreditCard, DollarSign, Receipt, CheckCircle, Clock, AlertCircle, ArrowRightLeft, Smartphone } from 'lucide-react';
@@ -26,6 +26,29 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [mostrarModalCancelar, setMostrarModalCancelar] = useState(false);
   const [comandaACancelar, setComandaACancelar] = useState<Comanda | null>(null);
   const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
+  
+  // Ref para preservar posición del scroll
+  const scrollPosRef = useRef(0);
+  const isFirstLoadRef = useRef(true);
+  
+  // Guardar posición del scroll continuamente
+  useEffect(() => {
+    const handleScroll = () => {
+      scrollPosRef.current = window.scrollY;
+    };
+    window.addEventListener('scroll', handleScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleScroll);
+  }, []);
+  
+  // Restaurar scroll después de actualizaciones (pero NO en la primera carga)
+  useLayoutEffect(() => {
+    if (!isFirstLoadRef.current && !loading) {
+      window.scrollTo(0, scrollPosRef.current);
+    }
+    if (isFirstLoadRef.current && !loading) {
+      isFirstLoadRef.current = false;
+    }
+  }, [comandasActivas, loading]);
 
   useEffect(() => {
     cargarComandasActivas();
@@ -44,7 +67,10 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
 
   const cargarComandasActivas = async () => {
     try {
-      setLoading(true);
+      // Solo cambiar loading en la primera carga
+      if (isFirstLoadRef.current) {
+        setLoading(true);
+      }
       const comandas = await apiService.getComandasActivas();
       setComandasActivas(comandas);
       setError(null);
@@ -52,7 +78,9 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       setError('Error al cargar las comandas');
       console.error('Error:', err);
     } finally {
-      setLoading(false);
+      if (isFirstLoadRef.current) {
+        setLoading(false);
+      }
     }
   };
 
