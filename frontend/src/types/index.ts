@@ -42,20 +42,6 @@ export type CategoriaProducto =
   | 'cafeteria'
   | 'porciones';
 
-export type TipoServicio = 
-  | 'desayuno'
-  | 'almuerzo'
-  | 'carta_pechuga'
-  | 'carta_carne'
-  | 'carta_pasta'
-  | 'carta_pescado'
-  | 'carta_arroz'
-  | 'sopa'
-  | 'bebida'
-  | 'otros'
-  | 'cafeteria'
-  | 'porciones';
-
 export interface ItemComanda {
   id: string;
   producto: Producto;
@@ -182,7 +168,7 @@ export interface PasoComanda {
 
 export interface FormularioComanda {
   mesas: Mesa[];
-  tipo_servicio?: TipoServicio;
+  tipo_servicio?: string;
   items: ItemComanda[];
   observaciones_generales?: string;
   mesero: string;

@@ -88,7 +88,7 @@ export default function BuscadorProductos({ onAgregarProducto, productosEnCarrit
     const tienePersonalizacion = productoSeleccionado.tiene_personalizacion;
 
     const nuevoItem: ItemComanda = {
-      id: `${Date.now()}-${Math.random()}`,
+      id: `item_${Date.now()}_${Math.random()}_${productoSeleccionado.id}`,
       producto: productoSeleccionado,
       cantidad: cantidad,
       precio_unitario: productoSeleccionado.precio,

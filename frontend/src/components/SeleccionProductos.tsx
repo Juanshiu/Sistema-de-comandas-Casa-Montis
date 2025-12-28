@@ -1,14 +1,14 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { TipoServicio, Producto, ItemComanda, PersonalizacionItem } from '@/types';
+import { Producto, ItemComanda, PersonalizacionItem } from '@/types';
 import { apiService } from '@/services/api';
 import { Plus, Minus, Trash2, Settings } from 'lucide-react';
-
+import { getPersonalizacionPorCategoria } from '@/utils/personalizacionUtils';
 import PersonalizacionProducto from './PersonalizacionProducto';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
 interface SeleccionProductosProps {
-  tipoServicio: TipoServicio;
+  categoria: string;
   items: ItemComanda[];
   onItemsChange: (items: ItemComanda[]) => void;
 }
@@ -21,7 +21,7 @@ interface CategoriaPersonalizacion {
   activo: boolean;
 }
 
-export default function SeleccionProductos({ tipoServicio, items, onItemsChange }: SeleccionProductosProps) {
+export default function SeleccionProductos({ categoria, items, onItemsChange }: SeleccionProductosProps) {
   const [productos, setProductos] = useState<Producto[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -32,7 +32,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   useEffect(() => {
     cargarProductos();
     cargarCategoriasPersonalizacion();
-  }, [tipoServicio]);
+  }, [categoria]);
 
   const cargarCategoriasPersonalizacion = async () => {
     try {
@@ -50,7 +50,7 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
   const cargarProductos = async () => {
     try {
       setLoading(true);
-      const productosData = await apiService.getProductosByCategoria(tipoServicio as any);
+      const productosData = await apiService.getProductosByCategoria(categoria);
       setProductos(productosData);
       setError(null);
     } catch (err) {
@@ -59,16 +59,6 @@ export default function SeleccionProductos({ tipoServicio, items, onItemsChange 
     } finally {
       setLoading(false);
     }
-  };
-
-  const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
-    if (!personalizacion) return null;
-    
-    // Convertir el nombre de la categoría a la misma clave que usa PersonalizacionAlmuerzo/Desayuno
-    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
-    
-    // Buscar directamente por la clave generada
-    return personalizacion[clave] || null;
   };
 
   const obtenerPersonalizacionesFormateadas = async (personalizacion: PersonalizacionItem): Promise<string[]> => {

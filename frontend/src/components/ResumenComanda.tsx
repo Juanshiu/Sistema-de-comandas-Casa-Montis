@@ -5,6 +5,7 @@ import { FormularioComanda, PersonalizacionItem } from '@/types';
 import { apiService } from '@/services/api';
 import { Printer, Send, AlertCircle } from 'lucide-react';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
+import { getIconoCategoria } from '@/utils/personalizacionUtils';
 
 interface ResumenComandaProps {
   formulario: FormularioComanda;
@@ -35,31 +36,6 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
     } catch (error) {
       console.error('Error al cargar categorías de personalización:', error);
     }
-  };
-
-  // Función para obtener el icono según el nombre de la categoría
-  const getIconoCategoria = (nombreCategoria: string): string => {
-    const nombre = nombreCategoria.toLowerCase();
-    if (nombre.includes('caldo') || nombre.includes('sopa')) return '🥄';
-    if (nombre.includes('principio') || nombre.includes('guarnición')) return '🍽️';
-    if (nombre.includes('proteína') || nombre.includes('proteina') || nombre.includes('carne')) return '🥩';
-    if (nombre.includes('bebida') || nombre.includes('jugo') || nombre.includes('refresco')) return '☕';
-    if (nombre.includes('salsa')) return '🍯';
-    if (nombre.includes('postre')) return '🍰';
-    if (nombre.includes('entrada')) return '🥗';
-    if (nombre.includes('acompañamiento')) return '🥘';
-    return '🔹'; // Icono por defecto
-  };
-
-  // Función para obtener la clave de personalización de manera dinámica
-  const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
-    if (!personalizacion) return null;
-    
-    // Convertir el nombre de la categoría a la misma clave que usa PersonalizacionAlmuerzo/Desayuno
-    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
-    
-    // Buscar directamente por la clave generada
-    return personalizacion[clave] || null;
   };
 
   const calcularSubtotal = (): number => {
@@ -299,13 +275,15 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
               {formulario.mesero}
             </div>
           </div>
-          
-          <div>
-            <label className="block text-sm font-medium text-secondary-700 mb-2">Tipo de Servicio</label>
-            <div className="p-3 bg-secondary-50 rounded-lg capitalize">
-              {formulario.tipo_servicio?.replace('_', ' ')}
+
+          {formulario.tipo_servicio && (
+            <div>
+              <label className="block text-sm font-medium text-secondary-700 mb-2">Tipo de Servicio</label>
+              <div className="p-3 bg-secondary-50 rounded-lg capitalize">
+                {formulario.tipo_servicio.replace(/_/g, ' ')}
+              </div>
             </div>
-          </div>
+          )}
         </div>
         
         <div>

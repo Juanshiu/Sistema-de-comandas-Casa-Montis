@@ -74,7 +74,6 @@ export default function FormularioComandas() {
         mesas: comanda.mesas,
         items: itemsEnriquecidos,
         mesero: comanda.mesero,
-        tipo_servicio: 'desayuno',
         observaciones_generales: comanda.observaciones_generales,
         tipo_pedido: comanda.tipo_pedido || 'mesa',
         datos_cliente: comanda.datos_cliente
@@ -86,7 +85,6 @@ export default function FormularioComandas() {
         mesas: comanda.mesas,
         items: comanda.items,
         mesero: comanda.mesero,
-        tipo_servicio: 'desayuno',
         observaciones_generales: comanda.observaciones_generales,
         tipo_pedido: comanda.tipo_pedido || 'mesa',
         datos_cliente: comanda.datos_cliente
@@ -116,12 +114,12 @@ export default function FormularioComandas() {
     setFormulario(prev => ({ ...prev, mesero }));
   };
 
-  const handleTipoServicioSelect = (tipo: FormularioComanda['tipo_servicio']) => {
-    setFormulario(prev => ({ ...prev, tipo_servicio: tipo }));
-  };
-
   const handleProductosChange = (items: ItemComanda[]) => {
     setFormulario(prev => ({ ...prev, items }));
+  };
+
+  const handleTipoServicioSelect = (tipo: string) => {
+    setFormulario(prev => ({ ...prev, tipo_servicio: tipo }));
   };
 
   const handleObservacionesChange = (observaciones: string) => {
@@ -159,7 +157,7 @@ export default function FormularioComandas() {
           return formulario.mesas.length > 0 && formulario.mesero.trim() !== '';
         }
       case 2: 
-        return !!formulario.tipo_servicio || formulario.items.length > 0;
+        return !!formulario.tipo_servicio;
       case 3: 
         return formulario.items.length > 0;
       case 4: 
@@ -213,6 +211,13 @@ export default function FormularioComandas() {
         }
       case 2:
         return (
+          <SeleccionTipoServicio
+            onTipoSelect={handleTipoServicioSelect}
+            tipoSeleccionado={formulario.tipo_servicio}
+          />
+        );
+      case 3:
+        return (
           <>
             <BuscadorProductos
               onAgregarProducto={(item) => {
@@ -223,19 +228,14 @@ export default function FormularioComandas() {
               }}
               productosEnCarrito={formulario.items.length}
             />
-            <SeleccionTipoServicio
-              onTipoSelect={handleTipoServicioSelect}
-              tipoSeleccionado={formulario.tipo_servicio}
-            />
+            {formulario.tipo_servicio && (
+              <SeleccionProductos
+                categoria={formulario.tipo_servicio}
+                items={formulario.items}
+                onItemsChange={handleProductosChange}
+              />
+            )}
           </>
-        );
-      case 3:
-        return (
-          <SeleccionProductos
-            tipoServicio={formulario.tipo_servicio!}
-            items={formulario.items}
-            onItemsChange={handleProductosChange}
-          />
         );
       case 4:
         return (
