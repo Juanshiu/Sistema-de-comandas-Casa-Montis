@@ -243,7 +243,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 router.patch('/:id/liberar', (req: Request, res: Response) => {
   const { id } = req.params;
   
-  const query = 'UPDATE mesas SET ocupada = 0 WHERE id = ?';
+  const query = 'UPDATE mesas SET ocupada = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?';
   
   db.run(query, [id], function(err: any) {
     if (err) {

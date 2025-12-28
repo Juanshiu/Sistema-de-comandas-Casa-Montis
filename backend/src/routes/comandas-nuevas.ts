@@ -1317,19 +1317,47 @@ router.patch('/:id/estado', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Estado inválido' });
   }
   
-  const query = 'UPDATE comandas SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?';
-  
-  db.run(query, [estado, id], function(err: any) {
-    if (err) {
-      console.error('Error al actualizar estado de comanda:', err);
-      return res.status(500).json({ error: 'Error al actualizar el estado de la comanda' });
-    }
+  db.serialize(() => {
+    // Actualizar estado de la comanda
+    const query = 'UPDATE comandas SET estado = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?';
     
-    if (this.changes === 0) {
-      return res.status(404).json({ error: 'Comanda no encontrada' });
-    }
-    
-    res.json({ message: 'Estado de comanda actualizado exitosamente' });
+    db.run(query, [estado, id], function(err: any) {
+      if (err) {
+        console.error('Error al actualizar estado de comanda:', err);
+        return res.status(500).json({ error: 'Error al actualizar el estado de la comanda' });
+      }
+      
+      if (this.changes === 0) {
+        return res.status(404).json({ error: 'Comanda no encontrada' });
+      }
+      
+      // Si el estado es 'cancelada', 'entregada' o 'facturada', liberar las mesas asociadas
+      if (estado === 'cancelada' || estado === 'entregada' || estado === 'facturada') {
+        const liberarMesasQuery = `
+          UPDATE mesas 
+          SET ocupada = 0, updated_at = CURRENT_TIMESTAMP 
+          WHERE id IN (SELECT mesa_id FROM comanda_mesas WHERE comanda_id = ?)
+        `;
+        
+        db.run(liberarMesasQuery, [id], (err: any) => {
+          if (err) {
+            console.error('Error al liberar mesas:', err);
+            // No retornar error aquí para no afectar la actualización del estado
+            // pero sí loguearlo
+            console.warn(`Mesas no liberadas para comanda ${id} con estado ${estado}`);
+          } else {
+            console.log(`✅ Mesas liberadas automáticamente para comanda ${id} (estado: ${estado})`);
+          }
+          
+          res.json({ 
+            message: 'Estado de comanda actualizado exitosamente',
+            mesas_liberadas: err ? false : true
+          });
+        });
+      } else {
+        res.json({ message: 'Estado de comanda actualizado exitosamente' });
+      }
+    });
   });
 });
 
@@ -1354,56 +1382,31 @@ router.delete('/:id', (req: Request, res: Response) => {
         return res.status(500).json({ error: 'Error al obtener las mesas de la comanda' });
       }
       
-      // Liberar mesas
+      // Liberar mesas si existen
       if (mesaRows.length > 0) {
-        const liberarMesaQuery = 'UPDATE mesas SET ocupada = 0 WHERE id = ?';
-        let mesasLiberadas = 0;
-        let erroresLiberacion = 0;
+        const liberarMesasQuery = `
+          UPDATE mesas 
+          SET ocupada = 0, updated_at = CURRENT_TIMESTAMP 
+          WHERE id IN (SELECT mesa_id FROM comanda_mesas WHERE comanda_id = ?)
+        `;
         
-        mesaRows.forEach((mesaRow) => {
-          db.run(liberarMesaQuery, [mesaRow.mesa_id], (err: any) => {
-            if (err) {
-              console.error('Error al liberar mesa:', err);
-              erroresLiberacion++;
-            } else {
-              mesasLiberadas++;
-            }
-            
-            if (mesasLiberadas + erroresLiberacion === mesaRows.length) {
-              if (erroresLiberacion > 0) {
-                db.run('ROLLBACK');
-                return res.status(500).json({ error: 'Error al liberar las mesas' });
-              }
-              
-              // Eliminar comanda (CASCADE eliminará items y relaciones)
-              const deleteComandaQuery = 'DELETE FROM comandas WHERE id = ?';
-              
-              db.run(deleteComandaQuery, [id], function(err: any) {
-                if (err) {
-                  console.error('Error al eliminar comanda:', err);
-                  db.run('ROLLBACK');
-                  return res.status(500).json({ error: 'Error al eliminar la comanda' });
-                }
-                
-                if (this.changes === 0) {
-                  db.run('ROLLBACK');
-                  return res.status(404).json({ error: 'Comanda no encontrada' });
-                }
-                
-                db.run('COMMIT', (err: any) => {
-                  if (err) {
-                    console.error('Error al hacer commit:', err);
-                    return res.status(500).json({ error: 'Error al eliminar la comanda' });
-                  }
-                  
-                  res.json({ message: 'Comanda eliminada exitosamente' });
-                });
-              });
-            }
-          });
+        db.run(liberarMesasQuery, [id], (err: any) => {
+          if (err) {
+            console.error('Error al liberar mesas:', err);
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Error al liberar las mesas' });
+          }
+          
+          console.log(`✅ Mesas liberadas automáticamente para comanda ${id} (eliminada)`);
+          eliminarComanda();
         });
       } else {
         // No hay mesas que liberar, eliminar directamente
+        eliminarComanda();
+      }
+      
+      function eliminarComanda() {
+        // Eliminar comanda (CASCADE eliminará items y relaciones)
         const deleteComandaQuery = 'DELETE FROM comandas WHERE id = ?';
         
         db.run(deleteComandaQuery, [id], function(err: any) {

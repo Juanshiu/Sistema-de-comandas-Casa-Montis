@@ -583,7 +583,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                                 setComandaACancelar(comanda);
                                 setMostrarModalCancelar(true);
                               }}
-                              className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+                              className="px-2 py-1 bg-red-200 text-white text-xs rounded hover:bg-red-400 transition-colors"
                               title="Cancelar comanda"
                             >
                               ❌

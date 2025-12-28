@@ -139,20 +139,30 @@ router.post('/', (req: Request, res: Response) => {
             });
 
             function finalizarFacturacion() {
-              // Liberar las mesas (marcarlas como no ocupadas)
-              const liberarMesasQuery = `
-                UPDATE mesas 
-                SET ocupada = 0 
-                WHERE id IN (SELECT mesa_id FROM comanda_mesas WHERE comanda_id = ?)
-              `;
+              // Liberar las mesas (marcarlas como no ocupadas) solo si hay mesas asociadas
+              if (mesasRows.length > 0) {
+                const liberarMesasQuery = `
+                  UPDATE mesas 
+                  SET ocupada = 0, updated_at = CURRENT_TIMESTAMP 
+                  WHERE id IN (SELECT mesa_id FROM comanda_mesas WHERE comanda_id = ?)
+                `;
 
-              db.run(liberarMesasQuery, [comanda_id], (err: any) => {
-                if (err) {
-                  console.error('Error al liberar mesas:', err);
-                  db.run('ROLLBACK');
-                  return res.status(500).json({ error: 'Error al liberar las mesas' });
-                }
+                db.run(liberarMesasQuery, [comanda_id], (err: any) => {
+                  if (err) {
+                    console.error('Error al liberar mesas:', err);
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: 'Error al liberar las mesas' });
+                  }
+                  
+                  console.log(`✅ Mesas liberadas automáticamente para comanda ${comanda_id} (facturada)`);
+                  actualizarComandaYFinalizar();
+                });
+              } else {
+                // Si no hay mesas (domicilio), continuar directamente
+                actualizarComandaYFinalizar();
+              }
 
+              function actualizarComandaYFinalizar() {
                 // Actualizar estado de la comanda a 'facturada'
                 const actualizarComandaQuery = `
                   UPDATE comandas 
@@ -216,7 +226,7 @@ router.post('/', (req: Request, res: Response) => {
                     });
                   });
                 });
-              });
+              }
             }
           });
         });
