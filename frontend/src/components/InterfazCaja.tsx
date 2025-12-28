@@ -22,6 +22,9 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [montoPagado, setMontoPagado] = useState<string>('');
   const [cambio, setCambio] = useState<number>(0);
   const [facturasImpresas, setFacturasImpresas] = useState<Set<string>>(new Set());
+  const [itemsPagados, setItemsPagados] = useState<{ [comandaId: string]: Set<string> }>({});
+  const [mostrarModalCancelar, setMostrarModalCancelar] = useState(false);
+  const [comandaACancelar, setComandaACancelar] = useState<Comanda | null>(null);
   const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
 
   useEffect(() => {
@@ -34,20 +37,10 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   useEffect(() => {
     if (comandaSeleccionada && montoPagado) {
       const pago = parseFloat(montoPagado) || 0;
-      const total = comandaSeleccionada.total;
-      setCambio(Math.max(0, pago - total));
+      const totalPendiente = calcularTotalPendiente(comandaSeleccionada);
+      setCambio(Math.max(0, pago - totalPendiente));
     }
-  }, [montoPagado, comandaSeleccionada]);
-
-  const getPersonalizacionPorCategoria = (personalizacion: any, nombreCategoria: string): any => {
-    if (!personalizacion) return null;
-    
-    // Convertir el nombre de la categoría a la misma clave que usa PersonalizacionAlmuerzo/Desayuno
-    const clave = nombreCategoria.toLowerCase().replace(/\//g, '-').replace(/\s+/g, '_');
-    
-    // Buscar directamente por la clave generada
-    return personalizacion[clave] || null;
-  };
+  }, [montoPagado, comandaSeleccionada, itemsPagados]);
 
   const cargarComandasActivas = async () => {
     try {
@@ -63,14 +56,95 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     }
   };
 
+  // Funciones para manejar items pagados
+  const toggleItemPagado = (comandaId: string, itemId: string) => {
+    setItemsPagados(prev => {
+      const nuevosItems = { ...prev };
+      if (!nuevosItems[comandaId]) {
+        nuevosItems[comandaId] = new Set();
+      }
+      
+      const itemsComanda = new Set(nuevosItems[comandaId]);
+      if (itemsComanda.has(itemId)) {
+        itemsComanda.delete(itemId);
+      } else {
+        itemsComanda.add(itemId);
+      }
+      
+      nuevosItems[comandaId] = itemsComanda;
+      return nuevosItems;
+    });
+  };
+
+  const isItemPagado = (comandaId: string, itemId: string): boolean => {
+    return itemsPagados[comandaId]?.has(itemId) || false;
+  };
+
+  const calcularTotalPendiente = (comanda: Comanda): number => {
+    if (!comanda.items || comanda.items.length === 0) return 0;
+    
+    const itemsPagadosComanda = itemsPagados[comanda.id] || new Set();
+    const totalPendiente = comanda.items
+      .filter(item => !itemsPagadosComanda.has(item.id))
+      .reduce((sum, item) => sum + item.subtotal, 0);
+    
+    return totalPendiente;
+  };
+
+  const getItemsPendientes = (comanda: Comanda) => {
+    if (!comanda.items || comanda.items.length === 0) return [];
+    
+    const itemsPagadosComanda = itemsPagados[comanda.id] || new Set();
+    return comanda.items.filter(item => !itemsPagadosComanda.has(item.id));
+  };
+
+  const marcarTodosComoNoPagados = (comandaId: string) => {
+    setItemsPagados(prev => {
+      const nuevosItems = { ...prev };
+      nuevosItems[comandaId] = new Set();
+      return nuevosItems;
+    });
+  };
+
+  const cancelarComanda = async () => {
+    if (!comandaACancelar) return;
+
+    try {
+      await apiService.actualizarEstadoComanda(comandaACancelar.id, 'cancelada');
+      await cargarComandasActivas();
+      
+      if (comandaSeleccionada?.id === comandaACancelar.id) {
+        setComandaSeleccionada(null);
+      }
+      
+      setMostrarModalCancelar(false);
+      setComandaACancelar(null);
+      
+      if (onMesaLiberada) {
+        onMesaLiberada();
+      }
+    } catch (err) {
+      console.error('Error al cancelar comanda:', err);
+      alert('Error al cancelar la comanda');
+    }
+  };
+
   const procesarFactura = async () => {
     if (!comandaSeleccionada) return;
+
+    const totalPendiente = calcularTotalPendiente(comandaSeleccionada);
+    const itemsPendientes = getItemsPendientes(comandaSeleccionada);
+    
+    if (itemsPendientes.length === 0) {
+      alert('No hay items pendientes por pagar');
+      return;
+    }
 
     // Validar monto pagado para efectivo
     if (metodoPago === 'efectivo') {
       const pago = parseFloat(montoPagado) || 0;
-      if (pago < comandaSeleccionada.total) {
-        alert('El monto pagado no puede ser menor al total de la cuenta');
+      if (pago < totalPendiente) {
+        alert('El monto pagado no puede ser menor al total pendiente');
         return;
       }
     }
@@ -78,36 +152,69 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     try {
       setProcesandoPago(true);
       
-      // Crear factura
-      const facturaData = {
-        comanda_id: comandaSeleccionada.id,
-        metodo_pago: metodoPago,
-        cajero: 'Cajero Principal' // TODO: Obtener del contexto de usuario
-      };
+      const itemsPagadosComanda = itemsPagados[comandaSeleccionada.id] || new Set();
+      const esPagoTotal = itemsPendientes.length === comandaSeleccionada.items.length;
+      
+      if (esPagoTotal) {
+        // Pago total - crear factura y liberar mesa
+        const facturaData = {
+          comanda_id: comandaSeleccionada.id,
+          metodo_pago: metodoPago,
+          cajero: 'Cajero Principal'
+        };
 
-      const response = await apiService.crearFactura(facturaData);
+        const response = await apiService.crearFactura(facturaData);
+        
+        // Preparar datos para el recibo
+        const montoPagadoFinal = metodoPago === 'efectivo' ? parseFloat(montoPagado) : totalPendiente;
+        
+        setFacturaParaRecibo({
+          ...response,
+          comanda: comandaSeleccionada,
+          metodo_pago: metodoPago,
+          monto_pagado: montoPagadoFinal,
+          cambio: metodoPago === 'efectivo' ? cambio : 0
+        });
+        
+        // Limpiar items pagados de esta comanda
+        setItemsPagados(prev => {
+          const nuevosItems = { ...prev };
+          delete nuevosItems[comandaSeleccionada.id];
+          return nuevosItems;
+        });
+        
+        if (onMesaLiberada) {
+          onMesaLiberada();
+        }
+        
+        setComandaSeleccionada(null);
+      } else {
+        // Pago parcial - marcar items como pagados
+        itemsPendientes.forEach(item => {
+          toggleItemPagado(comandaSeleccionada.id, item.id);
+        });
+        
+        // Preparar recibo para pago parcial
+        const montoPagadoFinal = metodoPago === 'efectivo' ? parseFloat(montoPagado) : totalPendiente;
+        
+        setFacturaParaRecibo({
+          comanda: {
+            ...comandaSeleccionada,
+            items: itemsPendientes,
+            total: totalPendiente
+          },
+          metodo_pago: metodoPago,
+          monto_pagado: montoPagadoFinal,
+          cambio: metodoPago === 'efectivo' ? cambio : 0,
+          es_pago_parcial: true
+        });
+      }
       
       // Actualizar lista
       await cargarComandasActivas();
       
-      // Preparar datos para el recibo
-      const montoPagadoFinal = metodoPago === 'efectivo' ? parseFloat(montoPagado) : comandaSeleccionada.total;
-      
-      setFacturaParaRecibo({
-        ...response,
-        comanda: comandaSeleccionada,
-        metodo_pago: metodoPago,
-        monto_pagado: montoPagadoFinal,
-        cambio: metodoPago === 'efectivo' ? cambio : 0
-      });
-      
-      setComandaSeleccionada(null);
       setMontoPagado('');
       setCambio(0);
-      
-      if (onMesaLiberada) {
-        onMesaLiberada();
-      }
 
       // Mostrar modal para preguntar si quiere imprimir recibo
       setMostrarModalRecibo(true);
@@ -203,6 +310,7 @@ VALOR TOTAL              ${comandaSeleccionada.total.toLocaleString('es-CO').pad
   const generarRecibo = (factura: any) => {
     const fechaActual = new Date();
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
+    const esParcial = factura.es_pago_parcial || false;
     
     // Información de mesa o cliente según tipo
     let mesaInfo = '';
@@ -228,7 +336,7 @@ CRA 9 # 11 07 - EDUARDO SANTOS
       PALERMO - HUILA
 TEL: 3132171025 - 3224588520
 ================================
-      RECIBO DE PAGO
+      RECIBO DE PAGO${esParcial ? ' PARCIAL' : ''}
 No. ${numeroFactura}
 CAJA 01
 ${mesaInfo}
@@ -468,6 +576,18 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                                 Marcar Lista
                               </button>
                             )}
+                            
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setComandaACancelar(comanda);
+                                setMostrarModalCancelar(true);
+                              }}
+                              className="px-2 py-1 bg-red-500 text-white text-xs rounded hover:bg-red-600 transition-colors"
+                              title="Cancelar comanda"
+                            >
+                              ❌
+                            </button>
                           </div>
                         </div>
                       ))}
@@ -536,27 +656,51 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
               </div>
 
               <div>
-                <h4 className="font-medium text-secondary-800 mb-2">Items:</h4>
+                <div className="flex justify-between items-center mb-2">
+                  <h4 className="font-medium text-secondary-800">Items:</h4>
+                  <button
+                    onClick={() => marcarTodosComoNoPagados(comandaSeleccionada.id)}
+                    className="text-xs text-primary-600 hover:text-primary-700 underline"
+                    title="Desmarcar todos los items"
+                  >
+                    Limpiar selección
+                  </button>
+                </div>
                 <div className="space-y-3">
                   {comandaSeleccionada.items && comandaSeleccionada.items.length > 0 ? (
                     comandaSeleccionada.items.map((item) => {
-                      // Debug: ver estructura de personalización
-                      // if (item.personalizacion) {
-                      //   console.log('🔍 Personalización del item:', item.producto.nombre, item.personalizacion);
-                      // }
+                      const itemYaPagado = isItemPagado(comandaSeleccionada.id, item.id);
                       
                       return (
-                        <div key={item.id} className="border-l-2 border-primary-300 pl-3 py-1">
-                          <div className="flex justify-between text-sm">
-                            <span className="font-medium">
-                              {item.producto.nombre} x {item.cantidad}
-                            </span>
-                            <span className="font-semibold">${item.subtotal.toLocaleString()}</span>
-                          </div>
+                        <div 
+                          key={item.id} 
+                          className={`border-l-2 pl-3 py-2 transition-all ${
+                            itemYaPagado 
+                              ? 'border-green-300 bg-green-50 opacity-60' 
+                              : 'border-primary-300 bg-white'
+                          }`}
+                        >
+                          <div className="flex items-start space-x-2">
+                            <input
+                              type="checkbox"
+                              checked={itemYaPagado}
+                              onChange={() => toggleItemPagado(comandaSeleccionada.id, item.id)}
+                              className="mt-1 h-4 w-4 text-green-600 focus:ring-green-500 border-secondary-300 rounded cursor-pointer"
+                              title={itemYaPagado ? 'Item ya pagado - click para desmarcar' : 'Marcar como pagado'}
+                            />
+                            <div className="flex-1">
+                              <div className="flex justify-between text-sm">
+                                <span className={`font-medium ${itemYaPagado ? 'line-through text-secondary-500' : ''}`}>
+                                  {item.producto.nombre} x {item.cantidad}
+                                </span>
+                                <span className={`font-semibold ${itemYaPagado ? 'line-through text-secondary-500' : ''}`}>
+                                  ${item.subtotal.toLocaleString()}
+                                </span>
+                              </div>
                           
-                          {/* Mostrar personalización */}
-                          {item.personalizacion && Object.keys(item.personalizacion).length > 0 && (
-                            <div className="mt-1 space-y-0.5">
+                              {/* Mostrar personalización */}
+                              {item.personalizacion && Object.keys(item.personalizacion).length > 0 && (
+                                <div className={`mt-1 space-y-0.5 ${itemYaPagado ? 'opacity-70' : ''}`}>
                               {(() => {
                                 // Ordenar las entradas según el orden de las categorías
                                 const entradasOrdenadas = ordenarPersonalizaciones(item.personalizacion);
@@ -595,14 +739,16 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                             </div>
                           )}
                           
-                          {/* Mostrar observaciones del item */}
-                          {item.observaciones && (
-                            <div className="mt-1">
-                              <p className="text-xs text-amber-700 italic">
-                                📝 {item.observaciones}
-                              </p>
+                              {/* Mostrar observaciones del item */}
+                              {item.observaciones && (
+                                <div className={`mt-1 ${itemYaPagado ? 'opacity-70' : ''}`}>
+                                  <p className={`text-xs text-amber-700 italic ${itemYaPagado ? 'line-through' : ''}`}>
+                                    📝 {item.observaciones}
+                                  </p>
+                                </div>
+                              )}
                             </div>
-                          )}
+                          </div>
                         </div>
                       );
                     })
@@ -613,11 +759,41 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
               </div>
 
               <div className="border-t pt-4">
-                <div className="flex justify-between items-center mb-4">
-                  <span className="text-lg font-semibold">Total:</span>
-                  <span className="text-xl font-bold text-primary-600">
-                    ${comandaSeleccionada.total.toLocaleString()}
-                  </span>
+                <div className="space-y-2 mb-4">
+                  {(() => {
+                    const totalPendiente = calcularTotalPendiente(comandaSeleccionada);
+                    const totalPagado = comandaSeleccionada.total - totalPendiente;
+                    const hayItemsPagados = totalPagado > 0;
+                    
+                    return (
+                      <>
+                        {hayItemsPagados && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-secondary-600">Total original:</span>
+                            <span className="text-secondary-600">
+                              ${comandaSeleccionada.total.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        {hayItemsPagados && (
+                          <div className="flex justify-between items-center text-sm">
+                            <span className="text-green-600">Ya pagado:</span>
+                            <span className="text-green-600 line-through">
+                              ${totalPagado.toLocaleString()}
+                            </span>
+                          </div>
+                        )}
+                        <div className="flex justify-between items-center">
+                          <span className="text-lg font-semibold">
+                            {hayItemsPagados ? 'Total pendiente:' : 'Total:'}
+                          </span>
+                          <span className="text-xl font-bold text-primary-600">
+                            ${totalPendiente.toLocaleString()}
+                          </span>
+                        </div>
+                      </>
+                    );
+                  })()}
                 </div>
 
                 <div className="mb-4">
@@ -700,12 +876,12 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                         type="number"
                         value={montoPagado}
                         onChange={(e) => setMontoPagado(e.target.value)}
-                        placeholder={`Mínimo: $${comandaSeleccionada.total.toLocaleString()}`}
+                        placeholder={`Mínimo: $${calcularTotalPendiente(comandaSeleccionada).toLocaleString()}`}
                         className="flex-1 px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500"
                       />
                       <button
                         type="button"
-                        onClick={() => setMontoPagado(comandaSeleccionada.total.toString())}
+                        onClick={() => setMontoPagado(calcularTotalPendiente(comandaSeleccionada).toString())}
                         className="px-4 py-2 bg-primary-500 text-white rounded-md hover:bg-primary-600 transition-colors whitespace-nowrap"
                         title="Pago exacto"
                       >
@@ -732,7 +908,8 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                     disabled={
                       procesandoPago || 
                       comandaSeleccionada.estado !== 'lista' || 
-                      (metodoPago === 'efectivo' && (!montoPagado || parseFloat(montoPagado) < comandaSeleccionada.total))
+                      (metodoPago === 'efectivo' && (!montoPagado || parseFloat(montoPagado) < calcularTotalPendiente(comandaSeleccionada))) ||
+                      getItemsPendientes(comandaSeleccionada).length === 0
                     }
                     className="btn-primary flex-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -742,7 +919,9 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                         <span>Procesando...</span>
                       </div>
                     ) : (
-                      'Procesar Pago y Liberar Mesa'
+                      getItemsPendientes(comandaSeleccionada).length === comandaSeleccionada.items.length
+                        ? 'Procesar Pago y Liberar Mesa'
+                        : 'Procesar Pago Parcial'
                     )}
                   </button>
                 </div>
@@ -753,9 +932,15 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                   </p>
                 )}
 
-                {metodoPago === 'efectivo' && montoPagado && parseFloat(montoPagado) < comandaSeleccionada.total && (
+                {metodoPago === 'efectivo' && montoPagado && parseFloat(montoPagado) < calcularTotalPendiente(comandaSeleccionada) && (
                   <p className="text-sm text-red-600 mt-2 text-center">
-                    El monto pagado debe ser mayor o igual al total
+                    El monto pagado debe ser mayor o igual al total pendiente
+                  </p>
+                )}
+                
+                {getItemsPendientes(comandaSeleccionada).length === 0 && (
+                  <p className="text-sm text-orange-600 mt-2 text-center">
+                    ⚠️ Todos los items ya han sido pagados
                   </p>
                 )}
               </div>
@@ -793,6 +978,59 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                 className="btn-secondary flex-1"
               >
                 No, continuar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmación para cancelar comanda */}
+      {mostrarModalCancelar && comandaACancelar && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white p-6 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <h3 className="text-lg font-semibold text-red-600 mb-4">
+              ⚠️ Cancelar Comanda
+            </h3>
+            <div className="mb-6">
+              <p className="text-secondary-700 mb-2">
+                ¿Está seguro que desea cancelar esta comanda?
+              </p>
+              <div className="bg-secondary-50 p-3 rounded-lg mt-3">
+                {comandaACancelar.tipo_pedido === 'domicilio' ? (
+                  <p className="text-sm">
+                    <strong>{comandaACancelar.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'}:</strong> {comandaACancelar.datos_cliente?.nombre}
+                  </p>
+                ) : (
+                  <p className="text-sm">
+                    <strong>Mesa(s):</strong> {comandaACancelar.mesas?.map(m => `${m.salon}-${m.numero}`).join(', ')}
+                  </p>
+                )}
+                <p className="text-sm mt-1">
+                  <strong>Total:</strong> ${comandaACancelar.total.toLocaleString()}
+                </p>
+                <p className="text-sm">
+                  <strong>Items:</strong> {comandaACancelar.items?.length || 0}
+                </p>
+              </div>
+              <p className="text-sm text-red-600 mt-3">
+                Esta acción liberará la mesa y marcará la comanda como cancelada.
+              </p>
+            </div>
+            <div className="flex space-x-3">
+              <button
+                onClick={() => {
+                  setMostrarModalCancelar(false);
+                  setComandaACancelar(null);
+                }}
+                className="btn-secondary flex-1"
+              >
+                No, volver
+              </button>
+              <button
+                onClick={cancelarComanda}
+                className="bg-red-500 text-white px-4 py-2 rounded-md hover:bg-red-600 transition-colors flex-1"
+              >
+                Sí, cancelar comanda
               </button>
             </div>
           </div>
