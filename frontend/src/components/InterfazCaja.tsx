@@ -531,13 +531,13 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                               </p>
                             </div>
                             <div className="flex flex-col items-end space-y-1 ml-2">
-                              <div className={`px-1.5 py-0.5 rounded text-[10px] font-medium flex items-center space-x-0.5 ${getEstadoColor(comanda.estado)}`}>
+                              <div className={`px-1.5 py-0.5 rounded text-[12px] font-medium flex items-center space-x-0.5 ${getEstadoColor(comanda.estado)}`}>
                                 {getEstadoIcon(comanda.estado)}
-                                <span>{comanda.estado === 'pendiente' ? 'Pend' : comanda.estado === 'preparando' ? 'Prep' : 'Lista'}</span>
+                                <span>{comanda.estado === 'pendiente' ? 'Pendiente' : comanda.estado === 'preparando' ? 'Preparando' : 'Lista'}</span>
                               </div>
                               {facturasImpresas.has(comanda.id) && (
-                                <div className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[10px] font-medium">
-                                  ✓ Fact
+                                <div className="px-1.5 py-0.5 bg-green-100 text-green-700 rounded text-[12px] font-medium">
+                                  ✓ Facturado
                                 </div>
                               )}
                             </div>
@@ -559,7 +559,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                                   e.stopPropagation();
                                   actualizarEstadoComanda(comanda.id, 'preparando');
                                 }}
-                                className="text-yellow-600 hover:text-yellow-800 text-[10px] px-1.5 py-0.5 border border-yellow-600 rounded flex-1"
+                                className="text-yellow-600 hover:text-yellow-800 text-[12px] px-1.5 py-0.5 border border-yellow-600 rounded flex-1"
                               >
                                 Preparando
                               </button>
@@ -571,7 +571,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                                   e.stopPropagation();
                                   actualizarEstadoComanda(comanda.id, 'lista');
                                 }}
-                                className="text-green-600 hover:text-green-800 text-[10px] px-1.5 py-0.5 border border-green-600 rounded flex-1"
+                                className="text-green-600 hover:text-green-800 text-[12px] px-1.5 py-0.5 border border-green-600 rounded flex-1"
                               >
                                 Marcar Lista
                               </button>
