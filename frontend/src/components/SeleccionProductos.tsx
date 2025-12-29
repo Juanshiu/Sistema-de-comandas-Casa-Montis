@@ -156,15 +156,39 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
   const quitarProducto = (itemIdOProductoId: string | number) => {
     // Si es un string, es un itemId específico
     if (typeof itemIdOProductoId === 'string') {
-      solicitarConfirmacionEliminar(itemIdOProductoId);
+      const item = items.find(i => i.id === itemIdOProductoId);
+      if (!item) return;
+      
+      // Si el producto es personalizable, siempre eliminar el item completo (pedir confirmación)
+      if (esPersonalizable(item.producto)) {
+        solicitarConfirmacionEliminar(itemIdOProductoId);
+        return;
+      }
+      
+      // Para productos acumulables (no personalizables), restar 1 si hay más de 1
+      if (item.cantidad > 1) {
+        const nuevosItems = items.map(i =>
+          i.id === itemIdOProductoId
+            ? {
+                ...i,
+                cantidad: i.cantidad - 1,
+                subtotal: calcularSubtotalConPersonalizacion(i.cantidad - 1, i.precio_unitario, i.personalizacion)
+              }
+            : i
+        );
+        onItemsChange(nuevosItems);
+      } else {
+        // Si solo queda 1, pedir confirmación para eliminar
+        solicitarConfirmacionEliminar(itemIdOProductoId);
+      }
       return;
     }
     
     const productoId = itemIdOProductoId;
     const producto = productos.find(p => p.id === productoId);
     
-    // Para almuerzo y desayuno, eliminar el último item agregado de ese producto
-    if (producto && (producto.categoria === 'almuerzo' || producto.categoria === 'desayuno')) {
+    // Para productos personalizables, eliminar el último item agregado de ese producto
+    if (producto && esPersonalizable(producto)) {
       const itemsDeEsteProducto = items.filter(item => item.producto.id === productoId);
       if (itemsDeEsteProducto.length > 0) {
         // Eliminar el último item agregado
@@ -174,7 +198,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
       return;
     }
 
-    // Para otros productos, mantener la lógica original
+    // Para otros productos, mantener la lógica original de restar cantidad
     const itemExistente = items.find(item => item.producto.id === productoId);
     
     if (itemExistente && itemExistente.cantidad > 1) {
