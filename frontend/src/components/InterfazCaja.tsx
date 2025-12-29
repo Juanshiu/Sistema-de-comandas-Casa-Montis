@@ -13,7 +13,7 @@ interface InterfazCajaProps {
 export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [comandasActivas, setComandasActivas] = useState<Comanda[]>([]);
   const [comandaSeleccionada, setComandaSeleccionada] = useState<Comanda | null>(null);
-  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'transferencia' | 'mixto'>('efectivo');
+  const [metodoPago, setMetodoPago] = useState<'efectivo' | 'tarjeta' | 'transferencia'>('efectivo'); // | 'mixto'
   const [loading, setLoading] = useState(true);
   const [procesandoPago, setProcesandoPago] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -161,15 +161,10 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     if (!comandaSeleccionada) return;
 
     const totalPendiente = calcularTotalPendiente(comandaSeleccionada);
-    const itemsPendientes = getItemsPendientes(comandaSeleccionada);
     
-    if (itemsPendientes.length === 0) {
-      alert('No hay items pendientes por pagar');
-      return;
-    }
-
-    // Validar monto pagado para efectivo
-    if (metodoPago === 'efectivo') {
+    // Validar monto pagado para efectivo solo si hay pendiente visual
+    // Si todo está marcado (totalPendiente == 0), asumimos que ya se cobró
+    if (metodoPago === 'efectivo' && totalPendiente > 0) {
       const pago = parseFloat(montoPagado) || 0;
       if (pago < totalPendiente) {
         alert('El monto pagado no puede ser menor al total pendiente');
@@ -180,63 +175,41 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     try {
       setProcesandoPago(true);
       
-      const itemsPagadosComanda = itemsPagados[comandaSeleccionada.id] || new Set();
-      const esPagoTotal = itemsPendientes.length === comandaSeleccionada.items.length;
-      
-      if (esPagoTotal) {
-        // Pago total - crear factura y liberar mesa
-        const facturaData = {
-          comanda_id: comandaSeleccionada.id,
-          metodo_pago: metodoPago,
-          cajero: 'Cajero Principal'
-        };
+      // Siempre procesar como pago total y liberar mesa
+      const facturaData = {
+        comanda_id: comandaSeleccionada.id,
+        metodo_pago: metodoPago,
+        cajero: 'Cajero Principal'
+      };
 
-        const response = await apiService.crearFactura(facturaData);
-        
-        // Preparar datos para el recibo
-        const montoPagadoFinal = metodoPago === 'efectivo' ? parseFloat(montoPagado) : totalPendiente;
-        
-        setFacturaParaRecibo({
-          ...response,
-          comanda: comandaSeleccionada,
-          metodo_pago: metodoPago,
-          monto_pagado: montoPagadoFinal,
-          cambio: metodoPago === 'efectivo' ? cambio : 0
-        });
-        
-        // Limpiar items pagados de esta comanda
-        setItemsPagados(prev => {
-          const nuevosItems = { ...prev };
-          delete nuevosItems[comandaSeleccionada.id];
-          return nuevosItems;
-        });
-        
-        if (onMesaLiberada) {
-          onMesaLiberada();
-        }
-        
-        setComandaSeleccionada(null);
-      } else {
-        // Pago parcial - marcar items como pagados
-        itemsPendientes.forEach(item => {
-          toggleItemPagado(comandaSeleccionada.id, item.id);
-        });
-        
-        // Preparar recibo para pago parcial
-        const montoPagadoFinal = metodoPago === 'efectivo' ? parseFloat(montoPagado) : totalPendiente;
-        
-        setFacturaParaRecibo({
-          comanda: {
-            ...comandaSeleccionada,
-            items: itemsPendientes,
-            total: totalPendiente
-          },
-          metodo_pago: metodoPago,
-          monto_pagado: montoPagadoFinal,
-          cambio: metodoPago === 'efectivo' ? cambio : 0,
-          es_pago_parcial: true
-        });
+      const response = await apiService.crearFactura(facturaData);
+      
+      // Preparar datos para el recibo
+      // Si se pagó todo visualmente (totalPendiente == 0), usamos el total de la comanda
+      const montoPagadoFinal = metodoPago === 'efectivo' && totalPendiente > 0 
+        ? parseFloat(montoPagado) 
+        : comandaSeleccionada.total;
+      
+      setFacturaParaRecibo({
+        ...response,
+        comanda: comandaSeleccionada,
+        metodo_pago: metodoPago,
+        monto_pagado: montoPagadoFinal,
+        cambio: metodoPago === 'efectivo' ? cambio : 0
+      });
+      
+      // Limpiar items pagados de esta comanda
+      setItemsPagados(prev => {
+        const nuevosItems = { ...prev };
+        delete nuevosItems[comandaSeleccionada.id];
+        return nuevosItems;
+      });
+      
+      if (onMesaLiberada) {
+        onMesaLiberada();
       }
+      
+      setComandaSeleccionada(null);
       
       // Actualizar lista
       await cargarComandasActivas();
@@ -828,7 +801,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                   <label className="block text-sm font-medium text-secondary-700 mb-2">
                     Método de Pago:
                   </label>
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-3 gap-3">
                     <button
                       onClick={() => setMetodoPago('efectivo')}
                       className={`p-3 border rounded-lg flex items-center justify-center space-x-2 ${
@@ -839,17 +812,6 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                     >
                       <DollarSign size={20} />
                       <span>Efectivo</span>
-                    </button>
-                    <button
-                      onClick={() => setMetodoPago('tarjeta')}
-                      className={`p-3 border rounded-lg flex items-center justify-center space-x-2 ${
-                        metodoPago === 'tarjeta'
-                          ? 'border-primary-500 bg-primary-50 text-primary-700'
-                          : 'border-secondary-300 text-secondary-700'
-                      }`}
-                    >
-                      <CreditCard size={20} />
-                      <span>Tarjeta</span>
                     </button>
                     <button
                       onClick={() => setMetodoPago('transferencia')}
@@ -863,6 +825,18 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                       <span>Transferencia</span>
                     </button>
                     <button
+                      onClick={() => setMetodoPago('tarjeta')}
+                      className={`p-3 border rounded-lg flex items-center justify-center space-x-2 ${
+                        metodoPago === 'tarjeta'
+                          ? 'border-primary-500 bg-primary-50 text-primary-700'
+                          : 'border-secondary-300 text-secondary-700'
+                      }`}
+                    >
+                      <CreditCard size={20} />
+                      <span>Tarjeta</span>
+                    </button>
+                    
+                    {/* <button
                       onClick={() => setMetodoPago('mixto')}
                       className={`p-3 border rounded-lg flex items-center justify-center space-x-2 ${
                         metodoPago === 'mixto'
@@ -872,7 +846,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                     >
                       <Receipt size={20} />
                       <span>Mixto</span>
-                    </button>
+                    </button> */}
                   </div>
                 </div>
 
@@ -936,8 +910,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                     disabled={
                       procesandoPago || 
                       comandaSeleccionada.estado !== 'lista' || 
-                      (metodoPago === 'efectivo' && (!montoPagado || parseFloat(montoPagado) < calcularTotalPendiente(comandaSeleccionada))) ||
-                      getItemsPendientes(comandaSeleccionada).length === 0
+                      (metodoPago === 'efectivo' && calcularTotalPendiente(comandaSeleccionada) > 0 && (!montoPagado || parseFloat(montoPagado) < calcularTotalPendiente(comandaSeleccionada)))
                     }
                     className="btn-primary flex-2 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
@@ -947,9 +920,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                         <span>Procesando...</span>
                       </div>
                     ) : (
-                      getItemsPendientes(comandaSeleccionada).length === comandaSeleccionada.items.length
-                        ? 'Procesar Pago y Liberar Mesa'
-                        : 'Procesar Pago Parcial'
+                      'Procesar Pago y Liberar Mesa'
                     )}
                   </button>
                 </div>
@@ -967,8 +938,8 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                 )}
                 
                 {getItemsPendientes(comandaSeleccionada).length === 0 && (
-                  <p className="text-sm text-orange-600 mt-2 text-center">
-                    ⚠️ Todos los items ya han sido pagados
+                  <p className="text-sm text-green-600 mt-2 text-center">
+                    ✅ Todos los items marcados. Listo para liberar mesa.
                   </p>
                 )}
               </div>
