@@ -7,6 +7,109 @@ import { convertirAHoraColombia, getFechaSQLite_Colombia } from '../utils/dateUt
 
 const router = Router();
 
+// ===== FUNCIÓN AUXILIAR: DECREMENTAR INVENTARIO DE PERSONALIZACIONES =====
+/**
+ * Decrementa el inventario de las personalizaciones usadas en items
+ * @param items - Array de items con personalizaciones
+ * @returns Promise que resuelve cuando se completa el proceso
+ */
+async function decrementarInventarioPersonalizaciones(items: any[]): Promise<void> {
+  const promises: Promise<void>[] = [];
+  
+  for (const item of items) {
+    // Si no tiene personalización, continuar
+    if (!item.personalizacion || typeof item.personalizacion !== 'object') {
+      continue;
+    }
+    
+    const personalizacion = item.personalizacion;
+    
+    // Iterar sobre cada categoría en la personalización
+    for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
+      // Saltar la clave precio_adicional
+      if (categoriaId === 'precio_adicional' || itemId === null || itemId === undefined) {
+        continue;
+      }
+      
+      const itemIdNum = Number(itemId);
+      if (isNaN(itemIdNum)) continue;
+      
+      // Crear promesa para decrementar este item
+      promises.push(
+        new Promise<void>((resolve, reject) => {
+          // Obtener info del item de personalización
+          db.get(
+            'SELECT * FROM items_personalizacion WHERE id = ?',
+            [itemIdNum],
+            (err: any, itemPers: any) => {
+              if (err) {
+                console.error(`❌ Error al obtener item personalización ${itemIdNum}:`, err);
+                resolve(); // No fallar la transacción completa
+                return;
+              }
+              
+              if (!itemPers) {
+                console.warn(`⚠️  Item personalización ${itemIdNum} no encontrado`);
+                resolve();
+                return;
+              }
+              
+              // Si no usa inventario, continuar
+              if (!itemPers.usa_inventario) {
+                resolve();
+                return;
+              }
+              
+              // Verificar inventario disponible
+              if (itemPers.cantidad_actual === null || itemPers.cantidad_actual < item.cantidad) {
+                console.error(`❌ Inventario insuficiente para ${itemPers.nombre}: disponible=${itemPers.cantidad_actual}, necesario=${item.cantidad}`);
+                reject(new Error(`Inventario insuficiente para personalización: ${itemPers.nombre}`));
+                return;
+              }
+              
+              // Decrementar inventario
+              const nuevaCantidad = itemPers.cantidad_actual - item.cantidad;
+              
+              db.run(
+                'UPDATE items_personalizacion SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+                [nuevaCantidad, itemIdNum],
+                (err: any) => {
+                  if (err) {
+                    console.error(`❌ Error al decrementar inventario de ${itemPers.nombre}:`, err);
+                    reject(err);
+                    return;
+                  }
+                  
+                  console.log(`✅ Inventario decrementado: ${itemPers.nombre} (${itemPers.cantidad_actual} → ${nuevaCantidad})`);
+                  
+                  // Si llegó a 0, marcar como no disponible
+                  if (nuevaCantidad <= 0) {
+                    db.run(
+                      'UPDATE items_personalizacion SET disponible = 0 WHERE id = ?',
+                      [itemIdNum],
+                      (err: any) => {
+                        if (err) {
+                          console.error(`❌ Error al marcar como no disponible ${itemPers.nombre}:`, err);
+                        } else {
+                          console.log(`⚠️  ${itemPers.nombre} marcado como NO DISPONIBLE (inventario agotado)`);
+                        }
+                      }
+                    );
+                  }
+                  
+                  resolve();
+                }
+              );
+            }
+          );
+        })
+      );
+    }
+  }
+  
+  await Promise.all(promises);
+}
+
 // Obtener todas las comandas
 router.get('/', (req: Request, res: Response) => {
   const query = `
@@ -577,44 +680,47 @@ router.post('/', (req: Request, res: Response) => {
       
       // Función auxiliar para insertar items
       function insertarItems() {
-        // Insertar items
-        const insertItemQuery = `
-          INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-        `;
-        
-        let itemsInserted = 0;
-        let itemsErrors = 0;
-        
-        comandaData.items.forEach((item) => {
-          const itemId = uuidv4();
-          const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
-          
-          db.run(insertItemQuery, [
-            itemId,
-            comandaId,
-            item.producto.id,
-            item.cantidad,
-            item.precio_unitario,
-            item.subtotal,
-            item.observaciones || null,
-            personalizacionStr
-          ], (err: any) => {
-            if (err) {
-              console.error('Error al insertar item:', err);
-              itemsErrors++;
-            } else {
-              itemsInserted++;
-            }
+        // Primero validar y decrementar inventario de personalizaciones
+        decrementarInventarioPersonalizaciones(comandaData.items)
+          .then(() => {
+            // Insertar items
+            const insertItemQuery = `
+              INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
+              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            `;
             
-            // Verificar si todos los items han sido procesados
-            if (itemsInserted + itemsErrors === comandaData.items.length) {
-              if (itemsErrors > 0) {
-                db.run('ROLLBACK');
-                return res.status(500).json({ error: 'Error al crear los items de la comanda' });
-              }
+            let itemsInserted = 0;
+            let itemsErrors = 0;
+            
+            comandaData.items.forEach((item) => {
+              const itemId = uuidv4();
+              const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
               
-              db.run('COMMIT', (err: any) => {
+              db.run(insertItemQuery, [
+                itemId,
+                comandaId,
+                item.producto.id,
+                item.cantidad,
+                item.precio_unitario,
+                item.subtotal,
+                item.observaciones || null,
+                personalizacionStr
+              ], (err: any) => {
+                if (err) {
+                  console.error('Error al insertar item:', err);
+                  itemsErrors++;
+                } else {
+                  itemsInserted++;
+                }
+                
+                // Verificar si todos los items han sido procesados
+                if (itemsInserted + itemsErrors === comandaData.items.length) {
+                  if (itemsErrors > 0) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: 'Error al crear los items de la comanda' });
+                  }
+                  
+                  db.run('COMMIT', (err: any) => {
                 if (err) {
                   console.error('Error al hacer commit:', err);
                   return res.status(500).json({ error: 'Error al guardar la comanda' });
@@ -705,6 +811,14 @@ router.post('/', (req: Request, res: Response) => {
             }
           });
         });
+          })
+          .catch((error: any) => {
+            console.error('❌ Error al decrementar inventario:', error);
+            db.run('ROLLBACK');
+            return res.status(400).json({ 
+              error: error.message || 'Error al validar inventario de personalizaciones' 
+            });
+          });
       }
       
       // Insertar relaciones de mesas (solo si es tipo mesa)
@@ -891,8 +1005,11 @@ router.put('/:id', (req: Request, res: Response) => {
         });
       });
 
-      // Ejecutar todas las operaciones de items
-      Promise.all([...deletePromises, ...updatePromises, ...insertPromises])
+      // 7. Decrementar inventario solo de items nuevos
+      decrementarInventarioPersonalizaciones(itemsNuevos)
+        .then(() => {
+          // Ejecutar todas las operaciones de items
+          Promise.all([...deletePromises, ...updatePromises, ...insertPromises])
         .then(() => {
           // 7. Recalcular Totales de la Comanda
           const queryRecalcular = 'SELECT SUM(subtotal) as total FROM comanda_items WHERE comanda_id = ?';
@@ -935,6 +1052,14 @@ router.put('/:id', (req: Request, res: Response) => {
           console.error('Error procesando items:', err);
           db.run('ROLLBACK');
           res.status(500).json({ error: 'Error al procesar los cambios en los items' });
+        });
+        })
+        .catch((error: any) => {
+          console.error('❌ Error al decrementar inventario en edición:', error);
+          db.run('ROLLBACK');
+          return res.status(400).json({ 
+            error: error.message || 'Error al validar inventario de personalizaciones' 
+          });
         });
     });
   });

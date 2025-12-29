@@ -82,8 +82,23 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
       const categoriasCompletas = await Promise.all(
         categoriasParaCargar.map(async (cat) => {
           const items = await apiService.getItemsPersonalizacion(cat.id);
-          // Filtrar solo items disponibles (disponible = 1 o true)
-          const itemsDisponibles = items.filter((item: any) => item.disponible === 1 || item.disponible === true);
+          // Filtrar items disponibles considerando:
+          // 1. disponible = 1 o true
+          // 2. Si usa inventario, cantidad_actual > 0
+          const itemsDisponibles = items.filter((item: any) => {
+            const disponible = item.disponible === 1 || item.disponible === true;
+            const usaInventario = Boolean(item.usa_inventario);
+            
+            if (!disponible) return false;
+            
+            // Si usa inventario, verificar que tenga stock
+            if (usaInventario) {
+              return item.cantidad_actual !== null && item.cantidad_actual > 0;
+            }
+            
+            return true;
+          });
+          
           return {
             id: cat.id,
             nombre: cat.nombre,
@@ -177,6 +192,10 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               {categoria.items.map((item) => {
                 const estaSeleccionado = personalizacion[categoria.id] === item.id;
+                const usaInventario = Boolean((item as any).usa_inventario);
+                const cantidadActual = (item as any).cantidad_actual;
+                const inventarioBajo = usaInventario && cantidadActual !== null && cantidadActual <= 5 && cantidadActual > 0;
+                
                 return (
                   <button
                     key={item.id}
@@ -187,7 +206,14 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
                         : 'border-gray-300 bg-white hover:border-blue-300'
                     }`}
                   >
-                    <div className="font-medium">{item.nombre}</div>
+                    <div className="flex items-center justify-between">
+                      <div className="font-medium">{item.nombre}</div>
+                      {inventarioBajo && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded" title={`Solo quedan ${cantidadActual} unidades`}>
+                          ⚠️ {cantidadActual} disponibles
+                        </span>
+                      )}
+                    </div>
                     {item.precio_adicional > 0 && (
                       <div className="text-sm text-blue-600">
                         +${item.precio_adicional.toLocaleString()}

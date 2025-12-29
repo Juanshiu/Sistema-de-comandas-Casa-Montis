@@ -139,25 +139,63 @@ router.get('/categorias/:categoriaId/items', (req: Request, res: Response) => {
       console.error('Error al obtener items de personalización:', err);
       return res.status(500).json({ error: 'Error al obtener items' });
     }
-    res.json(rows || []);
+    
+    // Mapear items y calcular disponibilidad real
+    const items = rows.map(item => {
+      const usaInventario = Boolean(item.usa_inventario);
+      let disponible = Boolean(item.disponible);
+      
+      // Si usa inventario y cantidad_actual es 0, automáticamente no disponible
+      if (usaInventario && item.cantidad_actual !== null && item.cantidad_actual <= 0) {
+        disponible = false;
+      }
+      
+      return {
+        ...item,
+        usa_inventario: usaInventario,
+        disponible: disponible ? 1 : 0
+      };
+    });
+    
+    res.json(items || []);
   });
 });
 
 // Crear un nuevo item para una categoría
 router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
   const { categoriaId } = req.params;
-  const { nombre, descripcion, precio_adicional } = req.body;
+  const { nombre, descripcion, precio_adicional, usa_inventario, cantidad_inicial } = req.body;
   
   if (!nombre) {
     return res.status(400).json({ error: 'El nombre es obligatorio' });
   }
   
+  // Validar inventario si está habilitado
+  const usaInv = Boolean(usa_inventario);
+  if (usaInv && (cantidad_inicial === undefined || cantidad_inicial === null || cantidad_inicial < 0)) {
+    return res.status(400).json({ error: 'Debe especificar una cantidad inicial válida cuando usa inventario' });
+  }
+  
   const query = `
-    INSERT INTO items_personalizacion (categoria_id, nombre, descripcion, precio_adicional)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO items_personalizacion (
+      categoria_id, nombre, descripcion, precio_adicional,
+      usa_inventario, cantidad_inicial, cantidad_actual
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?)
   `;
   
-  db.run(query, [categoriaId, nombre, descripcion || null, precio_adicional || 0], function(err: any) {
+  const cantidadIni = usaInv ? cantidad_inicial : null;
+  const cantidadAct = usaInv ? cantidad_inicial : null;
+  
+  db.run(query, [
+    categoriaId, 
+    nombre, 
+    descripcion || null, 
+    precio_adicional || 0,
+    usaInv ? 1 : 0,
+    cantidadIni,
+    cantidadAct
+  ], function(err: any) {
     if (err) {
       console.error('Error al crear item de personalización:', err);
       if (err.message.includes('UNIQUE constraint')) {
@@ -181,15 +219,39 @@ router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
 // Actualizar un item
 router.put('/categorias/:categoriaId/items/:itemId', (req: Request, res: Response) => {
   const { categoriaId, itemId } = req.params;
-  const { nombre, descripcion, precio_adicional } = req.body;
+  const { nombre, descripcion, precio_adicional, usa_inventario, cantidad_inicial, cantidad_actual } = req.body;
+  
+  // Validar inventario si está habilitado
+  const usaInv = Boolean(usa_inventario);
+  if (usaInv && cantidad_inicial !== undefined && cantidad_inicial < 0) {
+    return res.status(400).json({ error: 'La cantidad inicial debe ser mayor o igual a 0' });
+  }
+  if (usaInv && cantidad_actual !== undefined && cantidad_actual < 0) {
+    return res.status(400).json({ error: 'La cantidad actual debe ser mayor o igual a 0' });
+  }
   
   const query = `
     UPDATE items_personalizacion 
-    SET nombre = ?, descripcion = ?, precio_adicional = ?, updated_at = CURRENT_TIMESTAMP
+    SET nombre = ?, descripcion = ?, precio_adicional = ?, 
+        usa_inventario = ?, cantidad_inicial = ?, cantidad_actual = ?,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND categoria_id = ?
   `;
   
-  db.run(query, [nombre, descripcion || null, precio_adicional || 0, itemId, categoriaId], function(err: any) {
+  // Si no usa inventario, guardar NULL en los campos de cantidad
+  const cantidadIni = usaInv ? (cantidad_inicial !== undefined ? cantidad_inicial : null) : null;
+  const cantidadAct = usaInv ? (cantidad_actual !== undefined ? cantidad_actual : null) : null;
+  
+  db.run(query, [
+    nombre, 
+    descripcion || null, 
+    precio_adicional || 0, 
+    usaInv ? 1 : 0,
+    cantidadIni,
+    cantidadAct,
+    itemId, 
+    categoriaId
+  ], function(err: any) {
     if (err) {
       console.error('Error al actualizar item:', err);
       if (err.message.includes('UNIQUE constraint')) {
@@ -231,6 +293,85 @@ router.delete('/categorias/:categoriaId/items/:itemId', (req: Request, res: Resp
     }
     
     res.json({ mensaje: 'Item eliminado exitosamente' });
+  });
+});
+
+// Decrementar inventario de un item (usado al crear/editar comandas)
+router.patch('/categorias/:categoriaId/items/:itemId/decrementar', (req: Request, res: Response) => {
+  const { categoriaId, itemId } = req.params;
+  const { cantidad } = req.body;
+  
+  if (!cantidad || cantidad <= 0) {
+    return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
+  }
+  
+  // Verificar que el item use inventario
+  db.get('SELECT * FROM items_personalizacion WHERE id = ? AND categoria_id = ?', [itemId, categoriaId], (err: any, item: any) => {
+    if (err) {
+      console.error('Error al obtener item:', err);
+      return res.status(500).json({ error: 'Error al obtener el item' });
+    }
+    
+    if (!item) {
+      return res.status(404).json({ error: 'Item no encontrado' });
+    }
+    
+    if (!item.usa_inventario) {
+      // Si no usa inventario, no hacer nada y retornar éxito
+      return res.json({ mensaje: 'Item no usa inventario', item });
+    }
+    
+    // Verificar que haya suficiente inventario
+    if (item.cantidad_actual === null || item.cantidad_actual < cantidad) {
+      return res.status(400).json({ 
+        error: 'Inventario insuficiente',
+        disponible: item.cantidad_actual || 0,
+        solicitado: cantidad
+      });
+    }
+    
+    // Decrementar inventario
+    const nuevaCantidad = item.cantidad_actual - cantidad;
+    
+    const updateQuery = `
+      UPDATE items_personalizacion 
+      SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND categoria_id = ?
+    `;
+    
+    db.run(updateQuery, [nuevaCantidad, itemId, categoriaId], function(err: any) {
+      if (err) {
+        console.error('Error al decrementar inventario:', err);
+        return res.status(500).json({ error: 'Error al actualizar inventario' });
+      }
+      
+      // Si llegó a 0, también marcar como no disponible
+      if (nuevaCantidad <= 0) {
+        db.run(
+          'UPDATE items_personalizacion SET disponible = 0 WHERE id = ?',
+          [itemId],
+          (err: any) => {
+            if (err) {
+              console.error('Error al marcar como no disponible:', err);
+            }
+          }
+        );
+      }
+      
+      db.get('SELECT * FROM items_personalizacion WHERE id = ?', [itemId], (err: any, updatedItem: any) => {
+        if (err) {
+          return res.status(500).json({ error: 'Error al obtener item actualizado' });
+        }
+        
+        res.json({ 
+          mensaje: `Inventario decrementado. Cantidad actual: ${nuevaCantidad}`,
+          item: updatedItem,
+          cantidad_anterior: item.cantidad_actual,
+          cantidad_decrementada: cantidad,
+          cantidad_nueva: nuevaCantidad
+        });
+      });
+    });
   });
 });
 

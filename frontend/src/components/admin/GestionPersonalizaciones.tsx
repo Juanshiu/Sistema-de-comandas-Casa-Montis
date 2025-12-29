@@ -9,6 +9,9 @@ type TipoPersonalizacion = 'categorias' | 'caldos' | 'principios' | 'proteinas' 
 interface PersonalizacionForm {
   nombre: string;
   precio_adicional: number;
+  usa_inventario: boolean;
+  cantidad_inicial: number;
+  cantidad_actual: number;
 }
 
 interface CategoriaForm {
@@ -29,7 +32,10 @@ export default function GestionPersonalizaciones() {
   const [notificacion, setNotificacion] = useState<{ tipo: 'success' | 'error'; mensaje: string } | null>(null);
   const [formulario, setFormulario] = useState<PersonalizacionForm>({
     nombre: '',
-    precio_adicional: 0
+    precio_adicional: 0,
+    usa_inventario: false,
+    cantidad_inicial: 0,
+    cantidad_actual: 0
   });
   const [formularioCategoria, setFormularioCategoria] = useState<CategoriaForm>({
     nombre: '',
@@ -107,7 +113,10 @@ export default function GestionPersonalizaciones() {
     setEditandoId(null);
     setFormulario({
       nombre: '',
-      precio_adicional: 0
+      precio_adicional: 0,
+      usa_inventario: false,
+      cantidad_inicial: 0,
+      cantidad_actual: 0
     });
   };
 
@@ -116,7 +125,10 @@ export default function GestionPersonalizaciones() {
     setCreandoNuevo(false);
     setFormulario({
       nombre: item.nombre,
-      precio_adicional: item.precio_adicional
+      precio_adicional: item.precio_adicional,
+      usa_inventario: Boolean(item.usa_inventario),
+      cantidad_inicial: item.cantidad_inicial || 0,
+      cantidad_actual: item.cantidad_actual || 0
     });
   };
 
@@ -125,7 +137,10 @@ export default function GestionPersonalizaciones() {
     setCreandoNuevo(false);
     setFormulario({
       nombre: '',
-      precio_adicional: 0
+      precio_adicional: 0,
+      usa_inventario: false,
+      cantidad_inicial: 0,
+      cantidad_actual: 0
     });
   };
 
@@ -140,6 +155,18 @@ export default function GestionPersonalizaciones() {
       return;
     }
 
+    // Validar inventario si está habilitado
+    if (formulario.usa_inventario) {
+      if (creandoNuevo && (!formulario.cantidad_inicial || formulario.cantidad_inicial < 0)) {
+        setError('Debe especificar una cantidad inicial válida cuando usa inventario');
+        return;
+      }
+      if (!creandoNuevo && formulario.cantidad_actual < 0) {
+        setError('La cantidad actual debe ser mayor o igual a 0');
+        return;
+      }
+    }
+
     try {
       setError(null);
       const tipoEncontrado = tipos.find(t => t.id === tipoActivo);
@@ -148,10 +175,18 @@ export default function GestionPersonalizaciones() {
         return;
       }
       
+      const itemData = {
+        nombre: formulario.nombre,
+        precio_adicional: formulario.precio_adicional,
+        usa_inventario: formulario.usa_inventario,
+        cantidad_inicial: formulario.usa_inventario ? formulario.cantidad_inicial : null,
+        cantidad_actual: formulario.usa_inventario ? (creandoNuevo ? formulario.cantidad_inicial : formulario.cantidad_actual) : null
+      };
+      
       if (creandoNuevo) {
-        await apiService.createItemPersonalizacion(tipoEncontrado.categoriaId, formulario);
+        await apiService.createItemPersonalizacion(tipoEncontrado.categoriaId, itemData);
       } else if (editandoId) {
-        await apiService.updateItemPersonalizacion(tipoEncontrado.categoriaId, Number(editandoId), formulario);
+        await apiService.updateItemPersonalizacion(tipoEncontrado.categoriaId, Number(editandoId), itemData);
       }
 
       await cargarItems();
@@ -497,6 +532,102 @@ export default function GestionPersonalizaciones() {
             </div>
           </div>
 
+          {/* Sistema de Inventario */}
+          <div className="mt-4 pt-4 border-t border-secondary-200">
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="usa_inventario"
+                checked={formulario.usa_inventario}
+                onChange={(e) => setFormulario(prev => ({ 
+                  ...prev, 
+                  usa_inventario: e.target.checked,
+                  // Si se desactiva el inventario, resetear cantidades
+                  cantidad_inicial: e.target.checked ? prev.cantidad_inicial : 0,
+                  cantidad_actual: e.target.checked ? prev.cantidad_actual : 0
+                }))}
+                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <label htmlFor="usa_inventario" className="ml-2 text-sm font-medium text-secondary-700">
+                📊 Activar control de inventario
+              </label>
+            </div>
+
+            {formulario.usa_inventario && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                {creandoNuevo ? (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Cantidad Inicial *
+                    </label>
+                    <input
+                      type="number"
+                      value={formulario.cantidad_inicial}
+                      onChange={(e) => setFormulario(prev => ({ 
+                        ...prev, 
+                        cantidad_inicial: Number(e.target.value)
+                      }))}
+                      className="input-field"
+                      placeholder="0"
+                      min="0"
+                    />
+                    <p className="text-xs text-secondary-500 mt-1">
+                      Cantidad con la que inicia este item
+                    </p>
+                  </div>
+                ) : (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-2">
+                        Cantidad Inicial
+                      </label>
+                      <input
+                        type="number"
+                        value={formulario.cantidad_inicial}
+                        onChange={(e) => setFormulario(prev => ({ 
+                          ...prev, 
+                          cantidad_inicial: Number(e.target.value)
+                        }))}
+                        className="input-field"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <p className="text-xs text-secondary-500 mt-1">
+                        Cantidad de referencia
+                      </p>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-2">
+                        Cantidad Actual *
+                      </label>
+                      <input
+                        type="number"
+                        value={formulario.cantidad_actual}
+                        onChange={(e) => setFormulario(prev => ({ 
+                          ...prev, 
+                          cantidad_actual: Number(e.target.value)
+                        }))}
+                        className="input-field"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <p className="text-xs text-secondary-500 mt-1">
+                        Cantidad disponible actualmente
+                      </p>
+                    </div>
+                  </>
+                )}
+                <div className="md:col-span-2">
+                  <div className="bg-yellow-50 border border-yellow-200 rounded p-3">
+                    <p className="text-xs text-yellow-800">
+                      ⚠️ <strong>Nota:</strong> Cuando la cantidad actual llegue a 0, el item se marcará automáticamente como "No disponible"
+                    </p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end space-x-3 mt-6">
             <button
               onClick={cancelarEdicion}
@@ -621,6 +752,9 @@ export default function GestionPersonalizaciones() {
                       Precio Adicional
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Inventario
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                       Disponibilidad
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
@@ -629,64 +763,97 @@ export default function GestionPersonalizaciones() {
                   </tr>
                 </thead>
                 <tbody className="bg-white divide-y divide-secondary-200">
-                  {items.map((item) => (
-                    <tr key={item.id} className={item.disponible === 0 ? 'bg-gray-50' : ''}>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm font-medium ${item.disponible === 0 ? 'text-gray-400 line-through' : 'text-secondary-900'}`}>
-                          {item.nombre}
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <div className={`text-sm ${item.disponible === 0 ? 'text-gray-400' : 'text-secondary-900'}`}>
-                          {item.precio_adicional > 0 
-                            ? `+$${item.precio_adicional.toLocaleString()}`
-                            : 'Sin costo adicional'
-                          }
-                        </div>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap">
-                        <button
-                          onClick={() => cambiarDisponibilidad(item.id, item.disponible === 1)}
-                          disabled={creandoNuevo || editandoId !== null}
-                          className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium transition-colors disabled:opacity-50 ${
-                            item.disponible === 1
-                              ? 'bg-green-100 text-green-800 hover:bg-green-200'
-                              : 'bg-red-100 text-red-800 hover:bg-red-200'
-                          }`}
-                        >
-                          {item.disponible === 1 ? (
-                            <>
-                              <CheckCircle2 size={16} />
-                              <span>Disponible</span>
-                            </>
+                  {items.map((item) => {
+                    const usaInventario = Boolean(item.usa_inventario);
+                    const cantidadActual = item.cantidad_actual;
+                    const sinInventario = usaInventario && (cantidadActual === null || cantidadActual <= 0);
+                    
+                    return (
+                      <tr key={item.id} className={item.disponible === 0 || sinInventario ? 'bg-gray-50' : ''}>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm font-medium ${item.disponible === 0 || sinInventario ? 'text-gray-400 line-through' : 'text-secondary-900'}`}>
+                            {item.nombre}
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          <div className={`text-sm ${item.disponible === 0 || sinInventario ? 'text-gray-400' : 'text-secondary-900'}`}>
+                            {item.precio_adicional > 0 
+                              ? `+$${item.precio_adicional.toLocaleString()}`
+                              : 'Sin costo adicional'
+                            }
+                          </div>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {usaInventario ? (
+                            <div className="flex items-center space-x-2">
+                              <span className={`text-sm font-medium ${
+                                cantidadActual === null || cantidadActual <= 0 ? 'text-red-600' :
+                                cantidadActual <= 5 ? 'text-yellow-600' :
+                                'text-green-600'
+                              }`}>
+                                📦 {cantidadActual || 0} unidades
+                              </span>
+                              {cantidadActual !== null && cantidadActual <= 5 && cantidadActual > 0 && (
+                                <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-1 rounded">
+                                  ⚠️ Bajo
+                                </span>
+                              )}
+                              {(cantidadActual === null || cantidadActual <= 0) && (
+                                <span className="text-xs bg-red-100 text-red-800 px-2 py-1 rounded">
+                                  ❌ Agotado
+                                </span>
+                              )}
+                            </div>
                           ) : (
-                            <>
-                              <XCircle size={16} />
-                              <span>No disponible</span>
-                            </>
+                            <span className="text-sm text-gray-400">Sin control</span>
                           )}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                        <div className="flex space-x-2">
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
                           <button
-                            onClick={() => iniciarEdicion(item)}
-                            disabled={creandoNuevo || editandoId !== null}
-                            className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                            onClick={() => cambiarDisponibilidad(item.id, item.disponible === 1)}
+                            disabled={creandoNuevo || editandoId !== null || sinInventario}
+                            className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm font-medium transition-colors disabled:opacity-50 ${
+                              item.disponible === 1 && !sinInventario
+                                ? 'bg-green-100 text-green-800 hover:bg-green-200'
+                                : 'bg-red-100 text-red-800 hover:bg-red-200'
+                            }`}
+                            title={sinInventario ? 'Sin inventario - no se puede activar' : ''}
                           >
-                            <Edit2 size={16} />
+                            {item.disponible === 1 && !sinInventario ? (
+                              <>
+                                <CheckCircle2 size={16} />
+                                <span>Disponible</span>
+                              </>
+                            ) : (
+                              <>
+                                <XCircle size={16} />
+                                <span>{sinInventario ? 'Sin stock' : 'No disponible'}</span>
+                              </>
+                            )}
                           </button>
-                          <button
-                            onClick={() => eliminarItem(item.id)}
-                            disabled={creandoNuevo || editandoId !== null}
-                            className="text-red-600 hover:text-red-900 disabled:opacity-50"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                          <div className="flex space-x-2">
+                            <button
+                              onClick={() => iniciarEdicion(item)}
+                              disabled={creandoNuevo || editandoId !== null}
+                              className="text-blue-600 hover:text-blue-900 disabled:opacity-50"
+                              title="Editar (puedes reponer inventario aquí)"
+                            >
+                              <Edit2 size={16} />
+                            </button>
+                            <button
+                              onClick={() => eliminarItem(item.id)}
+                              disabled={creandoNuevo || editandoId !== null}
+                              className="text-red-600 hover:text-red-900 disabled:opacity-50"
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
               </table>
             </div>

@@ -60,6 +60,10 @@ export interface ItemPersonalizacion {
   descripcion?: string;
   precio_adicional: number;
   activo: boolean;
+  disponible?: number | boolean;
+  usa_inventario?: boolean | number;
+  cantidad_inicial?: number | null;
+  cantidad_actual?: number | null;
 }
 
 export interface PersonalizacionItem {
