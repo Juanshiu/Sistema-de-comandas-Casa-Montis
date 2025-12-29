@@ -466,6 +466,16 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
+                  // Verificar si hay items nuevos (con ID temporal)
+                  const hayItemsNuevos = formulario.items.some(item => 
+                    typeof item.id === 'string' && (item.id.startsWith('temp_') || item.id.startsWith('item_'))
+                  );
+                  
+                  if (!hayItemsNuevos) {
+                    alert('⚠️ No hay productos nuevos para imprimir.\n\nSolo se han modificado personalizaciones. Se recomienda usar "Imprimir comanda completa" para reflejar los cambios en cocina.');
+                    return;
+                  }
+
                   setMostrarDialogoImpresion(false);
                   procesarEnvioComanda(true, false);
                 }}

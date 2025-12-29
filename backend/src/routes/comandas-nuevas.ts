@@ -766,13 +766,19 @@ router.post('/', (req: Request, res: Response) => {
   });
 });
 
-// Editar comanda (agregar items adicionales)
+// Editar comanda (agregar items adicionales, actualizar o eliminar)
 router.put('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
   const { items, observaciones_generales, imprimir, imprimirCompleta } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({ error: 'Debe proporcionar items para agregar' });
+    // Si no hay items, podría ser que se eliminaron todos. 
+    // Pero el frontend suele enviar array vacío si borra todo? 
+    // Asumiremos que si llega vacío es válido si la intención es borrar todo, 
+    // pero la validación original prevenía esto. Mantendremos la validación por seguridad básica,
+    // aunque idealmente debería permitirse vaciar una comanda (cancelarla es otro proceso).
+    // Si el usuario borra todos los items, debería cancelar la comanda, no editarla a 0 items.
+    return res.status(400).json({ error: 'Debe proporcionar items para agregar o actualizar' });
   }
 
   console.log('🔍 ===== EDITANDO COMANDA =====');
@@ -780,402 +786,214 @@ router.put('/:id', (req: Request, res: Response) => {
   console.log('🔍 Items recibidos:', items.length);
   console.log('🔍 Imprimir completa:', imprimirCompleta);
 
-  // Obtener items existentes de la comanda para detectar incrementos
-  const queryItemsExistentes = 'SELECT * FROM comanda_items WHERE comanda_id = ?';
-  
-  db.all(queryItemsExistentes, [id], (err: any, itemsExistentesDB: any[]) => {
-    if (err) {
-      console.error('❌ Error al obtener items existentes:', err);
-      return res.status(500).json({ error: 'Error al obtener items existentes' });
-    }
-
-    console.log('📋 Items existentes en BD:', itemsExistentesDB.length);
-
-    // FILTRAR ITEMS NUEVOS Y DETECTAR INCREMENTOS EN CANTIDAD Y CAMBIOS EN PERSONALIZACIÓN
-    const itemsNuevos: any[] = [];
-    const itemsIncrementados: any[] = [];
-    const itemsConCambios: any[] = [];
-
-    items.forEach(item => {
-      // Si no tiene id, es nuevo
-      if (!item.id) {
-        itemsNuevos.push(item);
-        console.log(`   ✅ Item NUEVO (sin id): ${item.producto.nombre} x${item.cantidad}`);
-        return;
-      }
-      
-      // Si el id es temporal, es nuevo
-      if (typeof item.id === 'string' && (item.id.startsWith('temp_') || item.id.startsWith('item_'))) {
-        itemsNuevos.push(item);
-        console.log(`   ✅ Item NUEVO (temporal): ${item.producto.nombre} x${item.cantidad}`);
-        return;
-      }
-      
-      if (typeof item.id === 'number') {
-        itemsNuevos.push(item);
-        console.log(`   ✅ Item NUEVO (número): ${item.producto.nombre} x${item.cantidad}`);
-        return;
-      }
-      
-      // Si el id no es un UUID válido, es nuevo
-      const isUUID = typeof item.id === 'string' && item.id.includes('-');
-      if (!isUUID) {
-        itemsNuevos.push(item);
-        console.log(`   ✅ Item NUEVO (no UUID): ${item.producto.nombre} x${item.cantidad}`);
-        return;
-      }
-      
-      // Verificar si el item existe en la BD
-      const itemExistente = itemsExistentesDB.find(ie => ie.id === item.id);
-      if (itemExistente) {
-        // Verificar si la cantidad aumentó
-        if (item.cantidad > itemExistente.cantidad) {
-          const cantidadAdicional = item.cantidad - itemExistente.cantidad;
-          // Crear un item nuevo con la cantidad adicional
-          const itemAdicional = {
-            ...item,
-            id: `temp_inc_${Date.now()}_${Math.random()}`,
-            cantidad: cantidadAdicional,
-            subtotal: cantidadAdicional * item.precio_unitario
-          };
-          itemsIncrementados.push(itemAdicional);
-          console.log(`   📈 Item INCREMENTADO: ${item.producto.nombre}, cantidad adicional: ${cantidadAdicional}`);
-          
-          // También actualizar el item existente con la nueva cantidad
-          const updateItemQuery = `
-            UPDATE comanda_items 
-            SET cantidad = ?, subtotal = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-            WHERE id = ?
-          `;
-          db.run(updateItemQuery, [item.cantidad, item.subtotal, item.id], (err: any) => {
-            if (err) console.error('Error al actualizar cantidad del item:', err);
-          });
-        }
-        
-        // Verificar si cambió la personalización
-        const personalizacionExistente = itemExistente.personalizacion ? 
-          (typeof itemExistente.personalizacion === 'string' ? 
-            JSON.parse(itemExistente.personalizacion) : 
-            itemExistente.personalizacion) : 
-          null;
-        const personalizacionNueva = item.personalizacion;
-        
-        const hayCambioPersonalizacion = JSON.stringify(personalizacionExistente) !== JSON.stringify(personalizacionNueva);
-        
-        if (hayCambioPersonalizacion) {
-          itemsConCambios.push(item);
-          console.log(`   🔄 Item CON CAMBIOS en personalización: ${item.producto.nombre}`);
-          
-          // Actualizar el item con la nueva personalización
-          const updatePersonalizacionQuery = `
-            UPDATE comanda_items 
-            SET personalizacion = ?, subtotal = ?, fecha_actualizacion = CURRENT_TIMESTAMP 
-            WHERE id = ?
-          `;
-          const personalizacionJSON = personalizacionNueva ? JSON.stringify(personalizacionNueva) : null;
-          db.run(updatePersonalizacionQuery, [personalizacionJSON, item.subtotal, item.id], (err: any) => {
-            if (err) console.error('Error al actualizar personalización del item:', err);
-            else console.log(`   ✅ Personalización actualizada para: ${item.producto.nombre}`);
-          });
-        }
-      }
-    });
-
-    // Combinar items nuevos con los incrementados
-    const todosLosItemsNuevos = [...itemsNuevos, ...itemsIncrementados];
-
-    console.log('✅ Items NUEVOS filtrados:', todosLosItemsNuevos.length);
-    console.log('✅ Items NUEVOS:', todosLosItemsNuevos.map(i => `${i.producto.nombre} x${i.cantidad}`).join(', '));
-    console.log('🔄 Items CON CAMBIOS:', itemsConCambios.length);
-
-    if (todosLosItemsNuevos.length === 0 && itemsConCambios.length === 0 && !imprimirCompleta) {
-      return res.status(400).json({ error: 'No hay cambios para actualizar' });
-    }
-
-    procesarEdicionComanda(id, items, todosLosItemsNuevos, observaciones_generales, imprimir, imprimirCompleta, res);
-  });
-});
-
-function procesarEdicionComanda(
-  id: string,
-  todosLosItems: any[],
-  itemsNuevos: any[],
-  observaciones_generales: string | undefined,
-  imprimir: boolean | undefined,
-  imprimirCompleta: boolean | undefined,
-  res: Response
-) {
-  
-  // Si solo se quiere imprimir la comanda completa sin agregar items nuevos
-  if (itemsNuevos.length === 0 && imprimirCompleta) {
-    console.log('🖨️  Solo imprimir comanda completa, sin items nuevos');
-    
-    // Obtener la comanda actual
-    const getComandaQuery = 'SELECT * FROM comandas WHERE id = ?';
-    db.get(getComandaQuery, [id], (err: any, comandaRow: any) => {
-      if (err) {
-        console.error('Error al obtener comanda:', err);
-        return res.status(500).json({ error: 'Error al obtener comanda' });
-      }
-      
-      if (!comandaRow) {
-        return res.status(404).json({ error: 'Comanda no encontrada' });
-      }
-      
-      // Obtener TODOS los items de la comanda con las personalizaciones actualizadas
-      const queryTodosItems = `
-        SELECT 
-          ci.*,
-          p.nombre as producto_nombre,
-          p.precio as producto_precio,
-          p.categoria as producto_categoria
-        FROM comanda_items ci
-        JOIN productos p ON ci.producto_id = p.id
-        WHERE ci.comanda_id = ?
-        ORDER BY ci.rowid
-      `;
-      
-      db.all(queryTodosItems, [id], (err: any, todosItemsRows: any[]) => {
-        if (err) {
-          console.error('Error al obtener todos los items:', err);
-          return res.status(500).json({ error: 'Error al obtener items' });
-        }
-        
-        const itemsParaImprimir = todosItemsRows.map(item => ({
-          id: item.id,
-          comanda_id: id,
-          producto_id: item.producto_id,
-          cantidad: item.cantidad,
-          precio_unitario: item.precio_unitario,
-          subtotal: item.subtotal,
-          observaciones: item.observaciones,
-          personalizacion: item.personalizacion ? JSON.parse(item.personalizacion) : undefined,
-          producto: {
-            id: item.producto_id,
-            nombre: item.producto_nombre,
-            precio: item.producto_precio,
-            categoria: item.producto_categoria,
-            disponible: true
-          }
-        }));
-        
-        // Recalcular totales
-        const nuevoSubtotal = itemsParaImprimir.reduce((sum, item) => sum + item.subtotal, 0);
-        
-        // Actualizar totales en la BD
-        const updateTotalesQuery = `
-          UPDATE comandas 
-          SET subtotal = ?,
-              total = ?,
-              fecha_actualizacion = CURRENT_TIMESTAMP
-          WHERE id = ?
-        `;
-        
-        db.run(updateTotalesQuery, [nuevoSubtotal, nuevoSubtotal, id], (err: any) => {
-          if (err) {
-            console.error('Error al actualizar totales:', err);
-            return res.status(500).json({ error: 'Error al actualizar totales' });
-          }
-          
-          // Actualizar el total en comandaRow para la impresión
-          comandaRow.total = nuevoSubtotal;
-          comandaRow.subtotal = nuevoSubtotal;
-          
-          // Imprimir la comanda completa
-          imprimirComandaCompleta(id, comandaRow, itemsParaImprimir);
-          
-          // Responder éxito
-          return res.json({ 
-            mensaje: 'Comanda actualizada e impresa exitosamente',
-            comanda_id: id,
-            items_actualizados: itemsParaImprimir.length
-          });
-        });
-      });
-    });
-    
-    return;
-  }
-
   db.serialize(() => {
     db.run('BEGIN TRANSACTION');
 
-    // Actualizar observaciones generales si se proporcionan
-    if (observaciones_generales !== undefined) {
-      const updateObservacionesQuery = `
-        UPDATE comandas 
-        SET observaciones_generales = ?,
-            fecha_actualizacion = CURRENT_TIMESTAMP 
-        WHERE id = ?
-      `;
-      
-      db.run(updateObservacionesQuery, [observaciones_generales, id], (err: any) => {
-        if (err) {
-          console.error('Error al actualizar observaciones:', err);
-          db.run('ROLLBACK');
-          return res.status(500).json({ error: 'Error al actualizar observaciones' });
-        }
-      });
-    }
+    // 1. Obtener items existentes para comparar
+    const queryItemsExistentes = 'SELECT * FROM comanda_items WHERE comanda_id = ?';
+    
+    db.all(queryItemsExistentes, [id], (err: any, itemsExistentesDB: any[]) => {
+      if (err) {
+        console.error('❌ Error al obtener items existentes:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: 'Error al obtener items existentes' });
+      }
 
-    // Insertar nuevos items
-    const insertItemQuery = `
-      INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `;
+      const itemsNuevos: any[] = [];
+      const itemsParaActualizar: any[] = [];
+      const idsItemsRecibidos = new Set<string>();
 
-    let itemsInserted = 0;
-    let itemsErrors = 0;
-    let nuevoTotal = 0;
+      // 2. Clasificar items recibidos (Nuevos vs Existentes)
+      items.forEach(item => {
+        // Identificar si es nuevo
+        const esNuevo = !item.id || 
+                        (typeof item.id === 'string' && (item.id.startsWith('temp_') || item.id.startsWith('item_'))) ||
+                        (typeof item.id === 'string' && !item.id.includes('-')); // No es UUID
 
-    // USAR SOLO LOS ITEMS NUEVOS FILTRADOS
-    itemsNuevos.forEach((item) => {
-      const itemId = uuidv4();
-      const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
-      nuevoTotal += item.subtotal;
-
-      db.run(insertItemQuery, [
-        itemId,
-        id,
-        item.producto.id,
-        item.cantidad,
-        item.precio_unitario,
-        item.subtotal,
-        item.observaciones || null,
-        personalizacionStr
-      ], (err: any) => {
-        if (err) {
-          console.error('Error al insertar item adicional:', err);
-          itemsErrors++;
+        if (esNuevo) {
+          itemsNuevos.push(item);
         } else {
-          itemsInserted++;
-        }
-
-        // Verificar si todos los items NUEVOS han sido procesados
-        if (itemsInserted + itemsErrors === itemsNuevos.length) {
-          if (itemsErrors > 0) {
-            db.run('ROLLBACK');
-            return res.status(500).json({ error: 'Error al agregar items adicionales' });
-          }
-
-          // Actualizar totales
-          const updateTotalesQuery = `
-            UPDATE comandas 
-            SET subtotal = subtotal + ?,
-                total = total + ?,
-                fecha_actualizacion = CURRENT_TIMESTAMP
-            WHERE id = ?
-          `;
-
-          db.run(updateTotalesQuery, [nuevoTotal, nuevoTotal, id], (err: any) => {
-            if (err) {
-              console.error('Error al actualizar totales:', err);
-              db.run('ROLLBACK');
-              return res.status(500).json({ error: 'Error al actualizar totales' });
+          idsItemsRecibidos.add(item.id);
+          
+          // Verificar si hay cambios en items existentes
+          const itemExistente = itemsExistentesDB.find(ie => ie.id === item.id);
+          if (itemExistente) {
+            let necesitaActualizacion = false;
+            
+            // Cambio en cantidad
+            if (item.cantidad !== itemExistente.cantidad) {
+              necesitaActualizacion = true;
+            }
+            
+            // Cambio en personalización
+            const personalizacionExistente = itemExistente.personalizacion ? 
+              (typeof itemExistente.personalizacion === 'string' ? JSON.parse(itemExistente.personalizacion) : itemExistente.personalizacion) : null;
+            const personalizacionNueva = item.personalizacion;
+            
+            if (JSON.stringify(personalizacionExistente) !== JSON.stringify(personalizacionNueva)) {
+              necesitaActualizacion = true;
             }
 
-            db.run('COMMIT', (err: any) => {
+            if (necesitaActualizacion) {
+              itemsParaActualizar.push(item);
+            }
+          }
+        }
+      });
+
+      // 3. Identificar items eliminados
+      const itemsEliminados = itemsExistentesDB.filter(ie => !idsItemsRecibidos.has(ie.id));
+
+      console.log(`📊 Resumen cambios: Nuevos=${itemsNuevos.length}, Actualizar=${itemsParaActualizar.length}, Eliminar=${itemsEliminados.length}`);
+
+      // 4. Procesar Eliminaciones
+      const deletePromises = itemsEliminados.map(item => {
+        return new Promise<void>((resolve, reject) => {
+          db.run('DELETE FROM comanda_items WHERE id = ?', [item.id], (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      });
+
+      // 5. Procesar Actualizaciones
+      const updatePromises = itemsParaActualizar.map(item => {
+        return new Promise<void>((resolve, reject) => {
+          const personalizacionJSON = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
+          // CORRECCIÓN: Eliminado fecha_actualizacion que causaba el crash
+          const query = `
+            UPDATE comanda_items 
+            SET cantidad = ?, subtotal = ?, personalizacion = ?
+            WHERE id = ?
+          `;
+          db.run(query, [item.cantidad, item.subtotal, personalizacionJSON, item.id], (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      });
+
+      // 6. Procesar Inserciones (Nuevos)
+      const insertPromises = itemsNuevos.map(item => {
+        return new Promise<void>((resolve, reject) => {
+          const itemId = uuidv4();
+          const personalizacionStr = item.personalizacion ? JSON.stringify(item.personalizacion) : null;
+          const query = `
+            INSERT INTO comanda_items (id, comanda_id, producto_id, cantidad, precio_unitario, subtotal, observaciones, personalizacion)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          `;
+          db.run(query, [
+            itemId, id, item.producto.id, item.cantidad, item.precio_unitario, item.subtotal, item.observaciones || null, personalizacionStr
+          ], (err) => {
+            if (err) reject(err);
+            else resolve();
+          });
+        });
+      });
+
+      // Ejecutar todas las operaciones de items
+      Promise.all([...deletePromises, ...updatePromises, ...insertPromises])
+        .then(() => {
+          // 7. Recalcular Totales de la Comanda
+          const queryRecalcular = 'SELECT SUM(subtotal) as total FROM comanda_items WHERE comanda_id = ?';
+          db.get(queryRecalcular, [id], (err: any, row: any) => {
+            if (err) {
+              console.error('Error al recalcular totales:', err);
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: 'Error al recalcular totales' });
+            }
+
+            const nuevoTotal = row ? (row.total || 0) : 0;
+            
+            // Actualizar comanda con nuevos totales y observaciones
+            const updateComandaQuery = `
+              UPDATE comandas 
+              SET subtotal = ?, total = ?, observaciones_generales = ?, fecha_actualizacion = CURRENT_TIMESTAMP
+              WHERE id = ?
+            `;
+            
+            db.run(updateComandaQuery, [nuevoTotal, nuevoTotal, observaciones_generales, id], (err: any) => {
               if (err) {
-                console.error('Error al hacer commit:', err);
-                return res.status(500).json({ error: 'Error al guardar cambios' });
+                console.error('Error al actualizar comanda:', err);
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Error al actualizar comanda' });
               }
 
-              // Obtener la comanda actualizada
-              const getComandaQuery = 'SELECT * FROM comandas WHERE id = ?';
-              db.get(getComandaQuery, [id], (err: any, comandaRow: any) => {
+              db.run('COMMIT', (err) => {
                 if (err) {
-                  console.error('Error al obtener comanda actualizada:', err);
-                  return res.status(500).json({ error: 'Comanda actualizada pero error al obtener datos' });
+                  console.error('Error en COMMIT:', err);
+                  return res.status(500).json({ error: 'Error al confirmar cambios' });
                 }
-
-                // Si se debe imprimir, decidir qué imprimir
-                if (imprimir || imprimirCompleta) {
-                  if (imprimirCompleta) {
-                    // Imprimir la comanda completa
-                    console.log(`🖨️  Preparando impresión de comanda completa...`);
-                    
-                    // Obtener TODOS los items de la comanda
-                    const queryTodosItems = `
-                      SELECT 
-                        ci.*,
-                        p.nombre as producto_nombre,
-                        p.precio as producto_precio,
-                        p.categoria as producto_categoria
-                      FROM comanda_items ci
-                      JOIN productos p ON ci.producto_id = p.id
-                      WHERE ci.comanda_id = ?
-                      ORDER BY ci.rowid
-                    `;
-                    
-                    db.all(queryTodosItems, [id], (err: any, todosItemsRows: any[]) => {
-                      if (err) {
-                        console.error('Error al obtener todos los items:', err);
-                        return;
-                      }
-                      
-                      const itemsParaImprimir = todosItemsRows.map(item => ({
-                        id: item.id,
-                        comanda_id: id,
-                        producto_id: item.producto_id,
-                        cantidad: item.cantidad,
-                        precio_unitario: item.precio_unitario,
-                        subtotal: item.subtotal,
-                        observaciones: item.observaciones,
-                        personalizacion: item.personalizacion ? JSON.parse(item.personalizacion) : undefined,
-                        producto: {
-                          id: item.producto_id,
-                          nombre: item.producto_nombre,
-                          precio: item.producto_precio,
-                          categoria: item.producto_categoria,
-                          disponible: true
-                        }
-                      }));
-                      
-                      imprimirComandaCompleta(id, comandaRow, itemsParaImprimir);
-                    });
-                  } else if (imprimir) {
-                    // Imprimir solo items adicionales
-                    console.log(`🖨️  Preparando impresión de ${itemsNuevos.length} items adicionales...`);
-                    
-                    // Formatear los items NUEVOS recién agregados con la información del producto
-                    const itemsParaImprimir = itemsNuevos.map(item => ({
-                      id: uuidv4(),
-                      comanda_id: id,
-                      producto_id: item.producto.id,
-                      cantidad: item.cantidad,
-                      precio_unitario: item.precio_unitario,
-                      subtotal: item.subtotal,
-                      observaciones: item.observaciones,
-                      personalizacion: item.personalizacion,
-                      producto: {
-                        id: item.producto.id,
-                        nombre: item.producto.nombre,
-                        precio: item.producto.precio,
-                        categoria: item.producto.categoria,
-                        disponible: true
-                      }
-                    }));
-                    
-                    imprimirItemsAdicionales(id, comandaRow, itemsParaImprimir);
-                  }
-                }
-
-                res.json({
-                  message: 'Comanda actualizada exitosamente',
-                  comanda: {
-                    id: comandaRow.id,
-                    subtotal: comandaRow.subtotal,
-                    total: comandaRow.total,
-                    itemsAgregados: itemsNuevos.length
-                  }
-                });
+                
+                // 8. Manejar Impresión (fuera de la transacción)
+                handleImpresion(id, itemsNuevos, imprimir, imprimirCompleta, res);
               });
             });
           });
-        }
-      });
+        })
+        .catch(err => {
+          console.error('Error procesando items:', err);
+          db.run('ROLLBACK');
+          res.status(500).json({ error: 'Error al procesar los cambios en los items' });
+        });
     });
   });
+});
+
+// Función auxiliar para manejar la impresión después de guardar
+function handleImpresion(comandaId: string, itemsNuevos: any[], imprimir: boolean | undefined, imprimirCompleta: boolean | undefined, res: Response) {
+  // Obtener datos actualizados para imprimir
+  const queryComanda = 'SELECT * FROM comandas WHERE id = ?';
+  db.get(queryComanda, [comandaId], (err: any, comandaRow: any) => {
+    if (err || !comandaRow) {
+      return res.json({ message: 'Comanda actualizada (Error al obtener datos para impresión)' });
+    }
+
+    if (imprimirCompleta) {
+       // Obtener TODOS los items
+       const queryTodosItems = `
+         SELECT ci.*, p.nombre as producto_nombre, p.precio as producto_precio, p.categoria as producto_categoria
+         FROM comanda_items ci JOIN productos p ON ci.producto_id = p.id
+         WHERE ci.comanda_id = ? ORDER BY ci.rowid
+       `;
+       db.all(queryTodosItems, [comandaId], (err: any, rows: any[]) => {
+         if (!err) {
+           const itemsFormateados = rows.map(formatItemForPrint);
+           imprimirComandaCompleta(comandaId, comandaRow, itemsFormateados);
+         }
+       });
+    } else if (imprimir && itemsNuevos.length > 0) {
+       // Imprimir solo nuevos
+       const itemsParaImprimir = itemsNuevos.map((item: any) => ({
+         ...item,
+         id: uuidv4(), // ID ficticio para impresión
+         comanda_id: comandaId
+       }));
+       imprimirItemsAdicionales(comandaId, comandaRow, itemsParaImprimir);
+    }
+
+    res.json({ message: 'Comanda actualizada exitosamente', comanda: comandaRow });
+  });
+}
+
+function formatItemForPrint(item: any) {
+  return {
+    id: item.id,
+    comanda_id: item.comanda_id,
+    producto_id: item.producto_id,
+    cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
+    subtotal: item.subtotal,
+    observaciones: item.observaciones,
+    personalizacion: item.personalizacion ? JSON.parse(item.personalizacion) : undefined,
+    producto: {
+      id: item.producto_id,
+      nombre: item.producto_nombre,
+      precio: item.producto_precio,
+      categoria: item.producto_categoria,
+      disponible: true
+    }
+  };
 }
 
 // Función auxiliar para imprimir items adicionales
