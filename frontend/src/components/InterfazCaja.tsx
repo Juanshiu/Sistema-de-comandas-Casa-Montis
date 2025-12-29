@@ -22,7 +22,26 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [montoPagado, setMontoPagado] = useState<string>('');
   const [cambio, setCambio] = useState<number>(0);
   const [facturasImpresas, setFacturasImpresas] = useState<Set<string>>(new Set());
-  const [itemsPagados, setItemsPagados] = useState<{ [comandaId: string]: Set<string> }>({});
+  const [itemsPagados, setItemsPagados] = useState<{ [comandaId: string]: Set<string> }>(() => {
+    // Cargar estado desde localStorage al iniciar
+    if (typeof window !== 'undefined') {
+      try {
+        const saved = localStorage.getItem('itemsPagadosCaja');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          // Convertir arrays de vuelta a Sets
+          const result: { [key: string]: Set<string> } = {};
+          for (const [comandaId, itemIds] of Object.entries(parsed)) {
+            result[comandaId] = new Set(itemIds as string[]);
+          }
+          return result;
+        }
+      } catch (e) {
+        console.error('Error cargando itemsPagados desde localStorage:', e);
+      }
+    }
+    return {};
+  });
   const [mostrarModalCancelar, setMostrarModalCancelar] = useState(false);
   const [comandaACancelar, setComandaACancelar] = useState<Comanda | null>(null);
   const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
@@ -100,8 +119,25 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       }
       
       nuevosItems[comandaId] = itemsComanda;
+      
+      // Guardar en localStorage
+      guardarItemsPagadosEnStorage(nuevosItems);
+      
       return nuevosItems;
     });
+  };
+
+  // Función para guardar en localStorage (convierte Sets a Arrays para serializar)
+  const guardarItemsPagadosEnStorage = (items: { [comandaId: string]: Set<string> }) => {
+    try {
+      const serializable: { [key: string]: string[] } = {};
+      for (const [comandaId, itemIds] of Object.entries(items)) {
+        serializable[comandaId] = Array.from(itemIds);
+      }
+      localStorage.setItem('itemsPagadosCaja', JSON.stringify(serializable));
+    } catch (e) {
+      console.error('Error guardando itemsPagados en localStorage:', e);
+    }
   };
 
   const isItemPagado = (comandaId: string, itemId: string): boolean => {
@@ -130,6 +166,10 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     setItemsPagados(prev => {
       const nuevosItems = { ...prev };
       nuevosItems[comandaId] = new Set();
+      
+      // Guardar en localStorage
+      guardarItemsPagadosEnStorage(nuevosItems);
+      
       return nuevosItems;
     });
   };
@@ -202,6 +242,10 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       setItemsPagados(prev => {
         const nuevosItems = { ...prev };
         delete nuevosItems[comandaSeleccionada.id];
+        
+        // Guardar en localStorage
+        guardarItemsPagadosEnStorage(nuevosItems);
+        
         return nuevosItems;
       });
       
