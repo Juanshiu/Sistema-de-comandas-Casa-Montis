@@ -6,7 +6,7 @@ import { apiService } from '@/services/api';
 import { 
   TrendingUp, DollarSign, ShoppingCart, Calendar, Download, 
   TrendingDown, Clock, AlertCircle, Flame, CreditCard, 
-  ArrowUp, ArrowDown, Minus
+  ArrowUp, ArrowDown, Minus, ChevronDown, ChevronRight, Package
 } from 'lucide-react';
 
 export default function Reportes() {
@@ -24,6 +24,7 @@ export default function Reportes() {
   const [vistaActual, setVistaActual] = useState<'dia' | 'rango'>('dia');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [categoriasExpandidas, setCategoriasExpandidas] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     cargarReporte();
@@ -125,6 +126,64 @@ vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaj
 
   const calcularComandasRango = () => {
     return reporteRango.reduce((sum, r) => sum + r.cantidad_comandas, 0);
+  };
+
+  // Agrupar productos por categoría
+  const agruparPorCategoria = (productos: ProductoVendido[]) => {
+    const agrupado: { [categoria: string]: { items: ProductoVendido[], totalUnidades: number, totalVentas: number } } = {};
+    
+    productos.forEach(item => {
+      const categoria = item.producto.categoria || 'Sin categoría';
+      if (!agrupado[categoria]) {
+        agrupado[categoria] = { items: [], totalUnidades: 0, totalVentas: 0 };
+      }
+      agrupado[categoria].items.push(item);
+      agrupado[categoria].totalUnidades += item.cantidad_vendida;
+      agrupado[categoria].totalVentas += item.total_vendido;
+    });
+
+    // Ordenar items dentro de cada categoría por total vendido
+    Object.values(agrupado).forEach(cat => {
+      cat.items.sort((a, b) => b.total_vendido - a.total_vendido);
+    });
+
+    return agrupado;
+  };
+
+  // Combinar productos de múltiples reportes (para vista rango)
+  const combinarProductosRango = () => {
+    const combinado: { [productoId: number]: ProductoVendido } = {};
+    
+    reporteRango.forEach(reporte => {
+      reporte.productos_mas_vendidos.forEach(item => {
+        if (!combinado[item.producto.id]) {
+          combinado[item.producto.id] = { ...item };
+        } else {
+          combinado[item.producto.id].cantidad_vendida += item.cantidad_vendida;
+          combinado[item.producto.id].total_vendido += item.total_vendido;
+        }
+      });
+    });
+
+    return Object.values(combinado);
+  };
+
+  const toggleCategoria = (categoria: string) => {
+    setCategoriasExpandidas(prev => {
+      const nuevas = new Set(prev);
+      if (nuevas.has(categoria)) {
+        nuevas.delete(categoria);
+      } else {
+        nuevas.add(categoria);
+      }
+      return nuevas;
+    });
+  };
+
+  const formatearNombreCategoria = (categoria: string) => {
+    return categoria
+      .replace(/_/g, ' ')
+      .replace(/\b\w/g, l => l.toUpperCase());
   };
 
   const IconoComparativa = ({ porcentaje }: { porcentaje: number }) => {
@@ -469,6 +528,94 @@ vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaj
               )}
             </div>
           </div>
+
+          {/* Ventas por Categoría */}
+          <div className="card">
+            <div className="flex items-center space-x-2 mb-4">
+              <Package size={20} className="text-secondary-700" />
+              <h3 className="text-lg font-semibold text-secondary-800">
+                Ventas por Categoría
+              </h3>
+            </div>
+            {reporte.productos_mas_vendidos.length === 0 ? (
+              <p className="text-secondary-600 text-center py-4">
+                No hay datos de productos por categoría
+              </p>
+            ) : (
+              <div className="space-y-2">
+                {(() => {
+                  const categorias = agruparPorCategoria(reporte.productos_mas_vendidos);
+                  const categoriasOrdenadas = Object.entries(categorias)
+                    .sort((a, b) => b[1].totalVentas - a[1].totalVentas);
+                  
+                  return categoriasOrdenadas.map(([categoria, datos]) => {
+                    const estaExpandida = categoriasExpandidas.has(categoria);
+                    
+                    return (
+                      <div key={categoria} className="border border-secondary-200 rounded-lg overflow-hidden">
+                        {/* Header de categoría */}
+                        <button
+                          onClick={() => toggleCategoria(categoria)}
+                          className="w-full flex items-center justify-between p-3 bg-secondary-50 hover:bg-secondary-100 transition-colors"
+                        >
+                          <div className="flex items-center space-x-3">
+                            {estaExpandida ? (
+                              <ChevronDown size={20} className="text-secondary-600" />
+                            ) : (
+                              <ChevronRight size={20} className="text-secondary-600" />
+                            )}
+                            <span className="font-semibold text-secondary-800">
+                              {formatearNombreCategoria(categoria)}
+                            </span>
+                            <span className="text-sm text-secondary-600">
+                              ({datos.items.length} productos)
+                            </span>
+                          </div>
+                          <div className="flex items-center space-x-4">
+                            <span className="text-sm text-secondary-600">
+                              {datos.totalUnidades} unidades.
+                            </span>
+                            <span className="font-bold text-primary-600">
+                              ${datos.totalVentas.toLocaleString()}
+                            </span>
+                          </div>
+                        </button>
+                        
+                        {/* Items de la categoría */}
+                        {estaExpandida && (
+                          <div className="p-3 space-y-2 bg-white">
+                            {datos.items.map((item, index) => (
+                              <div 
+                                key={item.producto.id} 
+                                className="flex items-center justify-between py-2 px-3 bg-secondary-25 rounded"
+                              >
+                                <div className="flex items-center space-x-3">
+                                  <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xs font-bold">
+                                    {index + 1}
+                                  </span>
+                                  <span className="text-secondary-800">
+                                    {item.producto.nombre}
+                                  </span>
+                                </div>
+                                <div className="flex items-center space-x-4">
+                                  <span className="text-sm text-secondary-600">
+                                    {item.cantidad_vendida} unidades.
+                                  </span>
+                                  <span className="font-semibold text-primary-600 min-w-[80px] text-right">
+                                    ${item.total_vendido.toLocaleString()}
+                                  </span>
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  });
+                })()}
+              </div>
+            )}
+          </div>
         </>
       ) : (
         reporteRango.length > 0 && (
@@ -555,6 +702,99 @@ vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaj
                   </tbody>
                 </table>
               </div>
+            </div>
+
+            {/* Ventas por Categoría (Rango) */}
+            <div className="card">
+              <div className="flex items-center space-x-2 mb-4">
+                <Package size={20} className="text-secondary-700" />
+                <h3 className="text-lg font-semibold text-secondary-800">
+                  Ventas por Categoría (Período Completo)
+                </h3>
+              </div>
+              {(() => {
+                const productosCombinados = combinarProductosRango();
+                if (productosCombinados.length === 0) {
+                  return (
+                    <p className="text-secondary-600 text-center py-4">
+                      No hay datos de productos por categoría
+                    </p>
+                  );
+                }
+                
+                const categorias = agruparPorCategoria(productosCombinados);
+                const categoriasOrdenadas = Object.entries(categorias)
+                  .sort((a, b) => b[1].totalVentas - a[1].totalVentas);
+                
+                return (
+                  <div className="space-y-2">
+                    {categoriasOrdenadas.map(([categoria, datos]) => {
+                      const estaExpandida = categoriasExpandidas.has(`rango_${categoria}`);
+                      
+                      return (
+                        <div key={categoria} className="border border-secondary-200 rounded-lg overflow-hidden">
+                          {/* Header de categoría */}
+                          <button
+                            onClick={() => toggleCategoria(`rango_${categoria}`)}
+                            className="w-full flex items-center justify-between p-3 bg-secondary-50 hover:bg-secondary-100 transition-colors"
+                          >
+                            <div className="flex items-center space-x-3">
+                              {estaExpandida ? (
+                                <ChevronDown size={20} className="text-secondary-600" />
+                              ) : (
+                                <ChevronRight size={20} className="text-secondary-600" />
+                              )}
+                              <span className="font-semibold text-secondary-800">
+                                {formatearNombreCategoria(categoria)}
+                              </span>
+                              <span className="text-sm text-secondary-600">
+                                ({datos.items.length} productos)
+                              </span>
+                            </div>
+                            <div className="flex items-center space-x-4">
+                              <span className="text-sm text-secondary-600">
+                                {datos.totalUnidades} unidades.
+                              </span>
+                              <span className="font-bold text-primary-600">
+                                ${datos.totalVentas.toLocaleString()}
+                              </span>
+                            </div>
+                          </button>
+                          
+                          {/* Items de la categoría */}
+                          {estaExpandida && (
+                            <div className="p-3 space-y-2 bg-white">
+                              {datos.items.map((item, index) => (
+                                <div 
+                                  key={item.producto.id} 
+                                  className="flex items-center justify-between py-2 px-3 bg-secondary-25 rounded"
+                                >
+                                  <div className="flex items-center space-x-3">
+                                    <span className="w-6 h-6 rounded-full bg-primary-100 text-primary-600 flex items-center justify-center text-xs font-bold">
+                                      {index + 1}
+                                    </span>
+                                    <span className="text-secondary-800">
+                                      {item.producto.nombre}
+                                    </span>
+                                  </div>
+                                  <div className="flex items-center space-x-4">
+                                    <span className="text-sm text-secondary-600">
+                                      {item.cantidad_vendida} unidades.
+                                    </span>
+                                    <span className="font-semibold text-primary-600 min-w-[80px] text-right">
+                                      ${item.total_vendido.toLocaleString()}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                );
+              })()}
             </div>
           </>
         )
