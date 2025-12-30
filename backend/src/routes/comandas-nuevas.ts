@@ -1304,6 +1304,178 @@ router.patch('/:id/estado', (req: Request, res: Response) => {
   });
 });
 
+// Cambiar mesa(s) de una comanda activa
+router.patch('/:id/cambiar-mesa', (req: Request, res: Response) => {
+  const { id } = req.params;
+  const { nuevas_mesas } = req.body;
+
+  if (!nuevas_mesas || !Array.isArray(nuevas_mesas) || nuevas_mesas.length === 0) {
+    return res.status(400).json({ error: 'Debe proporcionar al menos una mesa nueva' });
+  }
+
+  console.log('🔄 ===== CAMBIO DE MESA =====');
+  console.log('🔄 Comanda ID:', id);
+  console.log('🔄 Nuevas mesas:', nuevas_mesas.map(m => m.id));
+
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+
+    // 1. Verificar que la comanda existe y es de tipo mesa
+    db.get('SELECT * FROM comandas WHERE id = ?', [id], (err: any, comanda: any) => {
+      if (err) {
+        console.error('Error al obtener comanda:', err);
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: 'Error al obtener la comanda' });
+      }
+
+      if (!comanda) {
+        db.run('ROLLBACK');
+        return res.status(404).json({ error: 'Comanda no encontrada' });
+      }
+
+      if (comanda.tipo_pedido === 'domicilio') {
+        db.run('ROLLBACK');
+        return res.status(400).json({ error: 'No se puede cambiar mesa a pedidos de domicilio' });
+      }
+
+      // 2. Verificar que las nuevas mesas existen y están disponibles
+      const mesasIds = nuevas_mesas.map(m => m.id);
+      const placeholders = mesasIds.map(() => '?').join(',');
+      const queryMesas = `SELECT * FROM mesas WHERE id IN (${placeholders})`;
+
+      db.all(queryMesas, mesasIds, (err: any, mesasRows: any[]) => {
+        if (err) {
+          console.error('Error al verificar mesas:', err);
+          db.run('ROLLBACK');
+          return res.status(500).json({ error: 'Error al verificar las mesas' });
+        }
+
+        if (mesasRows.length !== nuevas_mesas.length) {
+          db.run('ROLLBACK');
+          return res.status(404).json({ error: 'Una o más mesas no existen' });
+        }
+
+        // Verificar que las mesas nuevas estén disponibles
+        const mesasOcupadas = mesasRows.filter(m => m.ocupada === 1);
+        if (mesasOcupadas.length > 0) {
+          db.run('ROLLBACK');
+          return res.status(400).json({ 
+            error: 'Una o más mesas ya están ocupadas', 
+            mesas_ocupadas: mesasOcupadas.map(m => m.numero)
+          });
+        }
+
+        // 3. Obtener mesas actuales de la comanda
+        db.all('SELECT mesa_id FROM comanda_mesas WHERE comanda_id = ?', [id], (err: any, mesasActuales: any[]) => {
+          if (err) {
+            console.error('Error al obtener mesas actuales:', err);
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Error al obtener mesas actuales' });
+          }
+
+          const mesasAnterioresIds = mesasActuales.map(m => m.mesa_id);
+
+          // 4. Eliminar relaciones antiguas
+          db.run('DELETE FROM comanda_mesas WHERE comanda_id = ?', [id], (err: any) => {
+            if (err) {
+              console.error('Error al eliminar relaciones antiguas:', err);
+              db.run('ROLLBACK');
+              return res.status(500).json({ error: 'Error al actualizar mesas' });
+            }
+
+            // 5. Insertar nuevas relaciones
+            let relacionesInsertadas = 0;
+            let erroresInsercion = 0;
+
+            nuevas_mesas.forEach((mesa) => {
+              db.run('INSERT INTO comanda_mesas (comanda_id, mesa_id) VALUES (?, ?)', [id, mesa.id], (err: any) => {
+                if (err) {
+                  console.error('Error al insertar relación mesa:', err);
+                  erroresInsercion++;
+                } else {
+                  relacionesInsertadas++;
+                }
+
+                if (relacionesInsertadas + erroresInsercion === nuevas_mesas.length) {
+                  if (erroresInsercion > 0) {
+                    db.run('ROLLBACK');
+                    return res.status(500).json({ error: 'Error al relacionar nuevas mesas' });
+                  }
+
+                  // 6. Liberar mesas anteriores
+                  if (mesasAnterioresIds.length > 0) {
+                    const placeholdersAnteriores = mesasAnterioresIds.map(() => '?').join(',');
+                    db.run(
+                      `UPDATE mesas SET ocupada = 0, updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholdersAnteriores})`,
+                      mesasAnterioresIds,
+                      (err: any) => {
+                        if (err) {
+                          console.error('Error al liberar mesas anteriores:', err);
+                          // No hacer rollback, el cambio ya se hizo
+                          console.warn('⚠️  Mesas anteriores no liberadas, pero comanda actualizada');
+                        } else {
+                          console.log('✅ Mesas anteriores liberadas:', mesasAnterioresIds);
+                        }
+                        ocuparNuevasMesas();
+                      }
+                    );
+                  } else {
+                    ocuparNuevasMesas();
+                  }
+
+                  function ocuparNuevasMesas() {
+                    // 7. Ocupar nuevas mesas
+                    const placeholdersNuevas = mesasIds.map(() => '?').join(',');
+                    db.run(
+                      `UPDATE mesas SET ocupada = 1, updated_at = CURRENT_TIMESTAMP WHERE id IN (${placeholdersNuevas})`,
+                      mesasIds,
+                      (err: any) => {
+                        if (err) {
+                          console.error('Error al ocupar nuevas mesas:', err);
+                          db.run('ROLLBACK');
+                          return res.status(500).json({ error: 'Error al ocupar nuevas mesas' });
+                        }
+
+                        console.log('✅ Nuevas mesas ocupadas:', mesasIds);
+
+                        // 8. Actualizar timestamp de la comanda
+                        db.run('UPDATE comandas SET fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?', [id], (err: any) => {
+                          if (err) {
+                            console.error('Error al actualizar timestamp:', err);
+                            // No hacer rollback por esto
+                          }
+
+                          // 9. Commit
+                          db.run('COMMIT', (err: any) => {
+                            if (err) {
+                              console.error('Error en COMMIT:', err);
+                              return res.status(500).json({ error: 'Error al confirmar cambios' });
+                            }
+
+                            console.log('✅ Cambio de mesa completado exitosamente');
+
+                            // Retornar información del cambio
+                            res.json({
+                              message: 'Mesa(s) cambiada(s) exitosamente',
+                              mesas_anteriores: mesasAnterioresIds,
+                              mesas_nuevas: mesasIds,
+                              comanda_id: id
+                            });
+                          });
+                        });
+                      }
+                    );
+                  }
+                }
+              });
+            });
+          });
+        });
+      });
+    });
+  });
+});
+
 // Eliminar comanda
 router.delete('/:id', (req: Request, res: Response) => {
   const { id } = req.params;

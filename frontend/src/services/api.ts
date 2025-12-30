@@ -138,6 +138,13 @@ export const apiService = {
     return response.data;
   },
 
+  async cambiarMesaComanda(comandaId: string, nuevas_mesas: Mesa[]): Promise<any> {
+    const response = await api.patch(`/comandas/${comandaId}/cambiar-mesa`, {
+      nuevas_mesas
+    });
+    return response.data;
+  },
+
   async getHistorialComandas(fecha?: string): Promise<ComandaHistorial[]> {
     const params = fecha ? `?fecha=${fecha}` : '';
     const response = await api.get(`/comandas/historial${params}`);

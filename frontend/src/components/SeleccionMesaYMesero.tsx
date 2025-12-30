@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Mesa, Comanda } from '@/types';
 import { apiService } from '@/services/api';
-import { Users, Check, X, User, Edit, Clock, AlertCircle } from 'lucide-react';
+import { Users, Check, X, User, Edit, Clock, AlertCircle, Repeat } from 'lucide-react';
 
 interface SeleccionMesaProps {
   mesasSeleccionadas: Mesa[];
@@ -24,6 +24,13 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoMesero, setEditandoMesero] = useState(false);
+  
+  // Estados para cambio de mesa
+  const [mostrarModalCambioMesa, setMostrarModalCambioMesa] = useState(false);
+  const [comandaCambiandoMesa, setComandaCambiandoMesa] = useState<Comanda | null>(null);
+  const [mesasSeleccionadasCambio, setMesasSeleccionadasCambio] = useState<Mesa[]>([]);
+  const [cambiandoMesa, setCambiandoMesa] = useState(false);
+  const [errorCambioMesa, setErrorCambioMesa] = useState<string | null>(null);
   
   // Ref para preservar posición del scroll
   const scrollPosRef = useRef(0);
@@ -168,6 +175,62 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
 
   const limpiarSeleccion = () => {
     onMesasChange([]);
+  };
+
+  // Funciones para cambio de mesa
+  const iniciarCambioMesa = (comanda: Comanda) => {
+    setComandaCambiandoMesa(comanda);
+    setMesasSeleccionadasCambio([]);
+    setErrorCambioMesa(null);
+    setMostrarModalCambioMesa(true);
+  };
+
+  const cancelarCambioMesa = () => {
+    setMostrarModalCambioMesa(false);
+    setComandaCambiandoMesa(null);
+    setMesasSeleccionadasCambio([]);
+    setErrorCambioMesa(null);
+  };
+
+  const toggleMesaCambio = (mesa: Mesa) => {
+    if (mesa.ocupada) return;
+    
+    const mesaYaSeleccionada = mesasSeleccionadasCambio.find(m => m.id === mesa.id);
+    
+    if (mesaYaSeleccionada) {
+      setMesasSeleccionadasCambio(mesasSeleccionadasCambio.filter(m => m.id !== mesa.id));
+    } else {
+      setMesasSeleccionadasCambio([...mesasSeleccionadasCambio, mesa]);
+    }
+  };
+
+  const confirmarCambioMesa = async () => {
+    if (!comandaCambiandoMesa || mesasSeleccionadasCambio.length === 0) {
+      setErrorCambioMesa('Debe seleccionar al menos una mesa');
+      return;
+    }
+
+    try {
+      setCambiandoMesa(true);
+      setErrorCambioMesa(null);
+
+      await apiService.cambiarMesaComanda(comandaCambiandoMesa.id, mesasSeleccionadasCambio);
+      
+      // Recargar datos
+      await cargarMesas();
+      await cargarComandasActivas();
+      
+      // Cerrar modal
+      cancelarCambioMesa();
+      
+      // Mostrar mensaje de éxito (opcional, puedes agregar un toast)
+      console.log('✅ Mesa cambiada exitosamente');
+    } catch (error: any) {
+      console.error('Error al cambiar mesa:', error);
+      setErrorCambioMesa(error.response?.data?.error || 'Error al cambiar la mesa');
+    } finally {
+      setCambiandoMesa(false);
+    }
   };
 
   if (loading) {
@@ -414,8 +477,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                     {comandasPorSalon[salon].map((comanda) => (
                       <div
                         key={comanda.id}
-                        className="border rounded-lg p-4 bg-white hover:bg-primary-25 transition-colors cursor-pointer shadow-sm hover:shadow-md"
-                        onClick={() => onEditarComanda(comanda)}
+                        className="border rounded-lg p-4 bg-white hover:bg-primary-25 transition-colors shadow-sm hover:shadow-md"
                       >
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex-1">
@@ -462,10 +524,31 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                           <span className="text-lg font-bold text-primary-600">
                             ${comanda.total.toLocaleString()}
                           </span>
-                          <button className="text-blue-600 hover:text-blue-800 text-sm flex items-center">
-                            <Edit size={14} className="mr-1" />
-                            Editar
-                          </button>
+                          <div className="flex space-x-2">
+                            {comanda.tipo_pedido !== 'domicilio' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  iniciarCambioMesa(comanda);
+                                }}
+                                className="text-orange-600 hover:text-orange-800 text-sm flex items-center px-2 py-1 rounded hover:bg-orange-50"
+                                title="Cambiar mesa"
+                              >
+                                <Repeat size={14} className="mr-1" />
+                                Cambiar Mesa
+                              </button>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onEditarComanda(comanda);
+                              }}
+                              className="text-blue-600 hover:text-blue-800 text-sm flex items-center px-2 py-1 rounded hover:bg-blue-50"
+                            >
+                              <Edit size={14} className="mr-1" />
+                              Editar
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -473,6 +556,137 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                 </div>
               ));
             })()}
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Cambio de Mesa */}
+      {mostrarModalCambioMesa && comandaCambiandoMesa && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-secondary-200 p-6 z-10">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-secondary-800 flex items-center">
+                    <Repeat className="mr-2" size={24} />
+                    Cambiar Mesa
+                  </h2>
+                  <p className="text-sm text-secondary-600 mt-1">
+                    Comanda actual: {comandaCambiandoMesa.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                  </p>
+                </div>
+                <button
+                  onClick={cancelarCambioMesa}
+                  className="text-secondary-500 hover:text-secondary-700"
+                  disabled={cambiandoMesa}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-800">
+                  ℹ️ Selecciona la(s) nueva(s) mesa(s) para esta comanda. Las mesas actuales se liberarán automáticamente.
+                </p>
+              </div>
+
+              {errorCambioMesa && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-sm text-red-800">{errorCambioMesa}</p>
+                </div>
+              )}
+
+              {/* Selección de nuevas mesas */}
+              <div className="space-y-6">
+                {Object.entries(mesasAgrupadasYOrdenadas).map(([salon, mesasSalon]) => (
+                  <div key={salon} className="border rounded-lg p-4 bg-secondary-25">
+                    <h3 className="font-semibold text-lg text-secondary-800 mb-3">
+                      {salon}
+                    </h3>
+                    <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
+                      {mesasSalon.map((mesa) => {
+                        const estaSeleccionada = mesasSeleccionadasCambio.find(m => m.id === mesa.id);
+                        const esLaMesaActual = comandaCambiandoMesa.mesas.find(m => m.id === mesa.id);
+                        
+                        return (
+                          <button
+                            key={mesa.id}
+                            onClick={() => toggleMesaCambio(mesa)}
+                            disabled={mesa.ocupada || cambiandoMesa}
+                            className={`p-4 rounded-lg border-2 text-center transition-all ${
+                              estaSeleccionada
+                                ? 'border-primary-500 bg-primary-100 text-primary-800'
+                                : mesa.ocupada
+                                ? 'border-gray-200 bg-gray-100 text-gray-400 cursor-not-allowed'
+                                : 'border-secondary-300 bg-white hover:border-primary-300 hover:bg-primary-50'
+                            } ${esLaMesaActual ? 'ring-2 ring-orange-400' : ''}`}
+                            title={
+                              esLaMesaActual ? 'Mesa actual' :
+                              mesa.ocupada ? 'Mesa ocupada' : 
+                              `Capacidad: ${mesa.capacidad} personas`
+                            }
+                          >
+                            <div className="font-bold text-lg">{mesa.numero}</div>
+                            <div className="text-xs mt-1">
+                              {mesa.ocupada ? '🔴' : '🟢'} {mesa.capacidad}p
+                            </div>
+                            {esLaMesaActual && (
+                              <div className="text-xs text-orange-600 font-medium mt-1">
+                                Actual
+                              </div>
+                            )}
+                            {estaSeleccionada && (
+                              <div className="mt-1">
+                                <Check size={16} className="mx-auto text-primary-600" />
+                              </div>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              {mesasSeleccionadasCambio.length > 0 && (
+                <div className="mt-4 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <p className="text-sm text-green-800 font-medium">
+                    ✅ Nueva(s) mesa(s) seleccionada(s): {mesasSeleccionadasCambio.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-secondary-200 p-6">
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={cancelarCambioMesa}
+                  disabled={cambiandoMesa}
+                  className="px-6 py-2 text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarCambioMesa}
+                  disabled={mesasSeleccionadasCambio.length === 0 || cambiandoMesa}
+                  className="px-6 py-2 bg-primary-600 text-white rounded-lg hover:bg-primary-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
+                >
+                  {cambiandoMesa ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Cambiando...
+                    </>
+                  ) : (
+                    <>
+                      <Check size={16} className="mr-2" />
+                      Confirmar Cambio
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
