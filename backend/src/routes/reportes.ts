@@ -304,18 +304,100 @@ router.get('/ventas/rango', (req: Request, res: Response) => {
       return res.status(500).json({ error: 'Error al obtener el reporte por rango' });
     }
 
-    const reportes = rows.map(row => ({
-      fecha: row.fecha,
-      total_ventas: row.total_ventas,
-      cantidad_comandas: row.cantidad_comandas,
-      promedio_por_comanda: row.cantidad_comandas > 0 
-        ? row.total_ventas / row.cantidad_comandas 
-        : 0,
-      productos_mas_vendidos: [],
-      ventas_por_hora: []
-    }));
+    // Para cada fecha, obtener productos más vendidos
+    let completados = 0;
+    const reportes: any[] = [];
 
-    res.json(reportes);
+    if (rows.length === 0) {
+      return res.json([]);
+    }
+
+    rows.forEach(row => {
+      // Obtener productos más vendidos para esta fecha
+      const productosQuery = `
+        SELECT 
+          p.id,
+          p.nombre,
+          p.descripcion,
+          p.categoria,
+          p.precio,
+          SUM(ci.cantidad) as cantidad_vendida,
+          SUM(ci.subtotal) as total_vendido
+        FROM comanda_items ci
+        JOIN productos p ON ci.producto_id = p.id
+        JOIN comandas c ON ci.comanda_id = c.id
+        JOIN facturas f ON c.id = f.comanda_id
+        WHERE DATE(f.fecha_creacion) = ?
+        GROUP BY p.id, p.nombre, p.descripcion, p.categoria, p.precio
+        ORDER BY cantidad_vendida DESC
+        LIMIT 50
+      `;
+
+      db.all(productosQuery, [row.fecha], (err: any, productosRows: any[]) => {
+        if (err) {
+          console.error('Error al obtener productos para fecha', row.fecha, ':', err);
+          productosRows = [];
+        }
+
+        const productos_mas_vendidos = productosRows.map(p => ({
+          producto: {
+            id: p.id,
+            nombre: p.nombre,
+            descripcion: p.descripcion,
+            categoria: p.categoria,
+            precio: p.precio,
+            disponible: true
+          },
+          cantidad_vendida: p.cantidad_vendida,
+          total_vendido: p.total_vendido
+        }));
+
+        // Obtener ventas por hora para esta fecha
+        const ventasHoraQuery = `
+          SELECT 
+            CAST(strftime('%H', fecha_creacion) AS INTEGER) as hora,
+            COUNT(*) as comandas,
+            COALESCE(SUM(total), 0) as ventas
+          FROM facturas 
+          WHERE DATE(fecha_creacion) = ?
+          GROUP BY CAST(strftime('%H', fecha_creacion) AS INTEGER)
+          ORDER BY hora
+        `;
+
+        db.all(ventasHoraQuery, [row.fecha], (err: any, ventasRows: any[]) => {
+          if (err) {
+            console.error('Error al obtener ventas por hora para fecha', row.fecha, ':', err);
+            ventasRows = [];
+          }
+
+          const ventas_por_hora = ventasRows.map(v => ({
+            hora: v.hora.toString(),
+            comandas: v.comandas,
+            ventas: v.ventas
+          }));
+
+          reportes.push({
+            fecha: row.fecha,
+            total_ventas: row.total_ventas,
+            cantidad_comandas: row.cantidad_comandas,
+            promedio_por_comanda: row.cantidad_comandas > 0 
+              ? row.total_ventas / row.cantidad_comandas 
+              : 0,
+            productos_mas_vendidos,
+            ventas_por_hora
+          });
+
+          completados++;
+          
+          // Cuando todas las consultas se completen, enviar respuesta
+          if (completados === rows.length) {
+            // Ordenar por fecha antes de enviar
+            reportes.sort((a, b) => a.fecha.localeCompare(b.fecha));
+            res.json(reportes);
+          }
+        });
+      });
+    });
   });
 });
 
