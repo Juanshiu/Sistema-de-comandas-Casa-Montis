@@ -62,9 +62,16 @@ router.get('/categoria/:categoria', (req: Request, res: Response) => {
   });
 });
 
-// Obtener todos los productos
+// Obtener todos los productos (solo disponibles y de categorías activas)
 router.get('/', (req: Request, res: Response) => {
-  const query = 'SELECT * FROM productos WHERE disponible = 1 ORDER BY categoria, nombre';
+  const query = `
+    SELECT p.* 
+    FROM productos p
+    LEFT JOIN categorias_productos c ON p.categoria = c.nombre
+    WHERE p.disponible = 1 
+      AND (c.activo = 1 OR c.activo IS NULL)
+    ORDER BY p.categoria, p.nombre
+  `;
   
   db.all(query, [], (err: any, rows: Producto[]) => {
     if (err) {

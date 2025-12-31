@@ -52,8 +52,11 @@ export default function GestionProductos() {
 
   const cargarCategorias = async () => {
     try {
-      const response = await apiService.getCategorias();
-      setCategoriasDisponibles(response);
+      // Cargar solo categorías activas desde la tabla categorias_productos
+      const response = await apiService.getCategoriasProductosActivas();
+      // Extraer solo los nombres de las categorías
+      const nombresCateg = response.map((cat: any) => cat.nombre);
+      setCategoriasDisponibles(nombresCateg);
     } catch (err) {
       console.error('Error al cargar categorías:', err);
     }
@@ -89,7 +92,7 @@ export default function GestionProductos() {
       nombre: '',
       descripcion: '',
       precio: 0,
-      categoria: 'otros',
+      categoria: categoriasDisponibles.length > 0 ? categoriasDisponibles[0] : '',
       disponible: true,
       tiene_personalizacion: false,
       personalizaciones_habilitadas: []
@@ -117,7 +120,7 @@ export default function GestionProductos() {
       nombre: '',
       descripcion: '',
       precio: 0,
-      categoria: 'otros',
+      categoria: categoriasDisponibles.length > 0 ? categoriasDisponibles[0] : '',
       disponible: true,
       tiene_personalizacion: false,
       personalizaciones_habilitadas: []

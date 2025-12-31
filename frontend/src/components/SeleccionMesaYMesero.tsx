@@ -146,8 +146,20 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
       if (isFirstLoadRef.current) {
         setLoading(true);
       }
-      const mesasData = await apiService.getMesas();
-      setMesas(mesasData);
+      const [mesasData, salonesData] = await Promise.all([
+        apiService.getMesas(),
+        apiService.getSalones()
+      ]);
+      
+      // Filtrar solo mesas de salones activos
+      const salonesActivos = salonesData.filter((salon: any) => salon.activo);
+      const idsSalonesActivos = salonesActivos.map((s: any) => s.id);
+      
+      const mesasFiltradas = mesasData.filter((mesa: Mesa) => 
+        !mesa.salon_id || idsSalonesActivos.includes(mesa.salon_id)
+      );
+      
+      setMesas(mesasFiltradas);
       setError(null);
     } catch (err) {
       setError('Error al cargar las mesas');

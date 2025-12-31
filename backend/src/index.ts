@@ -15,6 +15,7 @@ import { iniciarPluginImpresora } from './services/pluginImpresora';
 import mesasRoutes from './routes/mesas';
 import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
+import categoriasRoutes from './routes/categorias';
 import comandasRoutes from './routes/comandas-nuevas';
 import facturasRoutes from './routes/facturas';
 import reportesRoutes from './routes/reportes';
@@ -68,6 +69,7 @@ app.use((req, res, next) => {
 app.use('/api/mesas', mesasRoutes);
 app.use('/api/salones', salonesRoutes);
 app.use('/api/productos', productosRoutes);
+app.use('/api/categorias', categoriasRoutes);
 app.use('/api/comandas', comandasRoutes);
 app.use('/api/facturas', facturasRoutes);
 app.use('/api/reportes', reportesRoutes);

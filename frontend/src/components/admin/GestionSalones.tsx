@@ -101,7 +101,8 @@ export default function GestionSalones() {
   const toggleActivo = async (salon: Salon) => {
     try {
       await apiService.updateSalon(salon.id, {
-        ...salon,
+        nombre: salon.nombre,
+        descripcion: salon.descripcion,
         activo: !salon.activo
       });
       await cargarSalones();

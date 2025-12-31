@@ -64,6 +64,36 @@ export const apiService = {
     return response.data;
   },
 
+  // Categorías de Productos
+  async getCategoriasProductos(): Promise<any[]> {
+    const response = await api.get('/categorias');
+    return response.data;
+  },
+
+  async getCategoriasProductosActivas(): Promise<any[]> {
+    const response = await api.get('/categorias/activas');
+    return response.data;
+  },
+
+  async createCategoriaProducto(categoria: { nombre: string; descripcion?: string }): Promise<any> {
+    const response = await api.post('/categorias', categoria);
+    return response.data;
+  },
+
+  async updateCategoriaProducto(id: number, categoria: { nombre: string; descripcion?: string; activo?: boolean }): Promise<any> {
+    const response = await api.put(`/categorias/${id}`, categoria);
+    return response.data;
+  },
+
+  async deleteCategoriaProducto(id: number): Promise<void> {
+    await api.delete(`/categorias/${id}`);
+  },
+
+  async getConteoProductosCategoria(id: number): Promise<{ count: number }> {
+    const response = await api.get(`/categorias/${id}/productos/count`);
+    return response.data;
+  },
+
   // Productos
   async getProductos(): Promise<Producto[]> {
     const response = await api.get('/productos');
