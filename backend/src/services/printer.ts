@@ -223,7 +223,6 @@ const crearArchivoComanda = async (comanda: Comanda): Promise<string> => {
   const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : getFechaHoraColombia();
   lineas.push(`Fecha: ${fecha.toLocaleDateString('es-CO')}`);
   lineas.push(`Hora:  ${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
-  lineas.push('');
   
   // Mesero
   const meseroTexto = `Mesero: ${comanda.mesero}`;
@@ -232,6 +231,7 @@ const crearArchivoComanda = async (comanda: Comanda): Promise<string> => {
   } else {
     lineas.push('Mesero:');
     lineas.push(`  ${comanda.mesero}`);
+    lineas.push('');
   }
   
   // Mesas o Datos de Cliente según tipo de pedido
