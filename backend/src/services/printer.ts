@@ -231,8 +231,8 @@ const crearArchivoComanda = async (comanda: Comanda): Promise<string> => {
   } else {
     lineas.push('Mesero:');
     lineas.push(`  ${comanda.mesero}`);
-    lineas.push('');
   }
+lineas.push('');
   
   // Mesas o Datos de Cliente según tipo de pedido
   if (comanda.tipo_pedido === 'domicilio' && comanda.datos_cliente) {
