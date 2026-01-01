@@ -393,7 +393,6 @@ IVA (${configFacturacion.porcentaje_iva}%)              ${iva.toLocaleString('es
 
     const fechaActual = new Date();
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
-    const esParcial = factura.es_pago_parcial || false;
     
     // Información de mesa o cliente según tipo
     let mesaInfo = '';
@@ -429,7 +428,7 @@ ${configFacturacion.direccion}
       ${configFacturacion.ubicacion_geografica}
 TEL: ${configFacturacion.telefonos.join(' - ')}
 ================================
-      RECIBO DE PAGO${esParcial ? ' PARCIAL' : ''}
+      RECIBO DE PAGO
 No. ${numeroFactura}
 CAJA 01
 ${mesaInfo}
