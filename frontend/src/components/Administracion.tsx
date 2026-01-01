@@ -1,15 +1,16 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Package, Tags, Utensils, Users, Home, Shield, UtensilsCrossed, Store, Cog, ChevronRight, ArrowLeft } from 'lucide-react';
+import { Settings, Package, Tags, Utensils, Users, Home, Shield, UtensilsCrossed, Store, Cog, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
 import GestionProductos from './admin/GestionProductos';
 import GestionCategorias from './admin/GestionCategorias';
 import GestionPersonalizaciones from './admin/GestionPersonalizaciones';
 import GestionMesas from './admin/GestionMesas';
 import GestionSalones from './admin/GestionSalones';
 import ConfiguracionSistema from './admin/ConfiguracionSistema';
+import GestionFacturacion from './admin/GestionFacturacion';
 
-type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema';
+type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion';
 
 interface Seccion {
   id: SeccionAdmin;
@@ -118,6 +119,13 @@ export default function Administracion() {
         iconBg: 'bg-red-500',
       },
       secciones: [
+        {
+          id: 'facturacion',
+          nombre: 'Facturas y Recibos',
+          icon: FileText,
+          descripcion: 'Configuración de facturas y recibos',
+          component: GestionFacturacion,
+        },
         {
           id: 'sistema',
           nombre: 'Sistema',

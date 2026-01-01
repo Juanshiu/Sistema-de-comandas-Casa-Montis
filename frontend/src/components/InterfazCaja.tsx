@@ -45,6 +45,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   const [mostrarModalCancelar, setMostrarModalCancelar] = useState(false);
   const [comandaACancelar, setComandaACancelar] = useState<Comanda | null>(null);
   const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
+  const [configFacturacion, setConfigFacturacion] = useState<any>(null);
   
   // Ref para preservar posición del scroll
   const scrollPosRef = useRef(0);
@@ -71,6 +72,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
 
   useEffect(() => {
     cargarComandasActivas();
+    cargarConfiguracionFacturacion();
     // Actualizar cada 5 segundos para tiempo real
     const interval = setInterval(cargarComandasActivas, 5000);
     return () => clearInterval(interval);
@@ -100,6 +102,25 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       if (isFirstLoadRef.current) {
         setLoading(false);
       }
+    }
+  };
+
+  const cargarConfiguracionFacturacion = async () => {
+    try {
+      const config = await apiService.getConfiguracionFacturacion();
+      setConfigFacturacion(config);
+    } catch (err) {
+      console.error('Error al cargar configuración de facturación:', err);
+      // Usar configuración por defecto si falla
+      setConfigFacturacion({
+        nombre_empresa: 'CASA MONTIS RESTAURANTE',
+        nit: '26420708-2',
+        responsable_iva: false,
+        porcentaje_iva: null,
+        direccion: 'CRA 9 # 11 07 - EDUARDO SANTOS',
+        ubicacion_geografica: 'PALERMO - HUILA',
+        telefonos: ['3132171025', '3224588520']
+      });
     }
   };
 
@@ -279,7 +300,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
   };
 
   const generarFactura = () => {
-    if (!comandaSeleccionada) return;
+    if (!comandaSeleccionada || !configFacturacion) return;
     
     // Marcar como impresa
     marcarFacturaImpresa(comandaSeleccionada.id);
@@ -298,15 +319,27 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     } else if (comandaSeleccionada.mesas && comandaSeleccionada.mesas.length > 0) {
       mesaInfo = `Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`;
     }
+
+    // Calcular IVA si aplica
+    let subtotal = comandaSeleccionada.total;
+    let iva = 0;
+    let total = comandaSeleccionada.total;
+
+    if (configFacturacion.responsable_iva && configFacturacion.porcentaje_iva) {
+      // Si es responsable de IVA, el total incluye IVA
+      // Calculamos el subtotal sin IVA
+      subtotal = comandaSeleccionada.total / (1 + configFacturacion.porcentaje_iva / 100);
+      iva = comandaSeleccionada.total - subtotal;
+    }
     
     const facturaContent = `
 ================================
-    CASA MONTIS RESTAURANTE
-      CC./NIT.: 26420708-2
-    NO RESPONSABLE DE IVA
-CRA 9 # 11 07 - EDUARDO SANTOS
-      PALERMO - HUILA
-TEL: 3132171025 - 3224588520
+    ${configFacturacion.nombre_empresa}
+      CC./NIT.: ${configFacturacion.nit}
+    ${configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA'}
+${configFacturacion.direccion}
+      ${configFacturacion.ubicacion_geografica}
+TEL: ${configFacturacion.telefonos.join(' - ')}
 ================================
 ${mesaInfo}
 Fecha: ${new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -339,7 +372,10 @@ ${(comandaSeleccionada.items || []).map(item => {
 }).join('\n')}
 --------------------------------
 ${comandaSeleccionada.observaciones_generales ? `Obs. generales:\n${comandaSeleccionada.observaciones_generales}\n================================\n` : '================================\n'}
-VALOR TOTAL              ${comandaSeleccionada.total.toLocaleString('es-CO').padStart(7, ' ')}
+${configFacturacion.responsable_iva && configFacturacion.porcentaje_iva ? `SUBTOTAL                 ${subtotal.toLocaleString('es-CO').padStart(7, ' ')}
+IVA (${configFacturacion.porcentaje_iva}%)              ${iva.toLocaleString('es-CO').padStart(7, ' ')}
+--------------------------------
+` : ''}VALOR TOTAL              ${total.toLocaleString('es-CO').padStart(7, ' ')}
 ================================
     GRACIAS POR SU COMPRA
        VUELVA PRONTO
@@ -353,6 +389,8 @@ VALOR TOTAL              ${comandaSeleccionada.total.toLocaleString('es-CO').pad
 
   // RECIBO DE PAGO
   const generarRecibo = (factura: any) => {
+    if (!configFacturacion) return;
+
     const fechaActual = new Date();
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
     const esParcial = factura.es_pago_parcial || false;
@@ -371,15 +409,25 @@ VALOR TOTAL              ${comandaSeleccionada.total.toLocaleString('es-CO').pad
     } else if (factura.comanda.mesas && factura.comanda.mesas.length > 0) {
       mesaInfo = `MESA: ${factura.comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}`;
     }
+
+    // Calcular IVA si aplica
+    let subtotal = factura.comanda.total;
+    let iva = 0;
+    let total = factura.comanda.total;
+
+    if (configFacturacion.responsable_iva && configFacturacion.porcentaje_iva) {
+      subtotal = factura.comanda.total / (1 + configFacturacion.porcentaje_iva / 100);
+      iva = factura.comanda.total - subtotal;
+    }
     
     const reciboContent = `
 ================================
-  CASA MONTIS RESTAURANTE
-    CC./NIT.: 26420708-2
-  NO RESPONSABLE DE IVA
-CRA 9 # 11 07 - EDUARDO SANTOS
-      PALERMO - HUILA
-TEL: 3132171025 - 3224588520
+  ${configFacturacion.nombre_empresa}
+    CC./NIT.: ${configFacturacion.nit}
+  ${configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA'}
+${configFacturacion.direccion}
+      ${configFacturacion.ubicacion_geografica}
+TEL: ${configFacturacion.telefonos.join(' - ')}
 ================================
       RECIBO DE PAGO${esParcial ? ' PARCIAL' : ''}
 No. ${numeroFactura}
@@ -395,11 +443,14 @@ ${(factura.comanda.items || []).map((item: any) => {
   return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
 }).join('\n')}
 --------------------------------
-VLR TOTAL              ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
+${configFacturacion.responsable_iva && configFacturacion.porcentaje_iva ? `SUBTOTAL               ${subtotal.toLocaleString('es-CO').padStart(7, ' ')}
+IVA (${configFacturacion.porcentaje_iva}%)            ${iva.toLocaleString('es-CO').padStart(7, ' ')}
+--------------------------------
+` : ''}VLR TOTAL              ${total.toLocaleString('es-CO').padStart(7, ' ')}
 ================================
 PAGO: ${factura.metodo_pago.toUpperCase()}
 
-TOTAL                  ${factura.comanda.total.toLocaleString('es-CO').padStart(7, ' ')}
+TOTAL                  ${total.toLocaleString('es-CO').padStart(7, ' ')}
 PAGO                   ${factura.monto_pagado.toLocaleString('es-CO').padStart(7, ' ')}
 CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')}
 ================================

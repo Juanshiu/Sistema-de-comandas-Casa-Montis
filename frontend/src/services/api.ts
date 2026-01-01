@@ -250,6 +250,25 @@ export const apiService = {
     const response = await api.patch(`/personalizaciones/categorias/${categoriaId}/items/${itemId}/disponibilidad`, { disponible });
     return response.data;
   },
+
+  // Configuración de Facturación
+  async getConfiguracionFacturacion(): Promise<any> {
+    const response = await api.get('/configuracion/facturacion');
+    return response.data;
+  },
+
+  async updateConfiguracionFacturacion(config: {
+    nombre_empresa: string;
+    nit: string;
+    responsable_iva: boolean;
+    porcentaje_iva: number | null;
+    direccion: string;
+    ubicacion_geografica: string;
+    telefonos: string[];
+  }): Promise<any> {
+    const response = await api.put('/configuracion/facturacion', config);
+    return response.data;
+  },
 };
 
 export default apiService;
