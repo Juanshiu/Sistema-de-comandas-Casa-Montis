@@ -348,8 +348,37 @@ Mesero: ${comandaSeleccionada.mesero}
 CANT ARTICULO          TOTAL
 --------------------------------
 ${(comandaSeleccionada.items || []).map(item => {
-  const nombre = item.producto.nombre.length > 16 ? item.producto.nombre.substring(0, 16) : item.producto.nombre.padEnd(16);
-  let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+  const maxLength = 16;
+  const nombre = item.producto.nombre;
+  
+  // Si el nombre es corto, usar padding normal
+  let itemText = '';
+  if (nombre.length <= maxLength) {
+    itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${nombre.padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+  } else {
+    // Si es largo, dividir en múltiples líneas
+    const words = nombre.split(' ');
+    let currentLine = '';
+    let lines = [];
+    
+    for (const word of words) {
+      if ((currentLine + word).length <= maxLength) {
+        currentLine += (currentLine ? ' ' : '') + word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    
+    // Primera línea con cantidad y total
+    itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${lines[0].padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    
+    // Líneas adicionales del nombre, indentadas
+    for (let i = 1; i < lines.length; i++) {
+      itemText += `\n     ${lines[i]}`;
+    }
+  }
   
   // Agregar personalización si existe
   if (item.personalizacion && Object.keys(item.personalizacion).length > 0) {
@@ -438,8 +467,38 @@ PAGO: ${factura.metodo_pago.toUpperCase()}
 CANT ARTICULO          TOTAL
 --------------------------------
 ${(factura.comanda.items || []).map((item: any) => {
-  const nombre = item.producto.nombre.length > 16 ? item.producto.nombre.substring(0, 16) : item.producto.nombre.padEnd(16);
-  return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+  const maxLength = 16;
+  const nombre = item.producto.nombre;
+  
+  // Si el nombre es corto, usar padding normal
+  if (nombre.length <= maxLength) {
+    return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre.padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+  } else {
+    // Si es largo, dividir en múltiples líneas
+    const words = nombre.split(' ');
+    let currentLine = '';
+    let lines = [];
+    
+    for (const word of words) {
+      if ((currentLine + word).length <= maxLength) {
+        currentLine += (currentLine ? ' ' : '') + word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    
+    // Primera línea con cantidad y total
+    let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${lines[0].padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    
+    // Líneas adicionales del nombre, indentadas
+    for (let i = 1; i < lines.length; i++) {
+      itemText += `\n     ${lines[i]}`;
+    }
+    
+    return itemText;
+  }
 }).join('\n')}
 --------------------------------
 ${configFacturacion.responsable_iva && configFacturacion.porcentaje_iva ? `SUBTOTAL               ${subtotal.toLocaleString('es-CO').padStart(7, ' ')}
