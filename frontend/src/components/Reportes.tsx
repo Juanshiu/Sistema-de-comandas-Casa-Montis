@@ -12,14 +12,23 @@ import {
 export default function Reportes() {
   const [reporte, setReporte] = useState<ReporteVentas | null>(null);
   const [reporteRango, setReporteRango] = useState<ReporteVentas[]>([]);
+  
+  // Función helper para obtener fecha local en formato YYYY-MM-DD
+  const obtenerFechaLocal = (date: Date = new Date()): string => {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+  };
+
   const [fechaSeleccionada, setFechaSeleccionada] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    obtenerFechaLocal()
   );
   const [fechaInicio, setFechaInicio] = useState<string>(
-    new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+    obtenerFechaLocal(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000))
   );
   const [fechaFin, setFechaFin] = useState<string>(
-    new Date().toISOString().split('T')[0]
+    obtenerFechaLocal()
   );
   const [vistaActual, setVistaActual] = useState<'dia' | 'rango'>('dia');
   const [loading, setLoading] = useState(true);
