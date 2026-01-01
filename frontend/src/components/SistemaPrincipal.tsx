@@ -77,7 +77,7 @@ export default function SistemaPrincipal() {
             </div>
             
             {/* Navegación desktop */}
-            <nav className="hidden md:flex space-x-8">
+            <nav className="hidden lg:flex space-x-8">
               {vistas.map((vista) => {
                 const Icon = vista.icon;
                 return (
@@ -98,7 +98,7 @@ export default function SistemaPrincipal() {
             </nav>
 
             {/* Botón menú móvil */}
-            <div className="md:hidden">
+            <div className="lg:hidden">
               <button
                 onClick={() => setMenuAbierto(!menuAbierto)}
                 className="text-secondary-600 hover:text-secondary-900 p-2"
@@ -111,7 +111,7 @@ export default function SistemaPrincipal() {
 
         {/* Menú móvil */}
         {menuAbierto && (
-          <div className="md:hidden border-t bg-white">
+          <div className="lg:hidden border-t bg-white">
             <div className="px-2 pt-2 pb-3 space-y-1">
               {vistas.map((vista) => {
                 const Icon = vista.icon;

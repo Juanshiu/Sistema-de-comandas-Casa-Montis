@@ -291,7 +291,7 @@ export default function FormularioComandas() {
         {/* Indicador de pasos */}
         <div className="card mb-6">
           {/* Vista desktop */}
-          <div className="hidden md:flex items-center justify-between">
+          <div className="hidden lg:flex items-center justify-between">
             {pasos.map((paso, index) => (
               <div key={paso.paso} className="flex items-center">
                 <div className={`
@@ -330,7 +330,7 @@ export default function FormularioComandas() {
           </div>
 
           {/* Vista móvil */}
-          <div className="md:hidden">
+          <div className="lg:hidden">
             <div className="flex items-center justify-between mb-4">
               <div className="text-lg font-semibold text-secondary-800">
                 Paso {pasoActual + 1} de {pasos.length}
