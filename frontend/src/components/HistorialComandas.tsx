@@ -201,7 +201,7 @@ export default function HistorialComandas() {
                             ? 'Para Llevar'
                             : 'Domicilio'
                           : Array.isArray(comanda.mesas) && comanda.mesas.length > 0
-                            ? comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')
+                            ? comanda.mesas.map(m => `${m.salon}, ${m.numero}`).join(', ')
                             : 'N/A'
                         }
                       </div>
