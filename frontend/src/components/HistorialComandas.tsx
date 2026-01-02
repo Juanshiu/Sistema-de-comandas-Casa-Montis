@@ -13,10 +13,21 @@ export default function HistorialComandas() {
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
   const [comandasVisibles, setComandasVisibles] = useState(20);
   const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
+  const [configFacturacion, setConfigFacturacion] = useState<any>(null);
 
   useEffect(() => {
     cargarHistorial();
+    cargarConfiguracionFacturacion();
   }, []);
+
+  const cargarConfiguracionFacturacion = async () => {
+    try {
+      const config = await apiService.getConfiguracionFacturacion();
+      setConfigFacturacion(config);
+    } catch (err) {
+      console.error('Error al cargar configuración de facturación:', err);
+    }
+  };
 
   const cargarHistorial = async (fecha?: string) => {
     try {
@@ -63,6 +74,16 @@ export default function HistorialComandas() {
       minute: '2-digit',
       timeZone: 'America/Bogota'
     });
+  };
+
+  const calcularDesgloseIVA = (total: number) => {
+    if (!configFacturacion || !configFacturacion.responsable_iva || !configFacturacion.porcentaje_iva) {
+      return { subtotal: total, iva: 0, total };
+    }
+    
+    const subtotal = total / (1 + configFacturacion.porcentaje_iva / 100);
+    const iva = total - subtotal;
+    return { subtotal, iva, total };
   };
 
   const getEstadoColor = (estado: string) => {
@@ -300,14 +321,40 @@ export default function HistorialComandas() {
                       <div>
                         <h4 className="font-medium text-gray-900 mb-3">Información Adicional</h4>
                         <div className="bg-white p-3 rounded border space-y-2">
-                          <div className="flex justify-between">
-                            <span className="text-gray-600">Subtotal:</span>
-                            <span className="font-medium">${comanda.subtotal.toLocaleString('es-CO')}</span>
-                          </div>
-                          <div className="flex justify-between border-t pt-2">
-                            <span className="text-gray-900 font-medium">Total:</span>
-                            <span className="font-bold text-lg">${comanda.total.toLocaleString('es-CO')}</span>
-                          </div>
+                          {(() => {
+                            const desglose = calcularDesgloseIVA(comanda.total);
+                            return (
+                              <>
+                                {configFacturacion?.responsable_iva && configFacturacion.porcentaje_iva ? (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Subtotal:</span>
+                                      <span className="font-medium">${Math.round(desglose.subtotal).toLocaleString('es-CO')}</span>
+                                    </div>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">IVA ({configFacturacion.porcentaje_iva}%):</span>
+                                      <span className="font-medium">${Math.round(desglose.iva).toLocaleString('es-CO')}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t pt-2">
+                                      <span className="text-gray-900 font-medium">Total:</span>
+                                      <span className="font-bold text-lg">${comanda.total.toLocaleString('es-CO')}</span>
+                                    </div>
+                                  </>
+                                ) : (
+                                  <>
+                                    <div className="flex justify-between">
+                                      <span className="text-gray-600">Subtotal:</span>
+                                      <span className="font-medium">${comanda.subtotal.toLocaleString('es-CO')}</span>
+                                    </div>
+                                    <div className="flex justify-between border-t pt-2">
+                                      <span className="text-gray-900 font-medium">Total:</span>
+                                      <span className="font-bold text-lg">${comanda.total.toLocaleString('es-CO')}</span>
+                                    </div>
+                                  </>
+                                )}
+                              </>
+                            );
+                          })()}
                           
                           {comanda.observaciones_generales && (
                             <div className="border-t pt-2">

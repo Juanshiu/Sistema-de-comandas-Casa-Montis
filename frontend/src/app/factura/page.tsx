@@ -36,7 +36,8 @@ export default function FacturaPage() {
     );
   }
 
-  const facturaContent = decodeURIComponent(data);
+  // Decodificar desde base64
+  const facturaContent = decodeURIComponent(escape(atob(data)));
 
   return (
     <>

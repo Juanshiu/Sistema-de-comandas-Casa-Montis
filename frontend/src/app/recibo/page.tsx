@@ -36,7 +36,8 @@ export default function ReciboPage() {
     );
   }
 
-  const reciboContent = decodeURIComponent(data);
+  // Decodificar desde base64
+  const reciboContent = decodeURIComponent(escape(atob(data)));
 
   return (
     <>

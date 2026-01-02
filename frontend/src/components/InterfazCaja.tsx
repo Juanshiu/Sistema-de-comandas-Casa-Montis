@@ -411,8 +411,8 @@ IVA (${configFacturacion.porcentaje_iva}%)              ${iva.toLocaleString('es
 ================================
     `;
     
-    // Navegar a la página de factura con los datos
-    const facturaData = encodeURIComponent(facturaContent);
+    // Navegar a la página de factura con los datos (usando base64 para evitar problemas con caracteres especiales)
+    const facturaData = btoa(unescape(encodeURIComponent(facturaContent)));
     window.open(`/factura?data=${facturaData}`, '_blank');
   };
 
@@ -517,8 +517,8 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
 ================================
     `;
 
-    // Navegar a la página de recibo con los datos
-    const reciboData = encodeURIComponent(reciboContent);
+    // Navegar a la página de recibo con los datos (usando base64 para evitar problemas con caracteres especiales)
+    const reciboData = btoa(unescape(encodeURIComponent(reciboContent)));
     window.open(`/recibo?data=${reciboData}`, '_blank');
   };
 

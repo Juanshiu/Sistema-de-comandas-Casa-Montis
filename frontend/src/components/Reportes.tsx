@@ -12,6 +12,7 @@ import {
 export default function Reportes() {
   const [reporte, setReporte] = useState<ReporteVentas | null>(null);
   const [reporteRango, setReporteRango] = useState<ReporteVentas[]>([]);
+  const [configFacturacion, setConfigFacturacion] = useState<any>(null);
   
   // Función helper para obtener fecha local en formato YYYY-MM-DD
   const obtenerFechaLocal = (date: Date = new Date()): string => {
@@ -37,7 +38,27 @@ export default function Reportes() {
 
   useEffect(() => {
     cargarReporte();
+    cargarConfiguracionFacturacion();
   }, [fechaSeleccionada]);
+
+  const cargarConfiguracionFacturacion = async () => {
+    try {
+      const config = await apiService.getConfiguracionFacturacion();
+      setConfigFacturacion(config);
+    } catch (err) {
+      console.error('Error al cargar configuración de facturación:', err);
+    }
+  };
+
+  const calcularDesgloseIVA = (total: number) => {
+    if (!configFacturacion || !configFacturacion.responsable_iva || !configFacturacion.porcentaje_iva) {
+      return { subtotal: total, iva: 0, total };
+    }
+    
+    const subtotal = total / (1 + configFacturacion.porcentaje_iva / 100);
+    const iva = total - subtotal;
+    return { subtotal, iva, total };
+  };
 
   const cargarReporte = async () => {
     try {
@@ -60,13 +81,26 @@ export default function Reportes() {
 
   const exportarReporte = () => {
     if (vistaActual === 'dia' && reporte) {
+      const desglose = calcularDesgloseIVA(reporte.total_ventas);
+      
       let contenido = `REPORTE DE VENTAS - CASA MONTIS
 Fecha: ${new Date(reporte.fecha).toLocaleDateString('es-CO')}
 ========================================
 
 📊 RESUMEN GENERAL
-----------------------------------------
-Total de Ventas: $${reporte.total_ventas.toLocaleString()}
+----------------------------------------`;
+
+      if (configFacturacion?.responsable_iva && configFacturacion.porcentaje_iva) {
+        contenido += `
+Subtotal: $${Math.round(desglose.subtotal).toLocaleString()}
+IVA (${configFacturacion.porcentaje_iva}%): $${Math.round(desglose.iva).toLocaleString()}
+Total de Ventas: $${reporte.total_ventas.toLocaleString()}`;
+      } else {
+        contenido += `
+Total de Ventas: $${reporte.total_ventas.toLocaleString()}`;
+      }
+
+      contenido += `
 Cantidad de Comandas: ${reporte.cantidad_comandas}
 Promedio por Comanda: $${Math.round(reporte.promedio_por_comanda).toLocaleString()}
 `;
@@ -347,11 +381,24 @@ vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaj
             {/* Total Ventas */}
             <div className="card bg-gradient-to-r from-green-500 to-green-600 text-white">
               <div className="flex items-center justify-between">
-                <div>
+                <div className="flex-1">
                   <p className="text-green-100 text-sm mb-1">Total Ventas</p>
                   <p className="text-3xl font-bold mb-2">
                     ${reporte.total_ventas.toLocaleString()}
                   </p>
+                  {configFacturacion?.responsable_iva && configFacturacion.porcentaje_iva && (
+                    <div className="text-xs text-green-100 mb-2">
+                      {(() => {
+                        const desglose = calcularDesgloseIVA(reporte.total_ventas);
+                        return (
+                          <>
+                            <div>Subtotal: ${Math.round(desglose.subtotal).toLocaleString()}</div>
+                            <div>IVA ({configFacturacion.porcentaje_iva}%): ${Math.round(desglose.iva).toLocaleString()}</div>
+                          </>
+                        );
+                      })()}
+                    </div>
+                  )}
                   {reporte.comparativas && (
                     <div className="space-y-1 text-xs">
                       <div className="flex items-center space-x-1">
