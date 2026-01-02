@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ComandaHistorial } from '@/types';
 import { apiService } from '@/services/api';
-import { Calendar, Clock, User, MapPin, DollarSign, ChevronDown, ChevronUp } from 'lucide-react';
+import { Calendar, Clock, User, MapPin, DollarSign, ChevronDown, ChevronUp, UtensilsCrossed, Bike, ShoppingBag, Printer, Receipt } from 'lucide-react';
 import { usePersonalizaciones } from '@/components/shared';
 
 export default function HistorialComandas() {
@@ -84,6 +84,134 @@ export default function HistorialComandas() {
     const subtotal = total / (1 + configFacturacion.porcentaje_iva / 100);
     const iva = total - subtotal;
     return { subtotal, iva, total };
+  };
+
+  const getIconoTipoPedido = (comanda: ComandaHistorial) => {
+    if (comanda.tipo_pedido === 'domicilio') {
+      if (comanda.datos_cliente?.es_para_llevar) {
+        return <ShoppingBag className="w-4 h-4" />;
+      }
+      return <Bike className="w-4 h-4" />;
+    }
+    return <UtensilsCrossed className="w-4 h-4" />;
+  };
+
+  const getTextoTipoPedido = (comanda: ComandaHistorial) => {
+    if (comanda.tipo_pedido === 'domicilio') {
+      if (comanda.datos_cliente?.es_para_llevar) {
+        return 'Para Llevar';
+      }
+      return `Domicilio${comanda.datos_cliente?.nombre ? ': ' + comanda.datos_cliente.nombre : ''}`;
+    }
+    if (Array.isArray(comanda.mesas) && comanda.mesas.length > 0) {
+      return `Mesa: ${comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`;
+    }
+    return 'N/A';
+  };
+
+  const reimprimirRecibo = (comanda: ComandaHistorial) => {
+    if (!configFacturacion) return;
+
+    const fechaActual = new Date(comanda.fecha_creacion || new Date());
+    const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
+    
+    // Información de mesa o cliente según tipo
+    let mesaInfo = '';
+    if (comanda.tipo_pedido === 'domicilio' && comanda.datos_cliente) {
+      const tipo = comanda.datos_cliente.es_para_llevar ? 'PARA LLEVAR' : 'DOMICILIO';
+      mesaInfo = `${tipo}: ${comanda.datos_cliente.nombre}`;
+      if (comanda.datos_cliente.telefono) {
+        mesaInfo += `\nTel: ${comanda.datos_cliente.telefono}`;
+      }
+      if (!comanda.datos_cliente.es_para_llevar && comanda.datos_cliente.direccion) {
+        mesaInfo += `\nDir: ${comanda.datos_cliente.direccion}`;
+      }
+    } else if (comanda.mesas && comanda.mesas.length > 0) {
+      mesaInfo = `MESA: ${comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}`;
+    }
+
+    // Calcular IVA si aplica
+    let subtotal = comanda.total;
+    let iva = 0;
+    let total = comanda.total;
+
+    if (configFacturacion.responsable_iva && configFacturacion.porcentaje_iva) {
+      subtotal = comanda.total / (1 + configFacturacion.porcentaje_iva / 100);
+      iva = comanda.total - subtotal;
+    }
+    
+    const reciboContent = `
+================================
+  ${configFacturacion.nombre_empresa}
+    CC./NIT.: ${configFacturacion.nit}
+  ${configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA'}
+${configFacturacion.direccion}
+      ${configFacturacion.ubicacion_geografica}
+TEL: ${configFacturacion.telefonos.join(' - ')}
+================================
+      RECIBO DE PAGO
+No. ${numeroFactura}
+CAJA 01
+${mesaInfo}
+FECHA: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+PAGO: EFECTIVO
+================================
+CANT ARTICULO          TOTAL
+--------------------------------
+${(comanda.items || []).map((item: any) => {
+  const maxLength = 16;
+  const nombre = item.producto.nombre;
+  
+  // Si el nombre es corto, usar padding normal
+  if (nombre.length <= maxLength) {
+    return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre.padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+  } else {
+    // Si es largo, dividir en múltiples líneas
+    const words = nombre.split(' ');
+    let currentLine = '';
+    let lines = [];
+    
+    for (const word of words) {
+      if ((currentLine + word).length <= maxLength) {
+        currentLine += (currentLine ? ' ' : '') + word;
+      } else {
+        if (currentLine) lines.push(currentLine);
+        currentLine = word;
+      }
+    }
+    if (currentLine) lines.push(currentLine);
+    
+    // Primera línea con cantidad y total
+    let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${lines[0].padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    
+    // Líneas adicionales del nombre, indentadas
+    for (let i = 1; i < lines.length; i++) {
+      itemText += `\n     ${lines[i]}`;
+    }
+    
+    return itemText;
+  }
+}).join('\n')}
+--------------------------------
+${configFacturacion.responsable_iva && configFacturacion.porcentaje_iva ? `SUBTOTAL               ${subtotal.toLocaleString('es-CO').padStart(7, ' ')}
+IVA (${configFacturacion.porcentaje_iva}%)            ${iva.toLocaleString('es-CO').padStart(7, ' ')}
+--------------------------------
+` : ''}VLR TOTAL              ${total.toLocaleString('es-CO').padStart(7, ' ')}
+================================
+PAGO: EFECTIVO
+
+TOTAL                  ${total.toLocaleString('es-CO').padStart(7, ' ')}
+PAGO                   ${total.toLocaleString('es-CO').padStart(7, ' ')}
+CAMBIO                          0
+================================
+   GRACIAS POR SU COMPRA
+      VUELVA PRONTO
+================================
+    `;
+
+    // Navegar a la página de recibo con los datos (usando base64)
+    const reciboData = btoa(unescape(encodeURIComponent(reciboContent)));
+    window.open(`/recibo?data=${reciboData}`, '_blank');
   };
 
   const getEstadoColor = (estado: string) => {
@@ -196,58 +324,89 @@ export default function HistorialComandas() {
             </div>
           ) : (
             comandas.slice(0, comandasVisibles).map((comanda, index) => (
-              <div key={comanda.id} className="bg-white rounded-lg shadow border overflow-hidden">
+              <div key={comanda.id} className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden">
                 <div
-                  className="p-4 cursor-pointer hover:bg-gray-50"
+                  className="p-6 cursor-pointer hover:bg-gradient-to-br hover:from-gray-50 hover:to-gray-100 transition-colors"
                   onClick={() => toggleExpansion(comanda.id.toString())}
                 >
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-4">
+                  <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Número y estado */}
                       <div className="flex items-center gap-2">
-                        <span className="font-medium text-gray-900">#{comandas.length - index}</span>
-                        <span className={`px-3 py-1 rounded-full text-xs font-semibold ${getEstadoColor(comanda.estado)}`}>
+                        <span className="font-bold text-lg text-gray-800">#{comandas.length - index}</span>
+                        <span className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${getEstadoColor(comanda.estado)}`}>
                           {comanda.estado.charAt(0).toUpperCase() + comanda.estado.slice(1)}
                         </span>
                       </div>
                       
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <User className="w-4 h-4" />
-                        {comanda.mesero}
+                      {/* Mesero */}
+                      <div className="flex items-center gap-2 bg-blue-50 px-3 py-1.5 rounded-lg">
+                        <User className="w-4 h-4 text-blue-600" />
+                        <span className="text-sm font-medium text-blue-700">{comanda.mesero}</span>
                       </div>
                       
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <MapPin className="w-4 h-4" />
-                        {comanda.tipo_pedido === 'domicilio' 
-                          ? comanda.datos_cliente?.es_para_llevar 
-                            ? 'Para Llevar'
-                            : 'Domicilio'
-                          : Array.isArray(comanda.mesas) && comanda.mesas.length > 0
-                            ? comanda.mesas.map(m => `${m.salon}, ${m.numero}`).join(', ')
-                            : 'N/A'
-                        }
+                      {/* Tipo de pedido con icono dinámico */}
+                      <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${
+                        comanda.tipo_pedido === 'domicilio' ? 'bg-green-50' : 'bg-orange-50'
+                      }`}>
+                        <div className={comanda.tipo_pedido === 'domicilio' ? 'text-green-600' : 'text-orange-600'}>
+                          {getIconoTipoPedido(comanda)}
+                        </div>
+                        <span className={`text-sm font-medium ${
+                          comanda.tipo_pedido === 'domicilio' ? 'text-green-700' : 'text-orange-700'
+                        }`}>
+                          {comanda.tipo_pedido === 'domicilio' 
+                            ? comanda.datos_cliente?.es_para_llevar 
+                              ? 'Para Llevar'
+                              : comanda.datos_cliente?.nombre || 'Domicilio'
+                            : Array.isArray(comanda.mesas) && comanda.mesas.length > 0
+                              ? `Mesa ${comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`
+                              : 'N/A'
+                          }
+                        </span>
                       </div>
                       
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Clock className="w-4 h-4" />
-                        {formatearFecha(comanda.fecha_creacion?.toString() || new Date().toString())}
+                      {/* Fecha y hora */}
+                      <div className="flex items-center gap-2 bg-gray-50 px-3 py-1.5 rounded-lg">
+                        <Clock className="w-4 h-4 text-gray-600" />
+                        <span className="text-sm font-medium text-gray-600">
+                          {formatearFecha(comanda.fecha_creacion?.toString() || new Date().toString())}
+                        </span>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-4">
+                    <div className="flex items-center gap-3">
+                      {/* Total e items */}
                       <div className="text-right">
-                        <p className="text-lg font-semibold text-gray-900">
+                        <p className="text-2xl font-bold text-black">
                           ${comanda.total.toLocaleString('es-CO')}
                         </p>
-                        <p className="text-sm text-gray-500">
+                        <p className="text-xs text-gray-500 font-medium">
                           {comanda.items?.length || 0} items
                         </p>
                       </div>
+
+                      {/* Botón reimprimir recibo */}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          reimprimirRecibo(comanda);
+                        }}
+                        className="flex items-center gap-2 px-3 py-2 bg-blue-600 hover:bg-blue-700 text-white text-sm font-medium rounded-lg transition-colors shadow-sm"
+                        title="Reimprimir recibo"
+                      >
+                        <Printer className="w-4 h-4" />
+                        <span className="hidden sm:inline">Recibo</span>
+                      </button>
                       
-                      {expandidas.has(comanda.id.toString()) ? (
-                        <ChevronUp className="w-5 h-5 text-gray-400" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-gray-400" />
-                      )}
+                      {/* Icono expandir/contraer */}
+                      <div className="p-2 hover:bg-gray-200 rounded-lg transition-colors">
+                        {expandidas.has(comanda.id.toString()) ? (
+                          <ChevronUp className="w-5 h-5 text-gray-700" />
+                        ) : (
+                          <ChevronDown className="w-5 h-5 text-gray-700" />
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
