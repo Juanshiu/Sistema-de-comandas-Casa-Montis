@@ -41,6 +41,7 @@ export interface Comanda {
   items?: ComandaItem[];
   tipo_pedido: 'mesa' | 'domicilio';
   datos_cliente?: DatosCliente;
+  metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto';
 }
 
 export interface ComandaItem {

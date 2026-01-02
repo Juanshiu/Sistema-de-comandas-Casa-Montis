@@ -378,8 +378,10 @@ router.get('/activas', (req: Request, res: Response) => {
 router.get('/historial', (req: Request, res: Response) => {
   const query = `
     SELECT 
-      c.*
+      c.*,
+      f.metodo_pago
     FROM comandas c
+    LEFT JOIN facturas f ON c.id = f.comanda_id
     ORDER BY c.fecha_creacion DESC
   `;
   
@@ -452,7 +454,8 @@ router.get('/historial', (req: Request, res: Response) => {
                 telefono: row.cliente_telefono || '',
                 es_para_llevar: row.es_para_llevar === 1
               },
-              items: items
+              items: items,
+              metodo_pago: row.metodo_pago || undefined
             };
             resolve(comanda);
             return;
@@ -489,7 +492,8 @@ router.get('/historial', (req: Request, res: Response) => {
               fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
               fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
               tipo_pedido: row.tipo_pedido || 'mesa',
-              items: items
+              items: items,
+              metodo_pago: row.metodo_pago || undefined
             };
             
             resolve(comanda);

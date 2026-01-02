@@ -193,6 +193,7 @@ export interface ComandaHistorial {
   tipo_pedido: 'mesa' | 'domicilio';
   datos_cliente?: DatosCliente;
   items: ItemComandaHistorial[];
+  metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto';
 }
 
 export interface ItemComandaHistorial {

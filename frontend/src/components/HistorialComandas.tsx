@@ -114,6 +114,8 @@ export default function HistorialComandas() {
 
     const fechaActual = new Date(comanda.fecha_creacion || new Date());
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
+    const esCancelada = comanda.estado.toLowerCase() === 'cancelada';
+    const metodoPago = comanda.metodo_pago ? comanda.metodo_pago.toUpperCase() : 'NO REGISTRADO';
     
     // Información de mesa o cliente según tipo
     let mesaInfo = '';
@@ -154,7 +156,7 @@ No. ${numeroFactura}
 CAJA 01
 ${mesaInfo}
 FECHA: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
-PAGO: EFECTIVO
+${esCancelada ? '*** SERVICIO CANCELADO ***' : `PAGO: ${metodoPago}`}
 ================================
 CANT ARTICULO          TOTAL
 --------------------------------
@@ -198,7 +200,10 @@ IVA (${configFacturacion.porcentaje_iva}%)            ${iva.toLocaleString('es-C
 --------------------------------
 ` : ''}VLR TOTAL              ${total.toLocaleString('es-CO').padStart(7, ' ')}
 ================================
-PAGO: EFECTIVO
+${esCancelada ? `
+*** SERVICIO CANCELADO ***
+    NO SE REALIZÓ COBRO
+================================` : `PAGO: ${metodoPago}
 
 TOTAL                  ${total.toLocaleString('es-CO').padStart(7, ' ')}
 PAGO                   ${total.toLocaleString('es-CO').padStart(7, ' ')}
@@ -206,7 +211,7 @@ CAMBIO                          0
 ================================
    GRACIAS POR SU COMPRA
       VUELVA PRONTO
-================================
+================================`}
     `;
 
     // Navegar a la página de recibo con los datos (usando base64)
