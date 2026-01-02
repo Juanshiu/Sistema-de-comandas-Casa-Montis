@@ -237,20 +237,21 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       setProcesandoPago(true);
       
       // Siempre procesar como pago total y liberar mesa
-      const facturaData = {
-        comanda_id: comandaSeleccionada.id,
-        metodo_pago: metodoPago,
-        cajero: 'Cajero Principal'
-      };
-
-      const response = await apiService.crearFactura(facturaData);
-      
-      // Preparar datos para el recibo
-      // Si se pagó todo visualmente (totalPendiente == 0), usamos el total de la comanda
       const montoPagadoFinal = metodoPago === 'efectivo' && totalPendiente > 0 
         ? parseFloat(montoPagado) 
         : comandaSeleccionada.total;
       
+      const facturaData = {
+        comanda_id: comandaSeleccionada.id,
+        metodo_pago: metodoPago,
+        cajero: 'Cajero Principal',
+        monto_pagado: montoPagadoFinal,
+        cambio: metodoPago === 'efectivo' ? cambio : 0
+      };
+
+      const response = await apiService.crearFactura(facturaData);
+      
+      // Preparar datos para el recibo usando el mismo montoPagadoFinal ya calculado
       setFacturaParaRecibo({
         ...response,
         comanda: comandaSeleccionada,

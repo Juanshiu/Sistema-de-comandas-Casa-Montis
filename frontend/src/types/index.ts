@@ -115,6 +115,8 @@ export interface Factura {
   fecha_creacion: Date;
   metodo_pago: 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto';
   cajero: string;
+  monto_pagado?: number;
+  cambio?: number;
 }
 
 export interface ReporteVentas {
@@ -194,6 +196,8 @@ export interface ComandaHistorial {
   datos_cliente?: DatosCliente;
   items: ItemComandaHistorial[];
   metodo_pago?: 'efectivo' | 'tarjeta' | 'transferencia' | 'mixto';
+  monto_pagado?: number;
+  cambio?: number;
 }
 
 export interface ItemComandaHistorial {

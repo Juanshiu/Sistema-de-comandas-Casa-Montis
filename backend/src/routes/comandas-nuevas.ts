@@ -379,7 +379,9 @@ router.get('/historial', (req: Request, res: Response) => {
   const query = `
     SELECT 
       c.*,
-      f.metodo_pago
+      f.metodo_pago,
+      f.monto_pagado,
+      f.cambio
     FROM comandas c
     LEFT JOIN facturas f ON c.id = f.comanda_id
     ORDER BY c.fecha_creacion DESC
@@ -455,7 +457,9 @@ router.get('/historial', (req: Request, res: Response) => {
                 es_para_llevar: row.es_para_llevar === 1
               },
               items: items,
-              metodo_pago: row.metodo_pago || undefined
+              metodo_pago: row.metodo_pago || undefined,
+              monto_pagado: row.monto_pagado || undefined,
+              cambio: row.cambio || undefined
             };
             resolve(comanda);
             return;
@@ -493,7 +497,9 @@ router.get('/historial', (req: Request, res: Response) => {
               fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
               tipo_pedido: row.tipo_pedido || 'mesa',
               items: items,
-              metodo_pago: row.metodo_pago || undefined
+              metodo_pago: row.metodo_pago || undefined,
+              monto_pagado: row.monto_pagado || undefined,
+              cambio: row.cambio || undefined
             };
             
             resolve(comanda);

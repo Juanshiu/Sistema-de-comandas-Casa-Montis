@@ -206,8 +206,8 @@ ${esCancelada ? `
 ================================` : `PAGO: ${metodoPago}
 
 TOTAL                  ${total.toLocaleString('es-CO').padStart(7, ' ')}
-PAGO                   ${total.toLocaleString('es-CO').padStart(7, ' ')}
-CAMBIO                          0
+PAGO                   ${(comanda.monto_pagado || total).toLocaleString('es-CO').padStart(7, ' ')}
+CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(7, ' ')}
 ================================
    GRACIAS POR SU COMPRA
       VUELVA PRONTO

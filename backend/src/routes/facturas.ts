@@ -8,7 +8,7 @@ const router = Router();
 
 // Crear factura
 router.post('/', (req: Request, res: Response) => {
-  const { comanda_id, metodo_pago, cajero } = req.body;
+  const { comanda_id, metodo_pago, cajero, monto_pagado, cambio } = req.body;
 
   if (!comanda_id || !metodo_pago || !cajero) {
     return res.status(400).json({ 
@@ -86,8 +86,8 @@ router.post('/', (req: Request, res: Response) => {
           const insertFacturaQuery = `
             INSERT INTO facturas (
               id, comanda_id, subtotal, total, 
-              metodo_pago, cajero, fecha_creacion
-            ) VALUES (?, ?, ?, ?, ?, ?, ?)
+              metodo_pago, cajero, monto_pagado, cambio, fecha_creacion
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
           `;
 
           db.run(insertFacturaQuery, [
@@ -97,6 +97,8 @@ router.post('/', (req: Request, res: Response) => {
             comanda.total,
             metodo_pago,
             cajero,
+            monto_pagado || comanda.total,
+            cambio || 0,
             fechaCreacion
           ], function(err: any) {
             if (err) {
