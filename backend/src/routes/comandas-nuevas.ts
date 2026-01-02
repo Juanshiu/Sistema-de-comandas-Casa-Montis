@@ -110,6 +110,93 @@ async function decrementarInventarioPersonalizaciones(items: any[]): Promise<voi
   await Promise.all(promises);
 }
 
+// Función para decrementar inventario de productos
+async function decrementarInventarioProductos(items: any[]): Promise<void> {
+  const promises: Promise<void>[] = [];
+  
+  for (const item of items) {
+    if (!item.producto || !item.producto.id) {
+      continue;
+    }
+    
+    const productoId = item.producto.id;
+    const cantidadRequerida = item.cantidad;
+    
+    // Crear promesa para decrementar este producto
+    promises.push(
+      new Promise<void>((resolve, reject) => {
+        // Obtener info del producto
+        db.get(
+          'SELECT * FROM productos WHERE id = ?',
+          [productoId],
+          (err: any, producto: any) => {
+            if (err) {
+              console.error(`❌ Error al obtener producto ${productoId}:`, err);
+              resolve(); // No fallar la transacción completa
+              return;
+            }
+            
+            if (!producto) {
+              console.warn(`⚠️  Producto ${productoId} no encontrado`);
+              resolve();
+              return;
+            }
+            
+            // Si no usa inventario, continuar
+            if (!producto.usa_inventario) {
+              resolve();
+              return;
+            }
+            
+            // Verificar inventario disponible
+            if (producto.cantidad_actual === null || producto.cantidad_actual < cantidadRequerida) {
+              console.error(`❌ Inventario insuficiente para ${producto.nombre}: disponible=${producto.cantidad_actual}, necesario=${cantidadRequerida}`);
+              reject(new Error(`Inventario insuficiente para producto: ${producto.nombre}`));
+              return;
+            }
+            
+            // Decrementar inventario
+            const nuevaCantidad = producto.cantidad_actual - cantidadRequerida;
+            
+            db.run(
+              'UPDATE productos SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+              [nuevaCantidad, productoId],
+              (err: any) => {
+                if (err) {
+                  console.error(`❌ Error al decrementar inventario de ${producto.nombre}:`, err);
+                  reject(err);
+                  return;
+                }
+                
+                console.log(`✅ Inventario de producto decrementado: ${producto.nombre} (${producto.cantidad_actual} → ${nuevaCantidad})`);
+                
+                // Si llegó a 0, marcar como no disponible
+                if (nuevaCantidad <= 0) {
+                  db.run(
+                    'UPDATE productos SET disponible = 0 WHERE id = ?',
+                    [productoId],
+                    (err: any) => {
+                      if (err) {
+                        console.error(`❌ Error al marcar como no disponible ${producto.nombre}:`, err);
+                      } else {
+                        console.log(`⚠️  ${producto.nombre} marcado como NO DISPONIBLE (inventario agotado)`);
+                      }
+                    }
+                  );
+                }
+                
+                resolve();
+              }
+            );
+          }
+        );
+      })
+    );
+  }
+  
+  await Promise.all(promises);
+}
+
 // Obtener todas las comandas
 router.get('/', (req: Request, res: Response) => {
   const query = `
@@ -690,8 +777,11 @@ router.post('/', (req: Request, res: Response) => {
       
       // Función auxiliar para insertar items
       function insertarItems() {
-        // Primero validar y decrementar inventario de personalizaciones
-        decrementarInventarioPersonalizaciones(comandaData.items)
+        // Primero validar y decrementar inventario de productos y personalizaciones
+        Promise.all([
+          decrementarInventarioProductos(comandaData.items),
+          decrementarInventarioPersonalizaciones(comandaData.items)
+        ])
           .then(() => {
             // Insertar items
             const insertItemQuery = `
@@ -1015,8 +1105,11 @@ router.put('/:id', (req: Request, res: Response) => {
         });
       });
 
-      // 7. Decrementar inventario solo de items nuevos
-      decrementarInventarioPersonalizaciones(itemsNuevos)
+      // 7. Decrementar inventario solo de items nuevos (productos y personalizaciones)
+      Promise.all([
+        decrementarInventarioProductos(itemsNuevos),
+        decrementarInventarioPersonalizaciones(itemsNuevos)
+      ])
         .then(() => {
           // Ejecutar todas las operaciones de items
           Promise.all([...deletePromises, ...updatePromises, ...insertPromises])

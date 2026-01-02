@@ -4,6 +4,12 @@ import { useState, useEffect } from 'react';
 import { Producto, CategoriaProducto } from '@/types';
 import { apiService } from '@/services/api';
 import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { 
+  getInventoryStatus, 
+  getInventoryStatusMessage, 
+  getInventoryPercentage,
+  INVENTORY_COLORS 
+} from '@/constants/inventory';
 
 interface ProductoForm {
   nombre: string;
@@ -13,6 +19,9 @@ interface ProductoForm {
   disponible: boolean;
   tiene_personalizacion: boolean;
   personalizaciones_habilitadas: string[];
+  usa_inventario: boolean;
+  cantidad_inicial: number | null;
+  cantidad_actual: number | null;
 }
 
 export default function GestionProductos() {
@@ -32,7 +41,10 @@ export default function GestionProductos() {
     categoria: 'otros',
     disponible: true,
     tiene_personalizacion: false,
-    personalizaciones_habilitadas: []
+    personalizaciones_habilitadas: [],
+    usa_inventario: false,
+    cantidad_inicial: null,
+    cantidad_actual: null
   });
 
   useEffect(() => {
@@ -95,7 +107,10 @@ export default function GestionProductos() {
       categoria: categoriasDisponibles.length > 0 ? categoriasDisponibles[0] : '',
       disponible: true,
       tiene_personalizacion: false,
-      personalizaciones_habilitadas: []
+      personalizaciones_habilitadas: [],
+      usa_inventario: false,
+      cantidad_inicial: null,
+      cantidad_actual: null
     });
   };
 
@@ -109,7 +124,10 @@ export default function GestionProductos() {
       categoria: producto.categoria,
       disponible: producto.disponible,
       tiene_personalizacion: producto.tiene_personalizacion || false,
-      personalizaciones_habilitadas: producto.personalizaciones_habilitadas || []
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas || [],
+      usa_inventario: producto.usa_inventario || false,
+      cantidad_inicial: producto.cantidad_inicial || null,
+      cantidad_actual: producto.cantidad_actual || null
     });
   };
 
@@ -123,7 +141,10 @@ export default function GestionProductos() {
       categoria: categoriasDisponibles.length > 0 ? categoriasDisponibles[0] : '',
       disponible: true,
       tiene_personalizacion: false,
-      personalizaciones_habilitadas: []
+      personalizaciones_habilitadas: [],
+      usa_inventario: false,
+      cantidad_inicial: null,
+      cantidad_actual: null
     });
   };
 
@@ -150,6 +171,15 @@ export default function GestionProductos() {
     }));
   };
 
+  const handleToggleInventario = (habilitado: boolean) => {
+    setFormulario(prev => ({
+      ...prev,
+      usa_inventario: habilitado,
+      cantidad_inicial: habilitado ? (prev.cantidad_inicial || 0) : null,
+      cantidad_actual: habilitado ? (prev.cantidad_actual || 0) : null
+    }));
+  };
+
   const guardarProducto = async () => {
     if (!formulario.nombre.trim()) {
       setError('El nombre del producto es obligatorio');
@@ -159,6 +189,18 @@ export default function GestionProductos() {
     if (formulario.precio < 0) {
       setError('El precio debe ser mayor o igual a 0');
       return;
+    }
+
+    // Validar inventario si está habilitado
+    if (formulario.usa_inventario) {
+      if (creandoNuevo && (formulario.cantidad_inicial === null || formulario.cantidad_inicial < 0)) {
+        setError('La cantidad inicial es obligatoria y debe ser mayor o igual a 0');
+        return;
+      }
+      if (!creandoNuevo && formulario.cantidad_actual !== null && formulario.cantidad_actual < 0) {
+        setError('La cantidad actual debe ser mayor o igual a 0');
+        return;
+      }
     }
 
     try {
@@ -371,6 +413,121 @@ export default function GestionProductos() {
             )}
           </div>
 
+          {/* Sección de Inventario */}
+          <div className="mt-6 border-t pt-6">
+            <div className="flex items-center mb-4">
+              <input
+                type="checkbox"
+                id="usa_inventario"
+                checked={formulario.usa_inventario}
+                onChange={(e) => handleToggleInventario(e.target.checked)}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded cursor-pointer"
+              />
+              <label htmlFor="usa_inventario" className="ml-2 block text-sm font-medium text-secondary-700 cursor-pointer">
+                Controlar Inventario para este producto
+              </label>
+            </div>
+
+            {formulario.usa_inventario && (
+              <div className="ml-6 space-y-4">
+                <p className="text-sm text-secondary-600 mb-3">
+                  Cuando el inventario llega a 0, el producto se marca automáticamente como no disponible.
+                </p>
+                
+                {creandoNuevo ? (
+                  <div>
+                    <label className="block text-sm font-medium text-secondary-700 mb-2">
+                      Cantidad Inicial *
+                    </label>
+                    <input
+                      type="number"
+                      value={formulario.cantidad_inicial || 0}
+                      onChange={(e) => setFormulario(prev => ({ 
+                        ...prev, 
+                        cantidad_inicial: Number(e.target.value),
+                        cantidad_actual: Number(e.target.value)
+                      }))}
+                      className="input-field w-32"
+                      placeholder="0"
+                      min="0"
+                    />
+                    <p className="text-xs text-secondary-500 mt-1">
+                      Esta será la cantidad disponible al crear el producto
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-2">
+                        Cantidad Inicial
+                      </label>
+                      <input
+                        type="number"
+                        value={formulario.cantidad_inicial || 0}
+                        onChange={(e) => setFormulario(prev => ({ 
+                          ...prev, 
+                          cantidad_inicial: Number(e.target.value)
+                        }))}
+                        className="input-field w-32"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <p className="text-xs text-secondary-500 mt-1">
+                        Cantidad de referencia inicial del producto
+                      </p>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-secondary-700 mb-2">
+                        Cantidad Actual
+                      </label>
+                      <input
+                        type="number"
+                        value={formulario.cantidad_actual || 0}
+                        onChange={(e) => setFormulario(prev => ({ 
+                          ...prev, 
+                          cantidad_actual: Number(e.target.value)
+                        }))}
+                        className="input-field w-32"
+                        placeholder="0"
+                        min="0"
+                      />
+                      <p className="text-xs text-secondary-500 mt-1">
+                        Cantidad actualmente disponible en inventario
+                      </p>
+                      
+                      {/* Indicador de nivel de inventario */}
+                      {formulario.cantidad_inicial && formulario.cantidad_actual !== null && (
+                        <div className="mt-2">
+                          {(() => {
+                            const status = getInventoryStatus(formulario.cantidad_actual, formulario.cantidad_inicial);
+                            const porcentaje = getInventoryPercentage(formulario.cantidad_actual, formulario.cantidad_inicial);
+                            const colors = INVENTORY_COLORS[status];
+                            const mensaje = getInventoryStatusMessage(status);
+                            
+                            return (
+                              <div className="flex items-center space-x-2">
+                                <div className="w-full bg-gray-200 rounded-full h-2.5">
+                                  <div 
+                                    className={`${colors.bg} h-2.5 rounded-full transition-all`}
+                                    style={{ width: `${porcentaje}%` }}
+                                  ></div>
+                                </div>
+                                <span className={`text-xs font-medium ${colors.text} min-w-[80px]`}>
+                                  {status === 'DEPLETED' ? '⚠️ ' : ''}{mensaje}
+                                </span>
+                              </div>
+                            );
+                          })()}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+
           <div className="flex justify-end space-x-3 mt-6">
             <button
               onClick={cancelarEdicion}
@@ -422,6 +579,9 @@ export default function GestionProductos() {
                     Precio
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                    Inventario
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                     Estado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
@@ -451,6 +611,43 @@ export default function GestionProductos() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">
                       ${producto.precio.toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {producto.usa_inventario ? (
+                        <div className="text-sm">
+                          <div className="font-medium text-secondary-900">
+                            {producto.cantidad_actual}/{producto.cantidad_inicial}
+                          </div>
+                          {producto.cantidad_inicial && producto.cantidad_actual !== null && producto.cantidad_actual !== undefined && (
+                            <div className="mt-1">
+                              {(() => {
+                                const status = getInventoryStatus(producto.cantidad_actual, producto.cantidad_inicial);
+                                const porcentaje = getInventoryPercentage(producto.cantidad_actual, producto.cantidad_inicial);
+                                const colors = INVENTORY_COLORS[status];
+                                const mensaje = getInventoryStatusMessage(status);
+                                
+                                return (
+                                  <div className="space-y-1">
+                                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                                      <div 
+                                        className={`${colors.bg} h-1.5 rounded-full transition-all`}
+                                        style={{ width: `${porcentaje}%` }}
+                                      ></div>
+                                    </div>
+                                    <span className={`text-xs ${colors.text} font-medium`}>
+                                      {mensaje}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-secondary-500 italic">
+                          Sin control
+                        </span>
+                      )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span

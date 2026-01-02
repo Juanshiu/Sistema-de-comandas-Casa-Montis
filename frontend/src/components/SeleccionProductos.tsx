@@ -7,6 +7,7 @@ import { Plus, Minus, Trash2, Settings } from 'lucide-react';
 import { getPersonalizacionPorCategoria } from '@/utils/personalizacionUtils';
 import PersonalizacionProducto from './PersonalizacionProducto';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
+import { getInventoryStatus, INVENTORY_COLORS } from '@/constants/inventory';
 interface SeleccionProductosProps {
   categoria: string;
   items: ItemComanda[];
@@ -334,12 +335,27 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {productos.map((producto) => {
               const cantidad = obtenerCantidadProducto(producto.id);
+              const inventoryStatus = producto.usa_inventario 
+                ? getInventoryStatus(producto.cantidad_actual, producto.cantidad_inicial)
+                : null;
+              const inventarioInsuficiente = inventoryStatus === 'DEPLETED';
+              const inventarioBajo = inventoryStatus === 'LOW' || inventoryStatus === 'CRITICAL';
               
               return (
                 <div key={producto.id} className="border border-secondary-200 rounded-lg p-4 bg-white">
                   <div className="mb-3">
                     <h3 className="font-semibold text-secondary-800 mb-1">
                       {producto.nombre}
+                      {inventarioInsuficiente && (
+                        <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                          Agotado
+                        </span>
+                      )}
+                      {inventarioBajo && !inventarioInsuficiente && (
+                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                          Bajo stock
+                        </span>
+                      )}
                     </h3>
                     {producto.descripcion && (
                       <p className="text-sm text-secondary-600 mb-2">
@@ -349,6 +365,11 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
                     <p className="text-lg font-bold text-primary-600">
                       ${producto.precio.toLocaleString()}
                     </p>
+                    {producto.usa_inventario && producto.cantidad_actual !== null && (
+                      <p className="text-xs text-secondary-500 mt-1">
+                        Stock: {producto.cantidad_actual} unidades
+                      </p>
+                    )}
                   </div>
                   
                   <div className="flex items-center justify-between">
@@ -367,8 +388,9 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
                       
                       <button
                         onClick={() => agregarProducto(producto)}
-                        disabled={!producto.disponible}
+                        disabled={!producto.disponible || inventarioInsuficiente}
                         className="w-8 h-8 rounded-full bg-primary-500 hover:bg-primary-600 disabled:opacity-50 disabled:cursor-not-allowed text-white flex items-center justify-center"
+                        title={inventarioInsuficiente ? 'Sin inventario disponible' : (!producto.disponible ? 'Producto no disponible' : 'Agregar producto')}
                       >
                         <Plus size={16} />
                       </button>

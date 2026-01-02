@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../database/init';
 import { Producto } from '../models';
+import { validateInventoryData, prepareInventoryValues } from '../utils/inventoryValidation';
 
 const router = Router();
 
@@ -33,7 +34,10 @@ router.get('/all', (req: Request, res: Response) => {
       ...producto,
       disponible: Boolean(producto.disponible),
       tiene_personalizacion: Boolean(producto.tiene_personalizacion),
-      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas) : []
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas) : [],
+      usa_inventario: Boolean(producto.usa_inventario),
+      cantidad_inicial: producto.cantidad_inicial,
+      cantidad_actual: producto.cantidad_actual
     }));
     
     res.json(productos);
@@ -55,7 +59,10 @@ router.get('/categoria/:categoria', (req: Request, res: Response) => {
       ...producto,
       disponible: Boolean(producto.disponible),
       tiene_personalizacion: Boolean(producto.tiene_personalizacion),
-      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : []
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : [],
+      usa_inventario: Boolean(producto.usa_inventario),
+      cantidad_inicial: producto.cantidad_inicial,
+      cantidad_actual: producto.cantidad_actual
     }));
     
     res.json(productos);
@@ -83,7 +90,10 @@ router.get('/', (req: Request, res: Response) => {
       ...producto,
       disponible: Boolean(producto.disponible),
       tiene_personalizacion: Boolean(producto.tiene_personalizacion),
-      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : []
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : [],
+      usa_inventario: Boolean(producto.usa_inventario),
+      cantidad_inicial: producto.cantidad_inicial,
+      cantidad_actual: producto.cantidad_actual
     }));
     
     res.json(productos);
@@ -109,7 +119,10 @@ router.get('/:id', (req: Request, res: Response) => {
       ...row,
       disponible: Boolean(row.disponible),
       tiene_personalizacion: Boolean(row.tiene_personalizacion),
-      personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : []
+      personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : [],
+      usa_inventario: Boolean(row.usa_inventario),
+      cantidad_inicial: row.cantidad_inicial,
+      cantidad_actual: row.cantidad_actual
     };
     
     res.json(producto);
@@ -125,7 +138,9 @@ router.post('/', (req: Request, res: Response) => {
     categoria, 
     disponible = true,
     tiene_personalizacion = false,
-    personalizaciones_habilitadas = []
+    personalizaciones_habilitadas = [],
+    usa_inventario = false,
+    cantidad_inicial = null
   } = req.body;
   
   if (!nombre || !precio || !categoria) {
@@ -133,12 +148,23 @@ router.post('/', (req: Request, res: Response) => {
       error: 'Nombre, precio y categoría son requeridos' 
     });
   }
+
+  // Validar inventario usando utilidad centralizada
+  const inventoryValidation = validateInventoryData(usa_inventario, cantidad_inicial, null, true);
+  if (!inventoryValidation.valid) {
+    return res.status(400).json({ error: inventoryValidation.error });
+  }
   
   const personalizacionesJson = tiene_personalizacion ? JSON.stringify(personalizaciones_habilitadas) : null;
+  const inventoryValues = prepareInventoryValues(usa_inventario, cantidad_inicial, null, true);
   
   const query = `
-    INSERT INTO productos (nombre, descripcion, precio, categoria, disponible, tiene_personalizacion, personalizaciones_habilitadas) 
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO productos (
+      nombre, descripcion, precio, categoria, disponible, 
+      tiene_personalizacion, personalizaciones_habilitadas,
+      usa_inventario, cantidad_inicial, cantidad_actual
+    ) 
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   db.run(query, [
@@ -148,7 +174,10 @@ router.post('/', (req: Request, res: Response) => {
     categoria, 
     disponible ? 1 : 0,
     tiene_personalizacion ? 1 : 0,
-    personalizacionesJson
+    personalizacionesJson,
+    inventoryValues.usa_inventario_db,
+    inventoryValues.cantidad_inicial_db,
+    inventoryValues.cantidad_actual_db
   ], function(err: any) {
     if (err) {
       console.error('Error al crear producto:', err);
@@ -166,10 +195,13 @@ router.post('/', (req: Request, res: Response) => {
         ...row,
         disponible: Boolean(row.disponible),
         tiene_personalizacion: Boolean(row.tiene_personalizacion),
-        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : []
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : [],
+        usa_inventario: Boolean(row.usa_inventario),
+        cantidad_inicial: row.cantidad_inicial,
+        cantidad_actual: row.cantidad_actual
       };
       
-      res.status(201).json(producto);
+      res.json(producto);
     });
   });
 });
@@ -184,7 +216,10 @@ router.put('/:id', (req: Request, res: Response) => {
     categoria, 
     disponible,
     tiene_personalizacion = false,
-    personalizaciones_habilitadas = []
+    personalizaciones_habilitadas = [],
+    usa_inventario = false,
+    cantidad_inicial = null,
+    cantidad_actual = null
   } = req.body;
   
   if (!nombre || !precio || !categoria) {
@@ -192,13 +227,22 @@ router.put('/:id', (req: Request, res: Response) => {
       error: 'Nombre, precio y categoría son requeridos' 
     });
   }
+
+  // Validar inventario usando utilidad centralizada
+  const inventoryValidation = validateInventoryData(usa_inventario, cantidad_inicial, cantidad_actual, false);
+  if (!inventoryValidation.valid) {
+    return res.status(400).json({ error: inventoryValidation.error });
+  }
   
   const personalizacionesJson = tiene_personalizacion ? JSON.stringify(personalizaciones_habilitadas) : null;
+  const inventoryValues = prepareInventoryValues(usa_inventario, cantidad_inicial, cantidad_actual, false);
   
   const query = `
     UPDATE productos 
     SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, disponible = ?, 
-        tiene_personalizacion = ?, personalizaciones_habilitadas = ?, updated_at = CURRENT_TIMESTAMP
+        tiene_personalizacion = ?, personalizaciones_habilitadas = ?,
+        usa_inventario = ?, cantidad_inicial = ?, cantidad_actual = ?,
+        updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
   
@@ -210,6 +254,9 @@ router.put('/:id', (req: Request, res: Response) => {
     disponible ? 1 : 0,
     tiene_personalizacion ? 1 : 0,
     personalizacionesJson,
+    inventoryValues.usa_inventario_db,
+    inventoryValues.cantidad_inicial_db,
+    inventoryValues.cantidad_actual_db,
     id
   ], function(err: any) {
     if (err) {
@@ -232,7 +279,10 @@ router.put('/:id', (req: Request, res: Response) => {
         ...row,
         disponible: Boolean(row.disponible),
         tiene_personalizacion: Boolean(row.tiene_personalizacion),
-        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : []
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : [],
+        usa_inventario: Boolean(row.usa_inventario),
+        cantidad_inicial: row.cantidad_inicial,
+        cantidad_actual: row.cantidad_actual
       };
       
       res.json(producto);
@@ -243,7 +293,16 @@ router.put('/:id', (req: Request, res: Response) => {
 // Actualizar producto (PATCH)
 router.patch('/:id', (req: Request, res: Response) => {
   const { id } = req.params;
-  const { nombre, descripcion, precio, categoria, disponible } = req.body;
+  const { 
+    nombre, 
+    descripcion, 
+    precio, 
+    categoria, 
+    disponible,
+    usa_inventario,
+    cantidad_inicial,
+    cantidad_actual
+  } = req.body;
   
   // Construir query dinámicamente solo con campos presentes
   const fields = [];
@@ -268,6 +327,23 @@ router.patch('/:id', (req: Request, res: Response) => {
   if (disponible !== undefined) {
     fields.push('disponible = ?');
     values.push(disponible ? 1 : 0);
+  }
+  if (usa_inventario !== undefined) {
+    fields.push('usa_inventario = ?');
+    values.push(usa_inventario ? 1 : 0);
+  }
+  if (cantidad_inicial !== undefined) {
+    fields.push('cantidad_inicial = ?');
+    values.push(cantidad_inicial);
+  }
+  if (cantidad_actual !== undefined) {
+    // Validar cantidad_actual usando utilidad centralizada
+    const validation = validateInventoryData(true, null, cantidad_actual, false);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error });
+    }
+    fields.push('cantidad_actual = ?');
+    values.push(cantidad_actual);
   }
   
   if (fields.length === 0) {

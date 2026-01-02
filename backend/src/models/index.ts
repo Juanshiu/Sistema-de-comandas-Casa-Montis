@@ -17,6 +17,9 @@ export interface Producto {
   disponible: boolean;
   tiene_personalizacion?: boolean;
   personalizaciones_habilitadas?: string | string[];
+  usa_inventario?: boolean;
+  cantidad_inicial?: number | null;
+  cantidad_actual?: number | null;
   created_at?: Date;
   updated_at?: Date;
 }

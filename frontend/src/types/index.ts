@@ -25,6 +25,9 @@ export interface Producto {
   descripcion?: string;
   tiene_personalizacion?: boolean;
   personalizaciones_habilitadas?: string[]; // Array de nombres de categorías de personalización
+  usa_inventario?: boolean;
+  cantidad_inicial?: number | null;
+  cantidad_actual?: number | null;
 }
 
 export type CategoriaProducto = 
