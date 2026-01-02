@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { ComandaHistorial } from '@/types';
 import { apiService } from '@/services/api';
-import { Calendar, Clock, User, MapPin, DollarSign, ChevronDown, ChevronUp, UtensilsCrossed, Bike, ShoppingBag, Printer, Receipt } from 'lucide-react';
+import { Calendar, Clock, User, MapPin, DollarSign, ChevronDown, ChevronUp, UtensilsCrossed, Truck, ShoppingBag, Printer, Receipt } from 'lucide-react';
 import { usePersonalizaciones } from '@/components/shared';
 
 export default function HistorialComandas() {
@@ -91,7 +91,7 @@ export default function HistorialComandas() {
       if (comanda.datos_cliente?.es_para_llevar) {
         return <ShoppingBag className="w-4 h-4" />;
       }
-      return <Bike className="w-4 h-4" />;
+      return <Truck className="w-4 h-4" />;
     }
     return <UtensilsCrossed className="w-4 h-4" />;
   };
