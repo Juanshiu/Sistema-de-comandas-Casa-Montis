@@ -109,7 +109,7 @@ router.get('/ventas', (req: Request, res: Response) => {
                 p.nombre,
                 p.descripcion,
                 p.categoria,
-                p.precio,
+                ROUND(SUM(ci.subtotal) / SUM(ci.cantidad)) as precio,
                 SUM(ci.cantidad) as cantidad_vendida,
                 SUM(ci.subtotal) as total_vendido
               FROM comanda_items ci
@@ -117,9 +117,8 @@ router.get('/ventas', (req: Request, res: Response) => {
               JOIN comandas c ON ci.comanda_id = c.id
               JOIN facturas f ON c.id = f.comanda_id
               WHERE DATE(f.fecha_creacion) = ?
-              GROUP BY p.id, p.nombre, p.descripcion, p.categoria, p.precio
+              GROUP BY p.id, p.nombre, p.descripcion, p.categoria
               ORDER BY cantidad_vendida DESC
-              LIMIT 20
             `;
 
             db.all(productosQuery, [fechaBusqueda], (err: any, productosRows: any[]) => {
@@ -320,7 +319,7 @@ router.get('/ventas/rango', (req: Request, res: Response) => {
           p.nombre,
           p.descripcion,
           p.categoria,
-          p.precio,
+          ROUND(SUM(ci.subtotal) / SUM(ci.cantidad)) as precio,
           SUM(ci.cantidad) as cantidad_vendida,
           SUM(ci.subtotal) as total_vendido
         FROM comanda_items ci
@@ -328,9 +327,8 @@ router.get('/ventas/rango', (req: Request, res: Response) => {
         JOIN comandas c ON ci.comanda_id = c.id
         JOIN facturas f ON c.id = f.comanda_id
         WHERE DATE(f.fecha_creacion) = ?
-        GROUP BY p.id, p.nombre, p.descripcion, p.categoria, p.precio
+        GROUP BY p.id, p.nombre, p.descripcion, p.categoria
         ORDER BY cantidad_vendida DESC
-        LIMIT 50
       `;
 
       db.all(productosQuery, [row.fecha], (err: any, productosRows: any[]) => {
@@ -481,7 +479,6 @@ router.get('/personalizaciones', (req: Request, res: Response) => {
     ${whereClause}
     GROUP BY ci.personalizacion, p.categoria
     ORDER BY frecuencia DESC
-    LIMIT 50
   `;
 
   db.all(query, params, (err: any, rows: any[]) => {
