@@ -846,7 +846,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                             <div className="flex-1">
                               <div className="flex justify-between text-sm">
                                 <span className={`font-medium ${itemYaPagado ? 'line-through text-secondary-500' : ''}`}>
-                                  {item.producto.nombre} x {item.cantidad}
+                                  {item.producto.nombre} x {item.cantidad} <span className="text-xs text-neutral-500">({item.precio_unitario ? `$${item.precio_unitario.toLocaleString()}` : '—'})</span>
                                 </span>
                                 <span className={`font-semibold ${itemYaPagado ? 'line-through text-secondary-500' : ''}`}>
                                   ${item.subtotal.toLocaleString()}
