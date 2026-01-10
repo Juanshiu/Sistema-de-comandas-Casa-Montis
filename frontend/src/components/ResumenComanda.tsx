@@ -466,14 +466,28 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
-                  // Verificar si hay items nuevos (con ID temporal)
+                  // Verificar si hay items nuevos (con ID temporal) o items con incremento de cantidad
                   const hayItemsNuevos = formulario.items.some(item => 
                     typeof item.id === 'string' && (item.id.startsWith('temp_') || item.id.startsWith('item_'))
                   );
                   
-                  if (!hayItemsNuevos) {
-                    alert('⚠️ No hay productos nuevos para imprimir.\n\nSolo se han modificado personalizaciones. Se recomienda usar "Imprimir comanda completa" para reflejar los cambios en cocina.');
+                  // 🆕 NUEVO: Verificar si hay items con incremento de cantidad
+                  // Esto solo aplica en modo edición, necesitaríamos acceso a items originales
+                  // Por ahora, si hay items con IDs UUID válidos (no temp), asumimos que podrían tener incrementos
+                  const hayItemsExistentes = formulario.items.some(item => 
+                    typeof item.id === 'string' && !item.id.startsWith('temp_') && !item.id.startsWith('item_') && item.id.includes('-')
+                  );
+                  
+                  if (!hayItemsNuevos && !hayItemsExistentes) {
+                    alert('⚠️ No hay productos para procesar.');
                     return;
+                  }
+                  
+                  // Si solo hay items existentes sin items nuevos, podría ser solo incremento de cantidad
+                  // El backend se encargará de detectar si hay incrementos y manejarlos correctamente
+                  if (!hayItemsNuevos && hayItemsExistentes) {
+                    // Continuar normalmente, el backend detectará los incrementos
+                    console.log('ℹ️ Procesando items con posibles incrementos de cantidad');
                   }
 
                   setMostrarDialogoImpresion(false);

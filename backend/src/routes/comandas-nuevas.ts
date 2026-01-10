@@ -1015,6 +1015,7 @@ router.put('/:id', (req: Request, res: Response) => {
 
       const itemsNuevos: any[] = [];
       const itemsParaActualizar: any[] = [];
+      const itemsConIncrementosCantidad: any[] = []; // NUEVO: Trackear incrementos de cantidad
       const idsItemsRecibidos = new Set<string>();
 
       // 2. Clasificar items recibidos (Nuevos vs Existentes)
@@ -1037,6 +1038,17 @@ router.put('/:id', (req: Request, res: Response) => {
             // Cambio en cantidad
             if (item.cantidad !== itemExistente.cantidad) {
               necesitaActualizacion = true;
+              
+              // 🆕 NUEVO: Si la cantidad aumentó, guardar el incremento
+              if (item.cantidad > itemExistente.cantidad) {
+                const incremento = item.cantidad - itemExistente.cantidad;
+                itemsConIncrementosCantidad.push({
+                  ...item,
+                  cantidad_original: itemExistente.cantidad,
+                  cantidad_incremento: incremento,
+                  cantidad_total: item.cantidad
+                });
+              }
             }
             
             // Cambio en personalización
@@ -1058,7 +1070,7 @@ router.put('/:id', (req: Request, res: Response) => {
       // 3. Identificar items eliminados
       const itemsEliminados = itemsExistentesDB.filter(ie => !idsItemsRecibidos.has(ie.id));
 
-      console.log(`📊 Resumen cambios: Nuevos=${itemsNuevos.length}, Actualizar=${itemsParaActualizar.length}, Eliminar=${itemsEliminados.length}`);
+      console.log(`📊 Resumen cambios: Nuevos=${itemsNuevos.length}, Actualizar=${itemsParaActualizar.length}, Incrementos=${itemsConIncrementosCantidad.length}, Eliminar=${itemsEliminados.length}`);
 
       // 4. Procesar Eliminaciones
       const deletePromises = itemsEliminados.map(item => {
@@ -1146,7 +1158,7 @@ router.put('/:id', (req: Request, res: Response) => {
                 }
                 
                 // 8. Manejar Impresión (fuera de la transacción)
-                handleImpresion(id, itemsNuevos, imprimir, imprimirCompleta, res);
+                handleImpresion(id, itemsNuevos, itemsConIncrementosCantidad, imprimir, imprimirCompleta, res);
               });
             });
           });
@@ -1169,7 +1181,14 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // Función auxiliar para manejar la impresión después de guardar
-function handleImpresion(comandaId: string, itemsNuevos: any[], imprimir: boolean | undefined, imprimirCompleta: boolean | undefined, res: Response) {
+function handleImpresion(
+  comandaId: string, 
+  itemsNuevos: any[], 
+  itemsConIncrementos: any[], 
+  imprimir: boolean | undefined, 
+  imprimirCompleta: boolean | undefined, 
+  res: Response
+) {
   // Obtener datos actualizados para imprimir
   const queryComanda = 'SELECT * FROM comandas WHERE id = ?';
   db.get(queryComanda, [comandaId], (err: any, comandaRow: any) => {
@@ -1190,14 +1209,35 @@ function handleImpresion(comandaId: string, itemsNuevos: any[], imprimir: boolea
            imprimirComandaCompleta(comandaId, comandaRow, itemsFormateados);
          }
        });
-    } else if (imprimir && itemsNuevos.length > 0) {
-       // Imprimir solo nuevos
-       const itemsParaImprimir = itemsNuevos.map((item: any) => ({
-         ...item,
-         id: uuidv4(), // ID ficticio para impresión
-         comanda_id: comandaId
-       }));
-       imprimirItemsAdicionales(comandaId, comandaRow, itemsParaImprimir);
+    } else if (imprimir) {
+      // 🆕 MEJORA: Combinar items completamente nuevos + incrementos de cantidad
+      const itemsParaImprimir: any[] = [];
+      
+      // Agregar items completamente nuevos
+      itemsNuevos.forEach((item: any) => {
+        itemsParaImprimir.push({
+          ...item,
+          id: uuidv4(), // ID ficticio para impresión
+          comanda_id: comandaId
+        });
+      });
+      
+      // 🆕 NUEVO: Agregar incrementos de cantidad como items "adicionales"
+      itemsConIncrementos.forEach((item: any) => {
+        itemsParaImprimir.push({
+          ...item,
+          cantidad: item.cantidad_incremento, // Solo la cantidad que se agregó
+          id: uuidv4(), // ID ficticio para impresión
+          comanda_id: comandaId
+        });
+      });
+      
+      if (itemsParaImprimir.length > 0) {
+        imprimirItemsAdicionales(comandaId, comandaRow, itemsParaImprimir);
+      } else {
+        // No hay nada que imprimir
+        console.log('⚠️ No hay items adicionales para imprimir (solo cambios en personalizaciones)');
+      }
     }
 
     res.json({ message: 'Comanda actualizada exitosamente', comanda: comandaRow });
