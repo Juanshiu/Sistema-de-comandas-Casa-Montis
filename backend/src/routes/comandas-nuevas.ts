@@ -4,6 +4,7 @@ import { Comanda, ComandaItem, CreateComandaRequest, Mesa } from '../models';
 import { v4 as uuidv4 } from 'uuid';
 import { imprimirComanda } from '../services/printer';
 import { convertirAHoraColombia, getFechaSQLite_Colombia } from '../utils/dateUtils';
+import { verificarAutenticacion } from '../middleware/authMiddleware';
 
 const router = Router();
 
@@ -706,7 +707,7 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // Crear una nueva comanda
-router.post('/', (req: Request, res: Response) => {
+router.post('/', verificarAutenticacion, (req: Request, res: Response) => {
   const comandaData: CreateComandaRequest = req.body;
   
   // Validar datos requeridos según el tipo de pedido
@@ -731,9 +732,20 @@ router.post('/', (req: Request, res: Response) => {
     return res.status(400).json({ error: 'Debe agregar al menos un producto' });
   }
 
+  // El mesero ahora es el usuario autenticado
+  if (!req.usuario) {
+    return res.status(401).json({ error: 'Usuario no autenticado' });
+  }
+
+  const usuarioNombre = req.usuario.nombre_completo;
+  const usuarioId = req.usuario.id;
+
+  /* 
+  ELIMINADO: Validación manual de mesero
   if (!comandaData.mesero || comandaData.mesero.trim() === '') {
     return res.status(400).json({ error: 'El nombre del mesero es requerido' });
   }
+  */
   
   const comandaId = uuidv4();
   
@@ -752,14 +764,16 @@ router.post('/', (req: Request, res: Response) => {
         cliente_nombre,
         cliente_direccion,
         cliente_telefono,
-        es_para_llevar
+        es_para_llevar,
+        usuario_id,
+        usuario_nombre
       )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `;
     
     db.run(insertComandaQuery, [
       comandaId,
-      comandaData.mesero,
+      usuarioNombre, // Usar nombre del usuario autenticado como "mesero" (legacy)
       comandaData.subtotal,
       comandaData.total,
       comandaData.observaciones_generales || null,
@@ -767,7 +781,9 @@ router.post('/', (req: Request, res: Response) => {
       comandaData.datos_cliente?.nombre || null,
       comandaData.datos_cliente?.direccion || null,
       comandaData.datos_cliente?.telefono || null,
-      comandaData.datos_cliente?.es_para_llevar ? 1 : 0
+      comandaData.datos_cliente?.es_para_llevar ? 1 : 0,
+      usuarioId,
+      usuarioNombre
     ], function(err: any) {
       if (err) {
         console.error('Error al insertar comanda:', err);

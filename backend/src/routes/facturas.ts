@@ -3,16 +3,19 @@ import { convertirAHoraColombia, getFechaISO_Colombia } from '../utils/dateUtils
 import { db } from '../database/init';
 import { v4 as uuidv4 } from 'uuid';
 import { imprimirFactura } from '../services/printer';
+import { verificarAutenticacion, verificarPermiso } from '../middleware/authMiddleware';
 
 const router = Router();
 
 // Crear factura
-router.post('/', (req: Request, res: Response) => {
-  const { comanda_id, metodo_pago, cajero, monto_pagado, cambio } = req.body;
+router.post('/', verificarAutenticacion, verificarPermiso('gestionar_caja'), (req: Request, res: Response) => {
+  const { comanda_id, metodo_pago, monto_pagado, cambio } = req.body;
+  // c.usuario_nombre se usará para reemplazar mesero en la visualización
+  const cajero = req.usuario?.nombre_completo || 'Cajero del Sistema';
 
-  if (!comanda_id || !metodo_pago || !cajero) {
+  if (!comanda_id || !metodo_pago) {
     return res.status(400).json({ 
-      error: 'Faltan campos requeridos: comanda_id, metodo_pago, cajero' 
+      error: 'Faltan campos requeridos: comanda_id, metodo_pago' 
     });
   }
 
@@ -242,7 +245,9 @@ router.get('/', (req: Request, res: Response) => {
   const query = `
     SELECT 
       f.*,
+      f.*,
       c.mesero,
+      c.usuario_nombre,
       c.observaciones_generales
     FROM facturas f
     JOIN comandas c ON f.comanda_id = c.id
@@ -289,7 +294,7 @@ router.get('/', (req: Request, res: Response) => {
             total: row.total,
             metodo_pago: row.metodo_pago,
             cajero: row.cajero,
-            mesero: row.mesero,
+            mesero: row.usuario_nombre || row.mesero,
             fecha_creacion: convertirAHoraColombia(row.fecha_creacion)
           };
           
@@ -314,7 +319,9 @@ router.get('/:id', (req: Request, res: Response) => {
   const query = `
     SELECT 
       f.*,
+      f.*,
       c.mesero,
+      c.usuario_nombre,
       c.observaciones_generales
     FROM facturas f
     JOIN comandas c ON f.comanda_id = c.id
@@ -390,7 +397,7 @@ router.get('/:id', (req: Request, res: Response) => {
           total: facturaRow.total,
           metodo_pago: facturaRow.metodo_pago,
           cajero: facturaRow.cajero,
-          mesero: facturaRow.mesero,
+          mesero: facturaRow.usuario_nombre || facturaRow.mesero,
           fecha_creacion: convertirAHoraColombia(facturaRow.fecha_creacion)
         };
 
@@ -407,7 +414,9 @@ router.get('/fecha/:inicio/:fin', (req: Request, res: Response) => {
   const query = `
     SELECT 
       f.*,
-      c.mesero
+      f.*,
+      c.mesero,
+      c.usuario_nombre
     FROM facturas f
     JOIN comandas c ON f.comanda_id = c.id
     WHERE DATE(f.fecha_creacion) BETWEEN DATE(?) AND DATE(?)
