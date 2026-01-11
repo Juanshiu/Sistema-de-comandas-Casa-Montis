@@ -100,7 +100,9 @@ export interface Comanda {
   estado: EstadoComanda;
   fecha_creacion: Date;
   fecha_actualizacion: Date;
-  mesero: string;
+  mesero: string; // DEPRECATED: se mantiene por compatibilidad
+  usuario_id?: number;
+  usuario_nombre?: string; // Nombre del usuario que creó la comanda
   observaciones_generales?: string;
   tipo_pedido: 'mesa' | 'domicilio';
   datos_cliente?: DatosCliente;
@@ -180,7 +182,7 @@ export interface FormularioComanda {
   tipo_servicio?: string;
   items: ItemComanda[];
   observaciones_generales?: string;
-  mesero: string;
+  mesero?: string; // DEPRECATED
   tipo_pedido: 'mesa' | 'domicilio';
   datos_cliente?: DatosCliente;
 }
@@ -189,7 +191,8 @@ export interface ComandaHistorial {
   id: string;
   fecha_creacion: Date;
   fecha_actualizacion: Date;
-  mesero: string;
+  mesero: string; // DEPRECATED
+  usuario_nombre?: string; // Nombre del usuario que creó la comanda
   subtotal: number;
   total: number;
   estado: string;
@@ -218,3 +221,58 @@ export interface ItemComandaHistorial {
   };
   personalizacion?: PersonalizacionItem;
 }
+
+// ==================== AUTENTICACIÓN Y ROLES ====================
+
+export interface Usuario {
+  id: number;
+  usuario: string; // email o username
+  nombre_completo: string;
+  rol_id: number;
+  pin?: string;
+  telefono?: string;
+  activo: boolean;
+  ultimo_login?: Date;
+  created_at?: Date;
+  updated_at?: Date;
+  rol_nombre?: string;
+}
+
+export interface Rol {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  es_superusuario: boolean;
+  activo: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+  cantidad_usuarios?: number;
+  permisos?: PermisoRol[];
+}
+
+export interface PermisoRol {
+  id?: number;
+  permiso: string;
+  activo: boolean;
+}
+
+export interface LoginRequest {
+  usuario: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  usuario: UsuarioSesion;
+  permisos: string[];
+}
+
+export interface UsuarioSesion {
+  id: number;
+  usuario: string;
+  nombre_completo: string;
+  rol_id: number;
+  rol_nombre: string;
+  es_superusuario: boolean;
+}
+
