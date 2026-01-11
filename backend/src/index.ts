@@ -11,7 +11,12 @@ import { crearTablasPersonalizaciones } from './database/migration-personalizaci
 import { initMigrationControl, migracionSalones_v1 } from './database/migration-control';
 import { migrarMultiplesMesas } from './database/migration-multiples-mesas';
 import { migrarPersonalizacionesProductos } from './database/migration-personalizaciones-productos';
+import { migrarUsuariosYRoles } from './database/migration-usuarios-roles';
+import { migrarColumnasComandas } from './database/migration-fix-comandas-columns';
 import { iniciarPluginImpresora } from './services/pluginImpresora';
+import authRoutes from './routes/auth';
+import usuariosRoutes from './routes/usuarios';
+import rolesRoutes from './routes/roles';
 import mesasRoutes from './routes/mesas';
 import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
@@ -66,7 +71,12 @@ app.use((req, res, next) => {
   next();
 });
 
-// Rutas de API
+// Rutas de API (públicas - sin autenticación)
+app.use('/api/auth', authRoutes);
+
+// Rutas de API (protegidas - requieren autenticación)
+app.use('/api/usuarios', usuariosRoutes);
+app.use('/api/roles', rolesRoutes);
 app.use('/api/mesas', mesasRoutes);
 app.use('/api/salones', salonesRoutes);
 app.use('/api/productos', productosRoutes);
@@ -127,6 +137,14 @@ async function startServer() {
     // Migrar personalizaciones en productos
     await migrarPersonalizacionesProductos();
     console.log('✅ Migración de personalizaciones en productos completada');
+    
+    // Migrar usuarios y roles
+    await migrarUsuariosYRoles();
+    console.log('✅ Migración de usuarios y roles completada');
+
+    // Corregir columnas faltantes en comandas
+    await migrarColumnasComandas();
+    console.log('✅ Corrección de columnas en comandas completada');
     
     // Actualizar con productos y mesas reales
     await updateDatabaseWithProducts();
