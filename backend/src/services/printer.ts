@@ -144,7 +144,7 @@ const crearArchivoItemsAdicionales = async (comanda: Comanda): Promise<string> =
   const fecha = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : getFechaHoraColombia();
   lineas.push(`${fecha.toLocaleDateString('es-CO')}`);
   lineas.push(`${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
-  lineas.push(`Mesero: ${comanda.mesero}`);
+  lineas.push(`Atendido por: ${comanda.usuario_nombre || comanda.mesero}`);
   lineas.push('========================');
   // lineas.push('');
   // lineas.push('** PRODUCTOS ADICIONALES **');
@@ -225,12 +225,12 @@ const crearArchivoComanda = async (comanda: Comanda): Promise<string> => {
   lineas.push(`Hora:  ${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
   
   // Mesero
-  const meseroTexto = `Mesero: ${comanda.mesero}`;
+  const meseroTexto = `Atendido por: ${comanda.usuario_nombre || comanda.mesero}`;
   if (meseroTexto.length <= ANCHO_LINEA) {
     lineas.push(meseroTexto);
   } else {
-    lineas.push('Mesero:');
-    lineas.push(`  ${comanda.mesero}`);
+    lineas.push('Atendido por:');
+    lineas.push(`  ${comanda.usuario_nombre || comanda.mesero}`);
   }
 lineas.push('');
   
@@ -644,7 +644,7 @@ const imprimirEnConsola = (comanda: any) => {
   }
   
   console.log(`Fecha: ${formatearFecha(new Date(comanda.fecha_creacion))}`);
-  console.log(`Mesero: ${comanda.mesero}`);
+  console.log(`Atendido por: ${comanda.usuario_nombre || comanda.mesero}`);
   console.log(`Comanda: ${comanda.id.substring(0, 8)}`);
   console.log('='.repeat(50));
   console.log('ITEMS:');
@@ -718,7 +718,7 @@ const imprimirFacturaEnConsola = (comanda: any) => {
   console.log('='.repeat(50));
   console.log(`Mesa: ${comanda.mesa_numero}`);
   console.log(`Fecha: ${formatearFecha(new Date(comanda.fecha_creacion))}`);
-  console.log(`Atendido por: ${comanda.mesero}`);
+  console.log(`Atendido por: ${comanda.usuario_nombre || comanda.mesero}`);
   console.log(`Factura: ${comanda.id.substring(0, 8)}`);
   console.log('='.repeat(50));
   console.log('DESCRIPCION                    CANT    VALOR');
