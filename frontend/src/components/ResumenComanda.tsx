@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { FormularioComanda, PersonalizacionItem } from '@/types';
 import { apiService } from '@/services/api';
 import { Printer, Send, AlertCircle } from 'lucide-react';
+import { useAuth } from '@/contexts/AuthContext';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
 import { getIconoCategoria } from '@/utils/personalizacionUtils';
 
@@ -15,6 +16,7 @@ interface ResumenComandaProps {
 }
 
 export default function ResumenComanda({ formulario, onObservacionesChange, modoEdicion = false, comandaId }: ResumenComandaProps) {
+  const { usuario } = useAuth();
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
@@ -70,10 +72,12 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
       return;
     }
 
+    /* ELIMINADO: Validación manual de mesero
     if (!formulario.mesero || formulario.mesero.trim() === '') {
       setError('Debe ingresar el nombre del mesero');
       return;
     }
+    */
 
     // Si estamos editando, mostrar diálogo de confirmación para impresión
     if (modoEdicion && comandaId) {
@@ -95,7 +99,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
         items: formulario.items,
         subtotal: calcularSubtotal(),
         total: calcularTotal(),
-        mesero: formulario.mesero,
+        // mesero: formulario.mesero, // ELIMINADO: Se asigna en backend desde el token
         tipo_pedido: formulario.tipo_pedido || 'mesa',
         datos_cliente: formulario.tipo_pedido === 'domicilio' ? formulario.datos_cliente : undefined,
         observaciones_generales: formulario.observaciones_generales
@@ -160,7 +164,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
     const comandaInfo = `
 CASA MONTIS - VISTA PREVIA ${modoEdicion ? 'ITEMS ADICIONALES' : 'COMANDA'}
 =======================================
-Mesero: ${formulario.mesero}
+Atendido por: ${usuario?.nombre_completo || 'Usuario del Sistema'}
 ${infoMesaOCliente}
 ${modoEdicion ? '\n⚠️  ESTOS SON ITEMS ADICIONALES' : ''}
 ${modoEdicion ? '⚠️  PARA COMANDA EXISTENTE\n' : ''}
@@ -271,8 +275,9 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
           
           <div>
             <label className="block text-sm font-medium text-secondary-700 mb-2">Mesero</label>
+            <label className="block text-sm font-medium text-secondary-700 mb-2">Atendido por</label>
             <div className="p-3 bg-secondary-50 rounded-lg">
-              {formulario.mesero}
+              {usuario?.nombre_completo || 'Usuario del Sistema'}
             </div>
           </div>
 

@@ -8,8 +8,6 @@ import { Users, Check, X, User, Edit, Clock, AlertCircle, Repeat } from 'lucide-
 interface SeleccionMesaProps {
   mesasSeleccionadas: Mesa[];
   onMesasChange: (mesas: Mesa[]) => void;
-  mesero: string;
-  onMeseroChange: (mesero: string) => void;
   onEditarComanda?: (comanda: Comanda) => void;
 }
 
@@ -17,13 +15,12 @@ interface MesasPorSalon {
   [salon: string]: Mesa[];
 }
 
-export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange, mesero, onMeseroChange, onEditarComanda }: SeleccionMesaProps) {
+export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange, onEditarComanda }: SeleccionMesaProps) {
   const [mesas, setMesas] = useState<Mesa[]>([]);
   const [mesasPorSalon, setMesasPorSalon] = useState<MesasPorSalon>({});
   const [comandasActivas, setComandasActivas] = useState<Comanda[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editandoMesero, setEditandoMesero] = useState(false);
   
   // Estados para cambio de mesa
   const [mostrarModalCambioMesa, setMostrarModalCambioMesa] = useState(false);
@@ -59,8 +56,6 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   useEffect(() => {
     cargarMesas();
     cargarComandasActivas();
-    // Cargar el nombre del mesero guardado al inicializar
-    cargarMeseroGuardado();
     
     // Actualizar cada 5 segundos para tiempo real
     const interval = setInterval(() => {
@@ -80,35 +75,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
     }
   };
 
-  const cargarMeseroGuardado = () => {
-    try {
-      const meseroGuardado = localStorage.getItem('casa-montis-mesero');
-      if (meseroGuardado && !mesero) {
-        onMeseroChange(meseroGuardado);
-      }
-    } catch (error) {
-      console.error('Error al cargar mesero guardado:', error);
-    }
-  };
-
-  const handleMeseroChange = (nuevoMesero: string) => {
-    onMeseroChange(nuevoMesero);
-    // Guardar en localStorage
-    try {
-      if (nuevoMesero.trim()) {
-        localStorage.setItem('casa-montis-mesero', nuevoMesero.trim());
-      } else {
-        localStorage.removeItem('casa-montis-mesero');
-      }
-    } catch (error) {
-      console.error('Error al guardar mesero:', error);
-    }
-  };
-
-  const guardarMesero = (nuevoMesero: string) => {
-    handleMeseroChange(nuevoMesero);
-    setEditandoMesero(false);
-  };
+  // Funcion cargarComandasActivas...
 
   // Optimizar agrupación de mesas con useMemo
   const mesasAgrupadasYOrdenadas = useMemo(() => {
@@ -248,7 +215,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   if (loading) {
     return (
       <div className="card">
-        <h2 className="text-xl font-semibold text-secondary-800 mb-4">Seleccionar Mesa(s) y Mesero</h2>
+        <h2 className="text-xl font-semibold text-secondary-800 mb-4">Seleccionar Mesa(s)</h2>
         <div className="flex justify-center items-center py-8">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary-600"></div>
         </div>
@@ -259,7 +226,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   if (error) {
     return (
       <div className="card">
-        <h2 className="text-xl font-semibold text-secondary-800 mb-4">Seleccionar Mesa(s) y Mesero</h2>
+        <h2 className="text-xl font-semibold text-secondary-800 mb-4">Seleccionar Mesa(s)</h2>
         <div className="text-red-600 text-center py-4">
           {error}
           <button 
@@ -276,77 +243,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   return (
     <div className="space-y-6">
       {/* Campo de Mesero - Movido al inicio */}
-      <div className="card">
-        <h2 className="text-xl font-semibold text-secondary-800 mb-4 flex items-center">
-          <User className="mr-2" size={20} />
-          Información del Mesero
-        </h2>
-        <div className="max-w-md">
-          {mesero && !editandoMesero ? (
-            // Vista compacta cuando hay mesero guardado
-            <div className="flex items-center justify-between p-3 bg-green-50 border border-green-200 rounded-md">
-              <div className="flex items-center space-x-2">
-                <User className="text-green-600" size={20} />
-                <span className="font-medium text-secondary-800">{mesero}</span>
-              </div>
-              <button
-                onClick={() => setEditandoMesero(true)}
-                className="flex items-center space-x-1 px-3 py-1 text-sm text-blue-600 hover:text-blue-800 hover:bg-blue-50 rounded-md transition-colors"
-              >
-                <Edit size={14} />
-                <span>(Cambiar)</span>
-              </button>
-            </div>
-          ) : (
-            // Vista de edición
-            <div>
-              <label htmlFor="mesero" className="block text-sm font-medium text-secondary-700 mb-2">
-                Nombre del Mesero/a
-              </label>
-              <div className="flex space-x-2">
-                <input
-                  type="text"
-                  id="mesero"
-                  value={mesero}
-                  onChange={(e) => onMeseroChange(e.target.value)}
-                  placeholder="Ingrese el nombre del mesero/a"
-                  className="flex-1 px-3 py-2 border border-secondary-300 rounded-md focus:outline-none focus:ring-2 focus:ring-primary-500 focus:border-transparent"
-                  autoFocus={editandoMesero}
-                />
-                {mesero && editandoMesero && (
-                  <button
-                    onClick={() => guardarMesero(mesero)}
-                    className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-md text-sm transition-colors flex items-center"
-                    title="Guardar mesero"
-                  >
-                    <Check size={16} />
-                  </button>
-                )}
-                {mesero && (
-                  <button
-                    onClick={() => {
-                      handleMeseroChange('');
-                      setEditandoMesero(false);
-                    }}
-                    className="px-3 py-2 bg-secondary-200 hover:bg-secondary-300 text-secondary-700 rounded-md text-sm transition-colors"
-                    title="Limpiar mesero"
-                  >
-                    <X size={16} />
-                  </button>
-                )}
-              </div>
-              {mesero && !editandoMesero && (
-                <p className="text-xs text-green-600 mt-1">
-                  ✓ Mesero guardado automáticamente
-                </p>
-              )}
-              <p className="text-xs text-secondary-500 mt-1">
-                El nombre se guardará automáticamente en este dispositivo
-              </p>
-            </div>
-          )}
-        </div>
-      </div>
+      {/* Campo de Mesero - ELIMINADO */}
 
       {/* Selección de Mesas */}
       <div className="card">
