@@ -9,8 +9,10 @@ import GestionMesas from './admin/GestionMesas';
 import GestionSalones from './admin/GestionSalones';
 import ConfiguracionSistema from './admin/ConfiguracionSistema';
 import GestionFacturacion from './admin/GestionFacturacion';
+import GestionUsuarios from './admin/GestionUsuarios';
+import GestionRoles from './admin/GestionRoles';
 
-type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion';
+type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles';
 
 interface Seccion {
   id: SeccionAdmin;
@@ -18,7 +20,10 @@ interface Seccion {
   icon: React.ComponentType<any>;
   descripcion: string;
   component: React.ComponentType;
+  permisos?: string[];
 }
+
+import { useAuth } from '@/contexts/AuthContext';
 
 interface GrupoAdmin {
   id: string;
@@ -36,6 +41,7 @@ interface GrupoAdmin {
 }
 
 export default function Administracion() {
+  const { tienePermiso } = useAuth();
   const [seccionActiva, setSeccionActiva] = useState<SeccionAdmin | null>(null);
   const [mostrandoInicio, setMostrandoInicio] = useState(true);
 
@@ -60,6 +66,7 @@ export default function Administracion() {
           icon: Package,
           descripcion: 'Crear, editar y eliminar productos del menú',
           component: GestionProductos,
+          permisos: ['gestion_menu']
         },
         {
           id: 'categorias',
@@ -67,6 +74,7 @@ export default function Administracion() {
           icon: Tags,
           descripcion: 'Administrar categorías de productos',
           component: GestionCategorias,
+          permisos: ['gestion_menu']
         },
         {
           id: 'personalizaciones',
@@ -74,6 +82,7 @@ export default function Administracion() {
           icon: Utensils,
           descripcion: 'Opciones de caldos, principios y proteínas',
           component: GestionPersonalizaciones,
+          permisos: ['gestion_menu']
         },
       ],
     },
@@ -96,6 +105,7 @@ export default function Administracion() {
           icon: Users,
           descripcion: 'Crear, editar y eliminar mesas',
           component: GestionMesas,
+          permisos: ['gestion_espacios']
         },
         {
           id: 'salones',
@@ -103,6 +113,7 @@ export default function Administracion() {
           icon: Home,
           descripcion: 'Administrar salones del restaurante',
           component: GestionSalones,
+          permisos: ['gestion_espacios']
         },
       ],
     },
@@ -125,19 +136,46 @@ export default function Administracion() {
           icon: FileText,
           descripcion: 'Configuración de facturas y recibos',
           component: GestionFacturacion,
+          permisos: ['gestionar_sistema']
+        },
+        {
+          id: 'usuarios',
+          nombre: 'Usuarios',
+          icon: Users,
+          descripcion: 'Gestión de usuarios y accesos',
+          component: GestionUsuarios,
+          permisos: ['gestionar_sistema']
+        },
+        {
+          id: 'roles',
+          nombre: 'Roles y Permisos',
+          icon: Shield,
+          descripcion: 'Configuración de roles y permisos del sistema',
+          component: GestionRoles,
+          permisos: ['gestionar_sistema']
         },
         {
           id: 'sistema',
           nombre: 'Sistema',
-          icon: Shield,
+          icon: Cog,
           descripcion: 'Configuración avanzada del sistema',
           component: ConfiguracionSistema,
+          permisos: ['gestionar_sistema']
         },
       ],
     },
   ];
 
-  const seccionActualData = grupos
+  // Filtrar grupos y secciones según permisos
+  const gruposFiltrados = grupos.map(grupo => ({
+    ...grupo,
+    secciones: grupo.secciones.filter(seccion => {
+      if (!seccion.permisos) return true;
+      return seccion.permisos.some(p => tienePermiso(p));
+    })
+  })).filter(grupo => grupo.secciones.length > 0);
+
+  const seccionActualData = gruposFiltrados
     .flatMap(g => g.secciones)
     .find(s => s.id === seccionActiva);
 
@@ -202,7 +240,7 @@ export default function Administracion() {
 
             {/* Grid de grupos */}
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              {grupos.map((grupo) => {
+              {gruposFiltrados.map((grupo) => {
                 const GrupoIcon = grupo.icon;
                 return (
                   <div
