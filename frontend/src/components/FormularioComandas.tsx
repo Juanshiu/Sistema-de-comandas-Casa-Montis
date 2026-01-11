@@ -18,7 +18,7 @@ export default function FormularioComandas() {
   const [formulario, setFormulario] = useState<FormularioComanda>({
     mesas: [],
     items: [],
-    mesero: '',
+    // mesero: '', // ELIMINADO
     tipo_pedido: 'mesa' // Por defecto es mesa
   });
 
@@ -32,8 +32,8 @@ export default function FormularioComandas() {
       paso: 1, 
       titulo: formulario.tipo_pedido === 'domicilio' ? 'Datos del Cliente' : 'Seleccionar Mesa', 
       completado: formulario.tipo_pedido === 'domicilio' 
-        ? (!!formulario.datos_cliente?.nombre && !!formulario.mesero)
-        : (formulario.mesas.length > 0 && !!formulario.mesero)
+        ? (!!formulario.datos_cliente?.nombre)
+        : (formulario.mesas.length > 0)
     },
     { 
       paso: 2, 
@@ -73,7 +73,7 @@ export default function FormularioComandas() {
       setFormulario({
         mesas: comanda.mesas,
         items: itemsEnriquecidos,
-        mesero: comanda.mesero,
+        // mesero: comanda.mesero, // ELIMINADO
         observaciones_generales: comanda.observaciones_generales,
         tipo_pedido: comanda.tipo_pedido || 'mesa',
         datos_cliente: comanda.datos_cliente
@@ -84,7 +84,7 @@ export default function FormularioComandas() {
       setFormulario({
         mesas: comanda.mesas,
         items: comanda.items,
-        mesero: comanda.mesero,
+        // mesero: comanda.mesero, // ELIMINADO
         observaciones_generales: comanda.observaciones_generales,
         tipo_pedido: comanda.tipo_pedido || 'mesa',
         datos_cliente: comanda.datos_cliente
@@ -100,7 +100,7 @@ export default function FormularioComandas() {
     setFormulario({
       mesas: [],
       items: [],
-      mesero: '',
+      // mesero: '', // ELIMINADO
       tipo_pedido: 'mesa'
     });
     setPasoActual(0);
@@ -110,9 +110,11 @@ export default function FormularioComandas() {
     setFormulario(prev => ({ ...prev, mesas }));
   };
 
+  /* ELIMINADO: handleMeseroChange
   const handleMeseroChange = (mesero: string) => {
     setFormulario(prev => ({ ...prev, mesero }));
   };
+  */
 
   const handleProductosChange = (items: ItemComanda[]) => {
     setFormulario(prev => ({ ...prev, items }));
@@ -146,15 +148,14 @@ export default function FormularioComandas() {
         return !!formulario.tipo_pedido;
       case 1:
         if (formulario.tipo_pedido === 'domicilio') {
-          // Para domicilio: validar nombre, mesero, y dirección (solo si no es para llevar)
+          // Para domicilio: validar nombre y dirección (solo si no es para llevar)
           const datosValidos = formulario.datos_cliente?.nombre.trim() !== '' && 
-                                formulario.mesero.trim() !== '' &&
                                 (formulario.datos_cliente?.es_para_llevar || 
                                  formulario.datos_cliente?.direccion.trim() !== '');
           return datosValidos;
         } else {
-          // Para mesa: validar mesas y mesero
-          return formulario.mesas.length > 0 && formulario.mesero.trim() !== '';
+          // Para mesa: validar mesas
+          return formulario.mesas.length > 0;
         }
       case 2: 
         return !!formulario.tipo_servicio;
@@ -193,9 +194,7 @@ export default function FormularioComandas() {
           return (
             <FormularioDatosCliente
               datosCliente={formulario.datos_cliente}
-              mesero={formulario.mesero}
               onDatosClienteChange={handleDatosClienteChange}
-              onMeseroChange={handleMeseroChange}
             />
           );
         } else {
@@ -203,8 +202,6 @@ export default function FormularioComandas() {
             <SeleccionMesaYMesero 
               mesasSeleccionadas={formulario.mesas}
               onMesasChange={handleMesasSelect}
-              mesero={formulario.mesero}
-              onMeseroChange={handleMeseroChange}
               onEditarComanda={handleEditarComanda}
             />
           );

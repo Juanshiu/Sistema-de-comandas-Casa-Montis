@@ -6,16 +6,12 @@ import { User, MapPin, Phone, ShoppingBag, Truck } from 'lucide-react';
 
 interface FormularioDatosClienteProps {
   datosCliente?: DatosCliente;
-  mesero: string;
   onDatosClienteChange: (datos: DatosCliente) => void;
-  onMeseroChange: (mesero: string) => void;
 }
 
 export default function FormularioDatosCliente({ 
   datosCliente,
-  mesero,
-  onDatosClienteChange,
-  onMeseroChange
+  onDatosClienteChange
 }: FormularioDatosClienteProps) {
   
   const [nombre, setNombre] = useState(datosCliente?.nombre || '');
@@ -144,20 +140,7 @@ export default function FormularioDatosCliente({
           </div>
         )}
 
-        {/* Mesero que toma el pedido */}
-        <div>
-          <label className="block text-sm font-medium text-secondary-700 mb-2">
-            Mesero/Responsable *
-          </label>
-          <input
-            type="text"
-            value={mesero}
-            onChange={(e) => onMeseroChange(e.target.value)}
-            placeholder="Nombre del mesero que toma el pedido"
-            className="input-field"
-            required
-          />
-        </div>
+        {/* Mesero que toma el pedido - ELIMINADO */}
 
         {/* Resumen */}
         {nombre.trim() && (
@@ -168,7 +151,7 @@ export default function FormularioDatosCliente({
               <p><strong>Cliente:</strong> {nombre}</p>
               {telefono && <p><strong>Teléfono:</strong> {telefono}</p>}
               {!esParaLlevar && direccion && <p><strong>Dirección:</strong> {direccion}</p>}
-              {mesero && <p><strong>Atendido por:</strong> {mesero}</p>}
+              {/* {mesero && <p><strong>Atendido por:</strong> {mesero}</p>} */}
             </div>
           </div>
         )}
