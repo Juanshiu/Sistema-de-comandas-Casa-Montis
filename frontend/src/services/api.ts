@@ -8,6 +8,23 @@ const api = axios.create({
   timeout: 10000,
 });
 
+// Interceptor para agregar el token de autenticación a cada solicitud
+api.interceptors.request.use(
+  (config) => {
+    // Obtener token del localStorage solo en el cliente
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
 export const apiService = {
   // Mesas
   async getMesas(): Promise<Mesa[]> {
