@@ -51,7 +51,7 @@ export default function UserInfo() {
           <div className="bg-primary-100 p-2 rounded-full">
             <User className="w-4 h-4 text-primary-700" />
           </div>
-          <div className="text-left hidden sm:block">
+          <div className="text-left block">
             <p className="text-sm font-semibold text-secondary-800 leading-tight">
               {usuario.nombre_completo}
             </p>
