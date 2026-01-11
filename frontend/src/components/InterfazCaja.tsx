@@ -78,6 +78,25 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     return () => clearInterval(interval);
   }, []);
 
+  // Actualizar comanda seleccionada si cambia en la lista de activas
+  useEffect(() => {
+    if (comandaSeleccionada) {
+      const comandaActualizada = comandasActivas.find(c => c.id === comandaSeleccionada.id);
+      
+      if (comandaActualizada) {
+        // Comparar propiedades clave para detectar cambios significativos
+        // JSON.stringify puede fallar si el orden de las propiedades cambia o si hay referencias circulares (aunque no debería aquí)
+        // Pero es la forma más segura de detectar cambios profundos en items
+        const haCambiado = JSON.stringify(comandaActualizada) !== JSON.stringify(comandaSeleccionada);
+        
+        if (haCambiado) {
+          console.log('🔄 Actualizando comanda seleccionada con nuevos datos...');
+          setComandaSeleccionada(comandaActualizada);
+        }
+      }
+    }
+  }, [comandasActivas, comandaSeleccionada]);
+
   useEffect(() => {
     if (comandaSeleccionada && montoPagado) {
       const pago = parseFloat(montoPagado) || 0;
@@ -344,7 +363,7 @@ TEL: ${configFacturacion.telefonos.join(' - ')}
 ================================
 ${mesaInfo}
 Fecha: ${new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
-Mesero: ${comandaSeleccionada.mesero}
+Atendido por: ${comandaSeleccionada.usuario_nombre || comandaSeleccionada.mesero}
 ================================
 CANT ARTICULO          TOTAL
 --------------------------------
@@ -682,7 +701,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                                 </>
                               )}
                               <p className="text-xs text-secondary-500 truncate">
-                                {comanda.mesero}
+                                {comanda.usuario_nombre || comanda.mesero}
                               </p>
                             </div>
                             <div className="flex flex-col items-end space-y-1 ml-2">
@@ -797,7 +816,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                   </>
                 )}
                 <p className="text-sm text-secondary-600">
-                  Mesero: {comandaSeleccionada.mesero}
+                  Atendido por: {comandaSeleccionada.usuario_nombre || comandaSeleccionada.mesero}
                 </p>
                 <p className="text-sm text-secondary-600">
                   Fecha: {new Date(comandaSeleccionada.fecha_creacion).toLocaleString()}
