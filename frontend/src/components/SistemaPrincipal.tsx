@@ -1,6 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/contexts/AuthContext';
+import Login from '@/components/Login';
+import UserInfo from '@/components/UserInfo';
 import FormularioComandas from '@/components/FormularioComandas';
 import InterfazCaja from '@/components/InterfazCaja';
 import Reportes from '@/components/Reportes';
@@ -10,42 +13,73 @@ import { ShoppingCart, Calculator, BarChart3, Settings, Menu, X, History } from 
 
 type Vista = 'comandas' | 'caja' | 'reportes' | 'admin' | 'historial';
 
+interface VistaConfig {
+  id: Vista;
+  nombre: string;
+  icon: any;
+  descripcion: string;
+  permisos?: string[];
+}
+
 export default function SistemaPrincipal() {
+  const { isAuthenticated, isLoading, usuario, tienePermiso } = useAuth();
   const [vistaActual, setVistaActual] = useState<Vista>('comandas');
   const [menuAbierto, setMenuAbierto] = useState(false);
 
-  const vistas = [
+  // Definición de vistas (movida antes de los returns condicionales)
+  const vistas: VistaConfig[] = [
     {
       id: 'comandas' as Vista,
       nombre: 'Tomar Comandas',
       icon: ShoppingCart,
-      descripcion: 'Crear nuevas comandas'
+      descripcion: 'Crear nuevas comandas',
+      permisos: ['crear_comandas']
     },
     {
       id: 'caja' as Vista,
       nombre: 'Caja',
       icon: Calculator,
-      descripcion: 'Procesar pagos y liberar mesas'
+      descripcion: 'Procesar pagos y liberar mesas',
+      permisos: ['gestionar_caja']
     },
     {
       id: 'historial' as Vista,
       nombre: 'Historial',
       icon: History,
-      descripcion: 'Ver historial de comandas'
+      descripcion: 'Ver historial de comandas',
+      permisos: ['ver_reportes', 'gestionar_caja', 'ver_historial'] // Agregado ver_historial
     },
     {
       id: 'reportes' as Vista,
       nombre: 'Reportes',
       icon: BarChart3,
-      descripcion: 'Ver estadísticas de ventas'
+      descripcion: 'Ver estadísticas de ventas',
+      permisos: ['ver_reportes']
     },
     {
       id: 'admin' as Vista,
       nombre: 'Administración',
       icon: Settings,
-      descripcion: 'Gestionar productos y personalizaciones'
+      descripcion: 'Gestionar sistema y productos',
+      permisos: ['gestionar_sistema', 'gestion_menu', 'gestion_espacios'] // Corregido a gestion_
     }
   ];
+
+  // Filtrar vistas según permisos
+  const vistasPermitidas = vistas.filter(vista => {
+    if (!vista.permisos) return true;
+    return vista.permisos.some(p => tienePermiso(p));
+  });
+
+  // Redirigir si la vista actual no está permitida
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && vistasPermitidas.length > 0) {
+      const vistaActualPermitida = vistasPermitidas.some(v => v.id === vistaActual);
+      if (!vistaActualPermitida) {
+        setVistaActual(vistasPermitidas[0].id);
+      }
+    }
+  }, [vistasPermitidas, vistaActual, isLoading, isAuthenticated]);
 
   const renderVista = () => {
     switch (vistaActual) {
@@ -64,21 +98,44 @@ export default function SistemaPrincipal() {
     }
   };
 
+  // Si está cargando, mostrar pantalla de carga
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-secondary-50">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary-600"></div>
+      </div>
+    );
+  }
+
+  // Si no está autenticado, mostrar login
+  if (!isAuthenticated) {
+    return <Login />;
+  }
+
   return (
     <div className="min-h-screen bg-secondary-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center h-16">
-            <div className="flex items-center">
-              <h1 className="text-xl font-bold text-secondary-800">
+            <div className="flex items-center space-x-4">
+              <h1 className="text-xl font-bold text-secondary-800 hidden md:block">
                 Casa Montis - Sistema de Comandas
+              </h1>
+              <h1 className="text-lg font-bold text-secondary-800 md:hidden">
+                Casa Montis
               </h1>
             </div>
             
-            {/* Navegación desktop */}
-            <nav className="hidden lg:flex space-x-8">
-              {vistas.map((vista) => {
+            <div className="flex items-center space-x-4">
+              {/* Información del Usuario */}
+              <div className="hidden lg:block">
+                <UserInfo />
+              </div>
+
+              {/* Navegación desktop (ahora alineada a la derecha) */}
+              <nav className="hidden lg:flex space-x-2">
+              {vistasPermitidas.map((vista) => {
                 const Icon = vista.icon;
                 return (
                   <button
@@ -106,14 +163,18 @@ export default function SistemaPrincipal() {
                 {menuAbierto ? <X size={24} /> : <Menu size={24} />}
               </button>
             </div>
+            </div>
           </div>
         </div>
 
         {/* Menú móvil */}
         {menuAbierto && (
           <div className="lg:hidden border-t bg-white">
+            <div className="p-4 border-b border-secondary-100">
+              <UserInfo />
+            </div>
             <div className="px-2 pt-2 pb-3 space-y-1">
-              {vistas.map((vista) => {
+              {vistasPermitidas.map((vista) => {
                 const Icon = vista.icon;
                 return (
                   <button
@@ -146,7 +207,7 @@ export default function SistemaPrincipal() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center space-x-2">
             {(() => {
-              const vistaActiva = vistas.find(v => v.id === vistaActual);
+              const vistaActiva = vistasPermitidas.find(v => v.id === vistaActual);
               if (vistaActiva) {
                 const Icon = vistaActiva.icon;
                 return (
