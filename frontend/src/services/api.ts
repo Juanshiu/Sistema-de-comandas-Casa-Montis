@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial } from '@/types';
+import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial, PaginatedResponse } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -192,9 +192,13 @@ export const apiService = {
     return response.data;
   },
 
-  async getHistorialComandas(fecha?: string): Promise<ComandaHistorial[]> {
-    const params = fecha ? `?fecha=${fecha}` : '';
-    const response = await api.get(`/comandas/historial${params}`);
+  async getHistorialComandas(fecha?: string, page: number = 1, limit: number = 20): Promise<PaginatedResponse<ComandaHistorial>> {
+    const params = new URLSearchParams();
+    if (fecha) params.append('fecha', fecha);
+    params.append('page', page.toString());
+    params.append('limit', limit.toString());
+    
+    const response = await api.get(`/comandas/historial?${params.toString()}`);
     return response.data;
   },
 

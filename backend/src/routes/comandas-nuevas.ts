@@ -462,146 +462,195 @@ router.get('/activas', (req: Request, res: Response) => {
   });
 });
 
-// Obtener historial de comandas (todas las comandas con items y mesas)
+// Obtener historial de comandas (paginado)
 router.get('/historial', (req: Request, res: Response) => {
-  const query = `
-    SELECT 
-      c.*,
-      f.metodo_pago,
-      f.monto_pagado,
-      f.cambio
-    FROM comandas c
-    LEFT JOIN facturas f ON c.id = f.comanda_id
-    ORDER BY c.fecha_creacion DESC
-  `;
-  
-  db.all(query, [], (err: any, rows: any[]) => {
+  const page = parseInt(req.query.page as string) || 1;
+  const limit = parseInt(req.query.limit as string) || 20;
+  const offset = (page - 1) * limit;
+  const fecha = req.query.fecha as string;
+
+  // 1. Obtener el total de registros para la paginación
+  let countQuery = 'SELECT COUNT(*) as count FROM comandas c';
+  const countParams: any[] = [];
+
+  if (fecha) {
+    countQuery += ' WHERE date(c.fecha_creacion) = ?';
+    countParams.push(fecha);
+  }
+
+  db.get(countQuery, countParams, (err: any, countRow: any) => {
     if (err) {
-      console.error('Error al obtener historial:', err);
+      console.error('Error al contar historial:', err);
       return res.status(500).json({ error: 'Error al obtener el historial' });
     }
-    
-    if (rows.length === 0) {
-      return res.json([]);
+
+    const total = countRow.count;
+    const totalPages = Math.ceil(total / limit);
+
+    // 2. Obtener los registros paginados
+    let query = `
+      SELECT 
+        c.*,
+        f.metodo_pago,
+        f.monto_pagado,
+        f.cambio
+      FROM comandas c
+      LEFT JOIN facturas f ON c.id = f.comanda_id
+    `;
+    const queryParams: any[] = [];
+
+    if (fecha) {
+      query += ' WHERE date(c.fecha_creacion) = ?';
+      queryParams.push(fecha);
     }
+
+    query += ' ORDER BY c.fecha_creacion DESC LIMIT ? OFFSET ?';
+    queryParams.push(limit, offset);
     
-    // Obtener mesas e items para cada comanda
-    const comandasPromises = rows.map((row: any) => {
-      return new Promise((resolve, reject) => {
-        // Obtener items primero
-        const itemsQuery = `
-          SELECT 
-            ci.*,
-            p.nombre as producto_nombre,
-            p.precio as producto_precio,
-            p.categoria as producto_categoria
-          FROM comanda_items ci
-          JOIN productos p ON ci.producto_id = p.id
-          WHERE ci.comanda_id = ?
-          ORDER BY ci.rowid
-        `;
-        
-        db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
-          if (err) {
-            reject(err);
-            return;
+    db.all(query, queryParams, (err: any, rows: any[]) => {
+      if (err) {
+        console.error('Error al obtener historial:', err);
+        return res.status(500).json({ error: 'Error al obtener el historial' });
+      }
+      
+      if (rows.length === 0) {
+        return res.json({
+          data: [],
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages
           }
-          
-          const items = itemsRows.map(itemRow => ({
-            id: itemRow.id,
-            comanda_id: itemRow.comanda_id,
-            producto_id: itemRow.producto_id,
-            cantidad: itemRow.cantidad,
-            precio_unitario: itemRow.precio_unitario,
-            subtotal: itemRow.subtotal,
-            observaciones: itemRow.observaciones,
-            personalizacion: itemRow.personalizacion ? JSON.parse(itemRow.personalizacion) : null,
-            producto: {
-              id: itemRow.producto_id,
-              nombre: itemRow.producto_nombre,
-              precio: itemRow.producto_precio,
-              categoria: itemRow.producto_categoria,
-              disponible: true
-            }
-          }));
-          
-          // Si es domicilio, no buscar mesas
-          if (row.tipo_pedido === 'domicilio') {
-            const comanda: Comanda = {
-              id: row.id,
-              mesas: [],
-              mesero: row.mesero,
-              subtotal: row.subtotal,
-              total: row.total,
-              estado: row.estado,
-              observaciones_generales: row.observaciones_generales,
-              fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
-              fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
-              tipo_pedido: 'domicilio',
-              datos_cliente: {
-                nombre: row.cliente_nombre,
-                direccion: row.cliente_direccion || '',
-                telefono: row.cliente_telefono || '',
-                es_para_llevar: row.es_para_llevar === 1
-              },
-              items: items,
-              metodo_pago: row.metodo_pago || undefined,
-              monto_pagado: row.monto_pagado || undefined,
-              cambio: row.cambio || undefined
-            };
-            resolve(comanda);
-            return;
-          }
-          
-          // Si es mesa, buscar las mesas asociadas
-          const mesasQuery = `
-            SELECT m.* 
-            FROM mesas m
-            INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
-            WHERE cm.comanda_id = ?
+        });
+      }
+      
+      // Obtener mesas e items para cada comanda
+      const comandasPromises = rows.map((row: any) => {
+        return new Promise((resolve, reject) => {
+          // Obtener items primero
+          const itemsQuery = `
+            SELECT 
+              ci.*,
+              p.nombre as producto_nombre,
+              p.precio as producto_precio,
+              p.categoria as producto_categoria
+            FROM comanda_items ci
+            JOIN productos p ON ci.producto_id = p.id
+            WHERE ci.comanda_id = ?
+            ORDER BY ci.rowid
           `;
           
-          db.all(mesasQuery, [row.id], (err: any, mesasRows: any[]) => {
+          db.all(itemsQuery, [row.id], (err: any, itemsRows: any[]) => {
             if (err) {
               reject(err);
               return;
             }
             
-            const comanda: Comanda = {
-              id: row.id,
-              mesas: mesasRows.map(mesa => ({
-                id: mesa.id,
-                numero: mesa.numero,
-                capacidad: mesa.capacidad,
-                salon: mesa.salon,
-                ocupada: mesa.ocupada
-              })),
-              mesero: row.mesero,
-              subtotal: row.subtotal,
-              total: row.total,
-              estado: row.estado,
-              observaciones_generales: row.observaciones_generales,
-              fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
-              fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
-              tipo_pedido: row.tipo_pedido || 'mesa',
-              items: items,
-              metodo_pago: row.metodo_pago || undefined,
-              monto_pagado: row.monto_pagado || undefined,
-              cambio: row.cambio || undefined
-            };
+            const items = itemsRows.map(itemRow => ({
+              id: itemRow.id,
+              comanda_id: itemRow.comanda_id,
+              producto_id: itemRow.producto_id,
+              cantidad: itemRow.cantidad,
+              precio_unitario: itemRow.precio_unitario,
+              subtotal: itemRow.subtotal,
+              observaciones: itemRow.observaciones,
+              personalizacion: itemRow.personalizacion ? JSON.parse(itemRow.personalizacion) : null,
+              producto: {
+                id: itemRow.producto_id,
+                nombre: itemRow.producto_nombre,
+                precio: itemRow.producto_precio,
+                categoria: itemRow.producto_categoria,
+                disponible: true
+              }
+            }));
             
-            resolve(comanda);
+            // Si es domicilio, no buscar mesas
+            if (row.tipo_pedido === 'domicilio') {
+              const comanda: Comanda = {
+                id: row.id,
+                mesas: [],
+                mesero: row.mesero,
+                subtotal: row.subtotal,
+                total: row.total,
+                estado: row.estado,
+                observaciones_generales: row.observaciones_generales,
+                fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+                fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
+                tipo_pedido: 'domicilio',
+                datos_cliente: {
+                  nombre: row.cliente_nombre,
+                  direccion: row.cliente_direccion || '',
+                  telefono: row.cliente_telefono || '',
+                  es_para_llevar: row.es_para_llevar === 1
+                },
+                items: items,
+                metodo_pago: row.metodo_pago || undefined,
+                monto_pagado: row.monto_pagado || undefined,
+                cambio: row.cambio || undefined
+              };
+              resolve(comanda);
+              return;
+            }
+            
+            // Si es mesa, buscar las mesas asociadas
+            const mesasQuery = `
+              SELECT m.* 
+              FROM mesas m
+              INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+              WHERE cm.comanda_id = ?
+            `;
+            
+            db.all(mesasQuery, [row.id], (err: any, mesasRows: any[]) => {
+              if (err) {
+                reject(err);
+                return;
+              }
+              
+              const comanda: Comanda = {
+                id: row.id,
+                mesas: mesasRows.map(mesa => ({
+                  id: mesa.id,
+                  numero: mesa.numero,
+                  capacidad: mesa.capacidad,
+                  salon: mesa.salon,
+                  ocupada: mesa.ocupada
+                })),
+                mesero: row.mesero,
+                subtotal: row.subtotal,
+                total: row.total,
+                estado: row.estado,
+                observaciones_generales: row.observaciones_generales,
+                fecha_creacion: convertirAHoraColombia(row.fecha_creacion),
+                fecha_actualizacion: convertirAHoraColombia(row.fecha_actualizacion),
+                tipo_pedido: row.tipo_pedido || 'mesa',
+                items: items,
+                metodo_pago: row.metodo_pago || undefined,
+                monto_pagado: row.monto_pagado || undefined,
+                cambio: row.cambio || undefined
+              };
+              
+              resolve(comanda);
+            });
           });
         });
       });
+      
+      Promise.all(comandasPromises)
+        .then(comandas => res.json({
+          data: comandas,
+          pagination: {
+            total,
+            page,
+            limit,
+            totalPages
+          }
+        }))
+        .catch(err => {
+          console.error('Error al obtener historial completo:', err);
+          res.status(500).json({ error: 'Error al obtener el historial' });
+        });
     });
-    
-    Promise.all(comandasPromises)
-      .then(comandas => res.json(comandas))
-      .catch(err => {
-        console.error('Error al obtener historial completo:', err);
-        res.status(500).json({ error: 'Error al obtener el historial' });
-      });
   });
 });
 

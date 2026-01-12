@@ -10,13 +10,16 @@ export default function HistorialComandas() {
   const [comandas, setComandas] = useState<ComandaHistorial[]>([]);
   const [filtroFecha, setFiltroFecha] = useState<string>('');
   const [cargando, setCargando] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
   const [expandidas, setExpandidas] = useState<Set<string>>(new Set());
-  const [comandasVisibles, setComandasVisibles] = useState(20);
+  const [pagina, setPagina] = useState(1);
+  const [totalComandas, setTotalComandas] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
   const { categorias: categoriasPersonalizacion, itemsPorCategoria: itemsPersonalizacion, ordenarPersonalizaciones } = usePersonalizaciones();
   const [configFacturacion, setConfigFacturacion] = useState<any>(null);
 
   useEffect(() => {
-    cargarHistorial();
+    cargarHistorial(1, '');
     cargarConfiguracionFacturacion();
   }, []);
 
@@ -29,27 +32,44 @@ export default function HistorialComandas() {
     }
   };
 
-  const cargarHistorial = async (fecha?: string) => {
+  const cargarHistorial = async (pageNum: number = 1, fecha: string = '', isFiltro: boolean = false) => {
     try {
-      setCargando(true);
-      const historial = await apiService.getHistorialComandas(fecha);
-      setComandas(historial);
+      if (pageNum === 1) {
+        setCargando(true);
+      } else {
+        setCargandoMas(true);
+      }
+      
+      const response = await apiService.getHistorialComandas(fecha, pageNum, 20);
+      
+      if (pageNum === 1) {
+        setComandas(response.data);
+      } else {
+        setComandas(prev => [...prev, ...response.data]);
+      }
+      
+      setTotalComandas(response.pagination.total);
+      setPagina(pageNum);
+      setHasMore(response.pagination.page < response.pagination.totalPages);
     } catch (error) {
       console.error('Error al cargar historial:', error);
     } finally {
-      setCargando(false);
+      if (pageNum === 1) {
+        setCargando(false);
+      } else {
+        setCargandoMas(false);
+      }
     }
   };
 
   const handleFiltroFecha = (e: React.ChangeEvent<HTMLInputElement>) => {
     const fecha = e.target.value;
     setFiltroFecha(fecha);
-    setComandasVisibles(20); // Reiniciar a 20 cuando se filtra
-    cargarHistorial(fecha);
+    cargarHistorial(1, fecha, true);
   };
 
   const cargarMasComandas = () => {
-    setComandasVisibles(prev => prev + 20);
+    cargarHistorial(pagina + 1, filtroFecha);
   };
 
   const toggleExpansion = (comandaId: string) => {
@@ -262,8 +282,7 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
             <button
               onClick={() => {
                 setFiltroFecha('');
-                setComandasVisibles(20);
-                cargarHistorial();
+                cargarHistorial(1, '');
               }}
               className="text-sm text-blue-600 hover:text-blue-800"
             >
@@ -278,7 +297,7 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm text-gray-500">Total Comandas</p>
-                <p className="text-2xl font-bold text-gray-900">{comandas.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{totalComandas}</p>
               </div>
               <div className="p-2 bg-blue-100 rounded-full">
                 <Clock className="w-6 h-6 text-blue-600" />
@@ -328,7 +347,7 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
               <p className="text-gray-500">No hay comandas para mostrar</p>
             </div>
           ) : (
-            comandas.slice(0, comandasVisibles).map((comanda, index) => (
+            comandas.map((comanda, index) => (
               <div key={comanda.id} className="bg-gradient-to-br from-white to-gray-50 rounded-xl shadow-md hover:shadow-xl transition-all duration-300 border border-gray-100 overflow-hidden">
                 <div
                   className="p-6 cursor-pointer hover:bg-gradient-to-br hover:from-gray-50 hover:to-gray-100 transition-colors"
@@ -338,7 +357,7 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Número y estado */}
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-lg text-gray-800">#{comandas.length - index}</span>
+                        <span className="font-bold text-lg text-gray-800">#{totalComandas - index}</span>
                         <span className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${getEstadoColor(comanda.estado)}`}>
                           {comanda.estado.charAt(0).toUpperCase() + comanda.estado.slice(1)}
                         </span>
@@ -539,20 +558,25 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
       )}
 
       {/* Botón Ver más */}
-      {!cargando && comandas.length > comandasVisibles && (
+      {!cargando && hasMore && (
         <div className="mt-6 flex justify-center">
           <button
             onClick={cargarMasComandas}
-            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow transition-colors flex items-center gap-2"
+            disabled={cargandoMas}
+            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg shadow transition-colors flex items-center gap-2 disabled:bg-blue-400 disabled:cursor-not-allowed"
           >
-            <ChevronDown className="w-5 h-5" />
-            Ver más comandas ({comandas.length - comandasVisibles} restantes)
+            {cargandoMas ? (
+              <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white"></div>
+            ) : (
+              <ChevronDown className="w-5 h-5" />
+            )}
+            {cargandoMas ? 'Cargando...' : `Ver más comandas (${totalComandas - comandas.length} restantes)`}
           </button>
         </div>
       )}
 
       {/* Mensaje cuando se muestran todas */}
-      {!cargando && comandas.length > 0 && comandasVisibles >= comandas.length && (
+      {!cargando && comandas.length > 0 && !hasMore && (
         <div className="mt-6 text-center">
           <p className="text-sm text-gray-500">
             Mostrando todas las comandas ({comandas.length})

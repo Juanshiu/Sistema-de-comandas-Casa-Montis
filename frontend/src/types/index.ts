@@ -276,3 +276,15 @@ export interface UsuarioSesion {
   es_superusuario: boolean;
 }
 
+
+export interface PaginationMeta {
+  total: number;
+  page: number;
+  limit: number;
+  totalPages: number;
+}
+
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: PaginationMeta;
+}
