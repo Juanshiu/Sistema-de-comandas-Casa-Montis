@@ -247,7 +247,14 @@ export default function GestionEmpresa() {
                 <label className="block text-xs font-bold text-gray-500 uppercase mb-1">Responsabilidad Tributaria</label>
                 <select
                   value={config.responsabilidad_tributaria}
-                  onChange={(e) => setConfig({ ...config, responsabilidad_tributaria: e.target.value })}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setConfig({ 
+                      ...config, 
+                      responsabilidad_tributaria: val,
+                      responsable_iva: val === 'Responsable de IVA'
+                    });
+                  }}
                   className="w-full px-4 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-teal-500"
                 >
                   <option value="No responsable de IVA">No responsable de IVA</option>

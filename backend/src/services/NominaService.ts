@@ -531,46 +531,58 @@ export class NominaService {
 
     private static dibujarHeaderEmpresa(doc: PDFKit.PDFDocument, emp: any) {
         // Nombre Empresa
-        doc.fontSize(14).font('Helvetica-Bold').text(emp.nombre_empresa.toUpperCase(), { align: 'center' });
+        const nombre = emp.nombre_empresa || 'CASA MONTIS';
+        doc.fontSize(14).font('Helvetica-Bold').text(nombre.toUpperCase(), { align: 'center' });
         
         // NIT y Responsabilidad IVA
         let ivaTexto = '';
-        if (emp.responsable_iva === 1 || emp.responsable_iva === "1") {
+        if (emp.responsable_iva === 1 || emp.responsable_iva === "1" || emp.responsable_iva === true) {
             ivaTexto = 'RESPONSABLE DE IVA';
-        } else if (emp.responsabilidad_tributaria) {
+        } else if (emp.responsabilidad_tributaria && emp.responsabilidad_tributaria !== 'null') {
             ivaTexto = emp.responsabilidad_tributaria.toUpperCase();
         } else {
             ivaTexto = 'NO RESPONSABLE DE IVA';
         }
         
-        doc.fontSize(10).font('Helvetica').text(`NIT: ${emp.nit}`, { align: 'center' });
+        const nit = emp.nit && emp.nit !== 'null' ? emp.nit : 'N/A';
+        doc.fontSize(10).font('Helvetica').text(`NIT: ${nit}`, { align: 'center' });
         doc.fontSize(9).text(ivaTexto, { align: 'center' });
         
         // Ubicación (Priorizar Ciudad/Depto, fallback a Ubicación Geográfica)
+        const direccion = emp.direccion && emp.direccion !== 'null' ? emp.direccion : '';
         const ciudadStr = emp.ciudad && emp.ciudad !== "null" ? emp.ciudad : '';
         const deptoStr = emp.departamento && emp.departamento !== "null" ? emp.departamento : '';
         
-        let ubicacionFull = emp.direccion || '';
+        let ubicacionFull = direccion;
         if (ciudadStr || deptoStr) {
-            ubicacionFull += `${ciudadStr ? ' - ' + ciudadStr : ''}${deptoStr ? ' - ' + deptoStr : ''}`;
+            const loc = [ciudadStr, deptoStr].filter(Boolean).join(' - ');
+            ubicacionFull += (ubicacionFull ? ' - ' : '') + loc;
         } else if (emp.ubicacion_geografica && emp.ubicacion_geografica !== "null") {
-            ubicacionFull += ` - ${emp.ubicacion_geografica}`;
+            ubicacionFull += (ubicacionFull ? ' - ' : '') + emp.ubicacion_geografica;
         }
         
-        doc.text(ubicacionFull, { align: 'center' });
+        if (ubicacionFull) {
+            doc.text(ubicacionFull, { align: 'center' });
+        }
         
         // Contacto (Teléfonos y Email)
         let tels = '';
         try {
             if (emp.telefonos) {
-                const parsed = JSON.parse(emp.telefonos);
+                let parsed;
+                if (typeof emp.telefonos === 'string') {
+                    parsed = JSON.parse(emp.telefonos);
+                } else {
+                    parsed = emp.telefonos;
+                }
+                
                 if (Array.isArray(parsed)) {
                     tels = parsed.filter((t: any) => t && String(t).trim()).join(' - ');
                 } else {
-                    tels = emp.telefonos;
+                    tels = String(emp.telefonos);
                 }
             }
-            if (emp.telefono2 && !tels.includes(emp.telefono2)) {
+            if (emp.telefono2 && emp.telefono2 !== 'null' && !tels.includes(emp.telefono2)) {
                 tels = tels ? `${tels} - ${emp.telefono2}` : emp.telefono2;
             }
         } catch(e) {

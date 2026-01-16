@@ -1,9 +1,7 @@
 import { Router, Request, Response } from 'express';
-import sqlite3 from 'sqlite3';
-import path from 'path';
+import { db } from '../database/init';
 
 const router = Router();
-const dbPath = path.join(__dirname, '../../database/restaurante.db');
 
 interface ConfiguracionFacturacion {
   id?: number;
@@ -37,15 +35,12 @@ interface ConfiguracionFacturacion {
 
 // GET - Obtener configuración de facturación
 router.get('/', async (req: Request, res: Response) => {
-  const db = new sqlite3.Database(dbPath);
-
   db.get(
     'SELECT * FROM config_facturacion ORDER BY id DESC LIMIT 1',
     [],
     (err, row: any) => {
       if (err) {
         res.status(500).json({ error: err.message });
-        db.close();
         return;
       }
 
@@ -61,7 +56,6 @@ router.get('/', async (req: Request, res: Response) => {
           telefonos: ['3132171025', '3224588520']
         };
         res.json(defaultConfig);
-        db.close();
         return;
       }
 
@@ -76,12 +70,25 @@ router.get('/', async (req: Request, res: Response) => {
         direccion: row.direccion,
         ubicacion_geografica: row.ubicacion_geografica,
         telefonos: JSON.parse(row.telefonos),
+        representante_legal: row.representante_legal,
+        tipo_identificacion: row.tipo_identificacion,
+        departamento: row.departamento,
+        ciudad: row.ciudad,
+        telefono2: row.telefono2,
+        correo_electronico: row.correo_electronico,
+        responsabilidad_tributaria: row.responsabilidad_tributaria,
+        tributos: row.tributos ? JSON.parse(row.tributos) : [],
+        zona: row.zona,
+        sitio_web: row.sitio_web,
+        alias: row.alias,
+        actividad_economica: row.actividad_economica,
+        descripcion: row.descripcion,
+        logo: row.logo,
         created_at: row.created_at,
         updated_at: row.updated_at
       };
 
       res.json(config);
-      db.close();
     }
   );
 });
@@ -95,13 +102,27 @@ router.put('/', async (req: Request, res: Response) => {
     porcentaje_iva,
     direccion,
     ubicacion_geografica,
-    telefonos
+    telefonos,
+    representante_legal,
+    tipo_identificacion,
+    departamento,
+    ciudad,
+    telefono2,
+    correo_electronico,
+    responsabilidad_tributaria,
+    tributos,
+    zona,
+    sitio_web,
+    alias,
+    actividad_economica,
+    descripcion,
+    logo
   } = req.body;
 
   // Validaciones
-  if (!nombre_empresa || !nit || !direccion || !ubicacion_geografica || !telefonos) {
+  if (!nombre_empresa || !nit || !direccion || !telefonos) {
     res.status(400).json({ 
-      error: 'Faltan campos requeridos: nombre_empresa, nit, direccion, ubicacion_geografica, telefonos' 
+      error: 'Faltan campos requeridos: nombre_empresa, nit, direccion, telefonos' 
     });
     return;
   }
@@ -118,17 +139,15 @@ router.put('/', async (req: Request, res: Response) => {
     return;
   }
 
-  const db = new sqlite3.Database(dbPath);
-
   // Verificar si existe configuración
   db.get('SELECT id FROM config_facturacion LIMIT 1', [], (err, row: any) => {
     if (err) {
       res.status(500).json({ error: err.message });
-      db.close();
       return;
     }
 
     const telefonosJSON = JSON.stringify(telefonos);
+    const tributosJSON = tributos ? JSON.stringify(tributos) : '[]';
     const responsableIvaInt = responsable_iva ? 1 : 0;
     const porcentajeIvaValue = responsable_iva ? porcentaje_iva : null;
 
@@ -143,6 +162,20 @@ router.put('/', async (req: Request, res: Response) => {
              direccion = ?,
              ubicacion_geografica = ?,
              telefonos = ?,
+             representante_legal = ?,
+             tipo_identificacion = ?,
+             departamento = ?,
+             ciudad = ?,
+             telefono2 = ?,
+             correo_electronico = ?,
+             responsabilidad_tributaria = ?,
+             tributos = ?,
+             zona = ?,
+             sitio_web = ?,
+             alias = ?,
+             actividad_economica = ?,
+             descripcion = ?,
+             logo = ?,
              updated_at = CURRENT_TIMESTAMP
          WHERE id = ?`,
         [
@@ -153,12 +186,25 @@ router.put('/', async (req: Request, res: Response) => {
           direccion,
           ubicacion_geografica,
           telefonosJSON,
+          representante_legal,
+          tipo_identificacion,
+          departamento,
+          ciudad,
+          telefono2,
+          correo_electronico,
+          responsabilidad_tributaria,
+          tributosJSON,
+          zona,
+          sitio_web,
+          alias,
+          actividad_economica,
+          descripcion,
+          logo,
           row.id
         ],
         function (err) {
           if (err) {
             res.status(500).json({ error: err.message });
-            db.close();
             return;
           }
 
@@ -169,7 +215,6 @@ router.put('/', async (req: Request, res: Response) => {
             (err, updatedRow: any) => {
               if (err) {
                 res.status(500).json({ error: err.message });
-                db.close();
                 return;
               }
 
@@ -182,12 +227,25 @@ router.put('/', async (req: Request, res: Response) => {
                 direccion: updatedRow.direccion,
                 ubicacion_geografica: updatedRow.ubicacion_geografica,
                 telefonos: JSON.parse(updatedRow.telefonos),
+                representante_legal: updatedRow.representante_legal,
+                tipo_identificacion: updatedRow.tipo_identificacion,
+                departamento: updatedRow.departamento,
+                ciudad: updatedRow.ciudad,
+                telefono2: updatedRow.telefono2,
+                correo_electronico: updatedRow.correo_electronico,
+                responsabilidad_tributaria: updatedRow.responsabilidad_tributaria,
+                tributos: updatedRow.tributos ? JSON.parse(updatedRow.tributos) : [],
+                zona: updatedRow.zona,
+                sitio_web: updatedRow.sitio_web,
+                alias: updatedRow.alias,
+                actividad_economica: updatedRow.actividad_economica,
+                descripcion: updatedRow.descripcion,
+                logo: updatedRow.logo,
                 created_at: updatedRow.created_at,
                 updated_at: updatedRow.updated_at
               };
 
               res.json(config);
-              db.close();
             }
           );
         }
@@ -202,8 +260,22 @@ router.put('/', async (req: Request, res: Response) => {
           porcentaje_iva,
           direccion,
           ubicacion_geografica,
-          telefonos
-        ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          telefonos,
+          representante_legal,
+          tipo_identificacion,
+          departamento,
+          ciudad,
+          telefono2,
+          correo_electronico,
+          responsabilidad_tributaria,
+          tributos,
+          zona,
+          sitio_web,
+          alias,
+          actividad_economica,
+          descripcion,
+          logo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           nombre_empresa,
           nit,
@@ -211,12 +283,25 @@ router.put('/', async (req: Request, res: Response) => {
           porcentajeIvaValue,
           direccion,
           ubicacion_geografica,
-          telefonosJSON
+          telefonosJSON,
+          representante_legal,
+          tipo_identificacion,
+          departamento,
+          ciudad,
+          telefono2,
+          correo_electronico,
+          responsabilidad_tributaria,
+          tributosJSON,
+          zona,
+          sitio_web,
+          alias,
+          actividad_economica,
+          descripcion,
+          logo
         ],
         function (err) {
           if (err) {
             res.status(500).json({ error: err.message });
-            db.close();
             return;
           }
 
@@ -227,7 +312,6 @@ router.put('/', async (req: Request, res: Response) => {
             (err, newRow: any) => {
               if (err) {
                 res.status(500).json({ error: err.message });
-                db.close();
                 return;
               }
 
@@ -240,12 +324,25 @@ router.put('/', async (req: Request, res: Response) => {
                 direccion: newRow.direccion,
                 ubicacion_geografica: newRow.ubicacion_geografica,
                 telefonos: JSON.parse(newRow.telefonos),
+                representante_legal: newRow.representante_legal,
+                tipo_identificacion: newRow.tipo_identificacion,
+                departamento: newRow.departamento,
+                ciudad: newRow.ciudad,
+                telefono2: newRow.telefono2,
+                correo_electronico: newRow.correo_electronico,
+                responsabilidad_tributaria: newRow.responsabilidad_tributaria,
+                tributos: newRow.tributos ? JSON.parse(newRow.tributos) : [],
+                zona: newRow.zona,
+                sitio_web: newRow.sitio_web,
+                alias: newRow.alias,
+                actividad_economica: newRow.actividad_economica,
+                descripcion: newRow.descripcion,
+                logo: newRow.logo,
                 created_at: newRow.created_at,
                 updated_at: newRow.updated_at
               };
 
               res.status(201).json(config);
-              db.close();
             }
           );
         }

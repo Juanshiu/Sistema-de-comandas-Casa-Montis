@@ -14,6 +14,7 @@ import { migrarPersonalizacionesProductos } from './database/migration-personali
 import { migrarUsuariosYRoles } from './database/migration-usuarios-roles';
 import { migrarColumnasComandas } from './database/migration-fix-comandas-columns';
 import { migrarNomina } from './database/migration-nomina';
+import { ejecutarMigracionConfigFacturacion } from './database/migration-config-facturacion';
 import { iniciarPluginImpresora } from './services/pluginImpresora';
 import authRoutes from './routes/auth';
 import usuariosRoutes from './routes/usuarios';
@@ -146,6 +147,10 @@ async function startServer() {
     // Migrar usuarios y roles
     await migrarUsuariosYRoles();
     console.log('✅ Migración de usuarios y roles completada');
+
+    // Migrar configuración de facturación (datos de la empresa)
+    await ejecutarMigracionConfigFacturacion();
+    console.log('✅ Migración de configuración de facturación completada');
 
     // Migrar nómina (empleados, configuración, etc.)
     await migrarNomina();

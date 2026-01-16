@@ -108,6 +108,36 @@ export const initDatabase = async (): Promise<void> => {
         )
       `);
 
+      // Tabla Configuración de Facturación (Datos de la Empresa)
+      db.run(`
+        CREATE TABLE IF NOT EXISTS config_facturacion (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre_empresa TEXT NOT NULL,
+          nit TEXT NOT NULL,
+          responsable_iva INTEGER DEFAULT 0,
+          porcentaje_iva DECIMAL(5,2),
+          direccion TEXT NOT NULL,
+          ubicacion_geografica TEXT,
+          telefonos TEXT NOT NULL,
+          representante_legal TEXT,
+          tipo_identificacion TEXT,
+          departamento TEXT,
+          ciudad TEXT,
+          telefono2 TEXT,
+          correo_electronico TEXT,
+          responsabilidad_tributaria TEXT,
+          tributos TEXT,
+          zona TEXT,
+          sitio_web TEXT,
+          alias TEXT,
+          actividad_economica TEXT,
+          descripcion TEXT,
+          logo TEXT,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Insertar datos iniciales se hace en el script de actualización
       console.log('Base de datos inicializada correctamente');
       resolve();
