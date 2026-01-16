@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Settings, Package, Tags, Utensils, Users, Home, Shield, UtensilsCrossed, Store, Cog, ChevronRight, ArrowLeft, FileText } from 'lucide-react';
+import { Settings, Package, Tags, Utensils, Users, Home, Shield, UtensilsCrossed, Store, Cog, ChevronRight, ArrowLeft, FileText, Calculator } from 'lucide-react';
 import GestionProductos from './admin/GestionProductos';
 import GestionCategorias from './admin/GestionCategorias';
 import GestionPersonalizaciones from './admin/GestionPersonalizaciones';
@@ -11,8 +11,12 @@ import ConfiguracionSistema from './admin/ConfiguracionSistema';
 import GestionFacturacion from './admin/GestionFacturacion';
 import GestionUsuarios from './admin/GestionUsuarios';
 import GestionRoles from './admin/GestionRoles';
+import GestionEmpleados from './admin/GestionEmpleados';
+import GestionNomina from './admin/GestionNomina';
+import GestionLiquidacion from './admin/GestionLiquidacion';
+import GestionEmpresa from './admin/GestionEmpresa';
 
-type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles';
+type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles' | 'empleados' | 'nomina' | 'liquidacion' | 'empresa';
 
 interface Seccion {
   id: SeccionAdmin;
@@ -118,6 +122,45 @@ export default function Administracion() {
       ],
     },
     {
+        id: 'personal',
+        nombre: 'Recursos Humanos',
+        descripcion: 'Gestión de empleados y nómina',
+        icon: Users,
+        colorClasses: {
+          border: 'border-purple-500',
+          bg: 'bg-purple-50',
+          bgHover: 'hover:bg-purple-100',
+          text: 'text-purple-700',
+          iconBg: 'bg-purple-500',
+        },
+        secciones: [
+          {
+            id: 'empleados',
+            nombre: 'Empleados',
+            icon: Users,
+            descripcion: 'Directorio de personal y contratos',
+            component: GestionEmpleados,
+            permisos: ['nomina.gestion']
+          },
+          {
+            id: 'nomina',
+            nombre: 'Nómina',
+            icon: FileText,
+            descripcion: 'Configuración y pagos de nómina',
+            component: GestionNomina,
+            permisos: ['nomina.gestion']
+          },
+          {
+            id: 'liquidacion',
+            nombre: 'Liquidaciones',
+            icon: Calculator,
+            descripcion: 'Cálculo de liquidación por retiro',
+            component: GestionLiquidacion,
+            permisos: ['nomina.gestion']
+          }
+        ]
+    },
+    {
       id: 'sistema',
       nombre: 'Configuración',
       descripcion: 'Herramientas avanzadas y configuración del sistema',
@@ -130,6 +173,14 @@ export default function Administracion() {
         iconBg: 'bg-red-500',
       },
       secciones: [
+        {
+          id: 'empresa',
+          nombre: 'Empresa',
+          icon: Store,
+          descripcion: 'Información comercial y legal de la empresa',
+          component: GestionEmpresa,
+          permisos: ['gestionar_sistema']
+        },
         {
           id: 'facturacion',
           nombre: 'Facturas y Recibos',
