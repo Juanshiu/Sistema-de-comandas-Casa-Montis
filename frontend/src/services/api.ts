@@ -381,6 +381,17 @@ export const apiService = {
     return response.data;
   },
 
+  async eliminarHistorialNomina(data: {
+    tipo: 'periodo' | 'fecha';
+    periodo_mes?: string;
+    periodo_anio?: number;
+    fecha_inicio?: string;
+    fecha_fin?: string;
+  }): Promise<{ message: string; deletedCount: number }> {
+    const response = await api.delete('/nomina/historial', { data });
+    return response.data;
+  },
+
   async registrarPagoNomina(
     nominaDetalleId: number,
     data: {

@@ -872,4 +872,109 @@ router.post('/liquidacion/pdf-preview', verifyToken, checkPermission('nomina.ges
     }
 });
 
+/**
+ * DELETE /api/nomina/historial
+ * Eliminar historial de nómina por periodo o fecha (Masivo)
+ */
+router.delete('/historial', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
+    const { tipo, periodo_mes, periodo_anio, fecha_inicio, fecha_fin } = req.body;
+
+    if (!tipo || (tipo !== 'periodo' && tipo !== 'fecha')) {
+        return res.status(400).json({ error: 'Tipo de eliminación inválido. Debe ser "periodo" o "fecha".' });
+    }
+
+    try {
+        let nominasIds: number[] = [];
+
+        // 1. Identificar nóminas a eliminar
+        if (tipo === 'periodo') {
+            if (!periodo_mes || !periodo_anio) {
+                return res.status(400).json({ error: 'Mes y año son requeridos para eliminación por periodo.' });
+            }
+
+            nominasIds = await new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT id FROM nomina_detalles WHERE periodo_mes = ? AND periodo_anio = ?`,
+                    [periodo_mes, periodo_anio],
+                    (err, rows: any[]) => {
+                        if (err) reject(err);
+                        else resolve(rows.map(r => r.id));
+                    }
+                );
+            });
+
+        } else if (tipo === 'fecha') {
+            if (!fecha_inicio || !fecha_fin) {
+                return res.status(400).json({ error: 'Fecha inicio y fin son requeridas para eliminación por rango.' });
+            }
+
+            const start = new Date(fecha_inicio).toISOString();
+            // Asegurar que fecha_fin incluya todo el día
+            const end = new Date(new Date(fecha_fin).setHours(23, 59, 59, 999)).toISOString();
+
+            nominasIds = await new Promise((resolve, reject) => {
+                db.all(
+                    `SELECT id FROM nomina_detalles WHERE fecha_generacion BETWEEN ? AND ?`,
+                    [start, end],
+                    (err, rows: any[]) => {
+                        if (err) reject(err);
+                        else resolve(rows.map(r => r.id));
+                    }
+                );
+            });
+        }
+
+        if (nominasIds.length === 0) {
+            return res.json({ message: 'No se encontraron registros para eliminar.', deletedCount: 0 });
+        }
+
+        const placeholders = nominasIds.map(() => '?').join(',');
+
+        // 2. Eliminar Pagos Asociados
+        await new Promise<void>((resolve, reject) => {
+            db.run(
+                `DELETE FROM pagos_nomina WHERE nomina_detalle_id IN (${placeholders})`,
+                nominasIds,
+                (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                }
+            );
+        });
+        
+        // 3. Eliminar Historial/Auditoría Asociada
+         await new Promise<void>((resolve, reject) => {
+            db.run(
+                `DELETE FROM historial_nomina WHERE nomina_detalle_id IN (${placeholders})`,
+                nominasIds,
+                (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                }
+            );
+        });
+
+        // 4. Eliminar Nóminas
+        await new Promise<void>((resolve, reject) => {
+            db.run(
+                `DELETE FROM nomina_detalles WHERE id IN (${placeholders})`,
+                nominasIds,
+                (err) => {
+                    if (err) reject(err);
+                    else resolve();
+                }
+            );
+        });
+
+        res.json({ 
+            message: 'Historial de nómina eliminado correctamente.', 
+            deletedCount: nominasIds.length 
+        });
+
+    } catch (error: any) {
+        console.error('Error eliminando historial de nómina:', error);
+        res.status(500).json({ error: error.message || 'Error interno al eliminar historial' });
+    }
+});
+
 export default router;

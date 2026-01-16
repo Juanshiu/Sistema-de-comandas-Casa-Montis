@@ -1,13 +1,62 @@
 'use client';
 
 import { useState } from 'react';
-import { AlertTriangle, Database, RefreshCw, Trash2, CheckCircle, XCircle, Coffee } from 'lucide-react';
+import { AlertTriangle, Database, RefreshCw, Trash2, CheckCircle, XCircle, Coffee, Calendar, FileX } from 'lucide-react';
+import apiService from '../../services/api';
 
 export default function ConfiguracionSistema() {
   const [modalAbierto, setModalAbierto] = useState<string | null>(null);
   const [confirmacion1, setConfirmacion1] = useState('');
   const [confirmacion2, setConfirmacion2] = useState('');
   const [procesando, setProcesando] = useState(false);
+
+  // Estados para depuración de nómina
+  const [tipoEliminacion, setTipoEliminacion] = useState<'periodo' | 'fecha'>('periodo');
+  const [mesEliminacion, setMesEliminacion] = useState('Enero');
+  const [anioEliminacion, setAnioEliminacion] = useState(new Date().getFullYear());
+  const [fechaInicioEliminacion, setFechaInicioEliminacion] = useState('');
+  const [fechaFinEliminacion, setFechaFinEliminacion] = useState('');
+
+  const meses = [
+    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
+    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+  ];
+
+  // Eliminar Historial de Nómina
+  const handleEliminarHistorialNomina = async () => {
+    if (confirmacion1 !== 'ELIMINAR NOMINA') {
+      alert('Debes escribir "ELIMINAR NOMINA" para confirmar');
+      return;
+    }
+
+    if (tipoEliminacion === 'fecha' && (!fechaInicioEliminacion || !fechaFinEliminacion)) {
+      alert('Debes seleccionar las fechas de inicio y fin');
+      return;
+    }
+
+    setProcesando(true);
+    try {
+      const data: any = { tipo: tipoEliminacion };
+      
+      if (tipoEliminacion === 'periodo') {
+        data.periodo_mes = mesEliminacion;
+        data.periodo_anio = anioEliminacion;
+      } else {
+        data.fecha_inicio = fechaInicioEliminacion;
+        data.fecha_fin = fechaFinEliminacion;
+      }
+
+      const resultado = await apiService.eliminarHistorialNomina(data);
+      alert(`✅ ${resultado.message}\nRegistros eliminados: ${resultado.deletedCount}`);
+      cerrarModal();
+      
+    } catch (error: any) {
+      console.error('Error:', error);
+      alert(`❌ Error al eliminar historial: ${error.response?.data?.error || error.message}`);
+    } finally {
+      setProcesando(false);
+    }
+  };
 
   // Resetear Base de Datos
   const handleResetearBaseDatos = async () => {
@@ -165,6 +214,15 @@ export default function ConfiguracionSistema() {
       color: 'yellow',
       peligro: 'medio',
       accion: handleLimpiarComandasAntiguas
+    },
+    {
+      id: 'eliminar-historial-nomina',
+      titulo: 'Depurar Historial de Nómina',
+      descripcion: 'Elimina registros de nómina, pagos e historial por periodo o fechas. Útil para correcciones masivas.',
+      icon: FileX,
+      color: 'red',
+      peligro: 'alto',
+      accion: handleEliminarHistorialNomina
     },
     {
       id: 'resetear-db',
@@ -501,6 +559,124 @@ export default function ConfiguracionSistema() {
                 className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
               >
                 {procesando ? 'Reseteando...' : 'RESETEAR TODO'}
+              </button>
+              <button
+                onClick={cerrarModal}
+                disabled={procesando}
+                className="flex-1 bg-secondary-500 text-white px-4 py-2 rounded-md hover:bg-secondary-600 transition-colors"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Modal de confirmación - Eliminar Historial Nómina */}
+      {modalAbierto === 'eliminar-historial-nomina' && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
+            <div className="flex items-center mb-4">
+              <FileX className="h-8 w-8 text-red-600 mr-3" />
+              <h3 className="text-xl font-bold text-red-800">
+                Depurar Historial de Nómina
+              </h3>
+            </div>
+
+            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
+              <p className="text-red-800 text-sm">
+                Esta acción eliminará permanentemente las nóminas, pagos y auditorías que coincidan con el criterio seleccionado.
+              </p>
+            </div>
+
+            <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Tipo de Eliminación:</label>
+                <div className="flex space-x-4 mb-4">
+                    <label className="flex items-center cursor-pointer">
+                        <input 
+                            type="radio" 
+                            checked={tipoEliminacion === 'periodo'} 
+                            onChange={() => setTipoEliminacion('periodo')}
+                            className="mr-2"
+                        />
+                        Por Periodo (Mes/Año)
+                    </label>
+                    <label className="flex items-center cursor-pointer">
+                        <input 
+                            type="radio" 
+                            checked={tipoEliminacion === 'fecha'} 
+                            onChange={() => setTipoEliminacion('fecha')}
+                            className="mr-2"
+                        />
+                        Por Rango de Fechas
+                    </label>
+                </div>
+
+                {tipoEliminacion === 'periodo' ? (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Mes</label>
+                            <select 
+                                value={mesEliminacion} 
+                                onChange={(e) => setMesEliminacion(e.target.value)}
+                                className="w-full border p-2 rounded focus:ring-red-500 focus:border-red-500"
+                            >
+                                {meses.map(m => <option key={m} value={m}>{m}</option>)}
+                            </select>
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Año</label>
+                            <input 
+                                type="number" 
+                                value={anioEliminacion} 
+                                onChange={(e) => setAnioEliminacion(parseInt(e.target.value))}
+                                className="w-full border p-2 rounded focus:ring-red-500 focus:border-red-500"
+                            />
+                        </div>
+                    </div>
+                ) : (
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Desde</label>
+                            <input 
+                                type="date" 
+                                value={fechaInicioEliminacion} 
+                                onChange={(e) => setFechaInicioEliminacion(e.target.value)}
+                                className="w-full border p-2 rounded focus:ring-red-500 focus:border-red-500"
+                            />
+                        </div>
+                        <div>
+                            <label className="block text-xs text-gray-500 mb-1">Hasta</label>
+                            <input 
+                                type="date" 
+                                value={fechaFinEliminacion} 
+                                onChange={(e) => setFechaFinEliminacion(e.target.value)}
+                                className="w-full border p-2 rounded focus:ring-red-500 focus:border-red-500"
+                            />
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            <p className="text-secondary-700 mb-2 font-semibold">
+              Para confirmar, escribe <strong className="text-red-600">ELIMINAR NOMINA</strong>:
+            </p>
+
+            <input
+              type="text"
+              value={confirmacion1}
+              onChange={(e) => setConfirmacion1(e.target.value)}
+              placeholder="Escribe: ELIMINAR NOMINA"
+              className="w-full px-3 py-2 border border-red-300 rounded-md mb-4 focus:outline-none focus:ring-2 focus:ring-red-500"
+              disabled={procesando}
+            />
+
+            <div className="flex space-x-3">
+              <button
+                onClick={handleEliminarHistorialNomina}
+                disabled={confirmacion1 !== 'ELIMINAR NOMINA' || procesando}
+                className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
+              >
+                {procesando ? 'Eliminando...' : 'Eliminar Historial'}
               </button>
               <button
                 onClick={cerrarModal}
