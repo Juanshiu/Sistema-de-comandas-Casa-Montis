@@ -12,6 +12,7 @@ const PERMISOS_DISPONIBLES = [
   { id: 'ver_historial', nombre: 'Ver Historial', descripcion: 'Acceso al historial completo de comandas pasadas' },
   { id: 'gestion_menu', nombre: 'Gestión de Menú', descripcion: 'Crear, editar y eliminar productos y categorías' },
   { id: 'gestion_espacios', nombre: 'Gestión de Espacios', descripcion: 'Administrar mesas y salones' },
+  { id: 'nomina.gestion', nombre: 'Gestión de Nómina', descripcion: 'Administrar empleados, contratos y liquidaciones' },
 ];
 
 export default function GestionRoles() {
