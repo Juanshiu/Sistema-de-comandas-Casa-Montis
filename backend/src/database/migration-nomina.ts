@@ -237,6 +237,8 @@ export const migrarNomina = async (): Promise<void> => {
             { table: 'nomina_detalles', col: 'pdf_path', type: 'TEXT' },
             { table: 'nominas', col: 'version', type: 'INTEGER DEFAULT 1' },
             { table: 'pagos_nomina', col: 'empleado_id', type: 'INTEGER' },
+            { table: 'pagos_nomina', col: 'periodo_mes', type: 'TEXT' },
+            { table: 'pagos_nomina', col: 'periodo_anio', type: 'INTEGER' },
             { table: 'pagos_nomina', col: 'fecha', type: 'DATETIME' },
             { table: 'pagos_nomina', col: 'usuario_nombre', type: 'TEXT' },
             { table: 'pagos_nomina', col: 'observaciones', type: 'TEXT' }
@@ -258,6 +260,9 @@ export const migrarNomina = async (): Promise<void> => {
             CREATE TABLE IF NOT EXISTS pagos_nomina (
               id INTEGER PRIMARY KEY AUTOINCREMENT,
               nomina_detalle_id INTEGER NOT NULL,
+              empleado_id INTEGER,
+              periodo_mes TEXT,
+              periodo_anio INTEGER,
               fecha DATETIME NOT NULL,
               tipo TEXT NOT NULL, -- 'QUINCENA', 'AJUSTE', etc.
               valor REAL NOT NULL,

@@ -376,8 +376,10 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
                 // Si el cálculo es idéntico, retornamos la versión existente (sin generar PDF nuevo ni versión nueva)
                 const pagos: any[] = await new Promise((resolve, reject) => {
                     db.all(
-                        `SELECT * FROM pagos_nomina WHERE nomina_detalle_id = ? ORDER BY fecha ASC`,
-                        [latestNomina.id],
+                        `SELECT * FROM pagos_nomina 
+                         WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
+                         ORDER BY fecha ASC`,
+                        [empleado.id, periodo_mes, periodo_anio],
                         (err, rows: any[]) => {
                             if (err) reject(err);
                             else resolve(rows);
@@ -550,8 +552,15 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
         }
 
         const safeMes = (periodo_mes || '').toString().toUpperCase().replace(/\s+/g, '');
-        const fileName = `nomina_${empleado.id}_${periodo_anio}_${safeMes}_v${newVersion}.pdf`;
-        const filePath = path.join(baseDir, fileName);
+        let fileName = `nomina_${empleado.id}_${periodo_anio}_${safeMes}_v${newVersion}.pdf`;
+        let filePath = path.join(baseDir, fileName);
+
+        // REGLA: No sobrescribir PDFs existentes. Si por alguna razón existe, agregar un timestamp único.
+        if (fs.existsSync(filePath)) {
+            const timestamp = new Date().getTime();
+            fileName = `nomina_${empleado.id}_${periodo_anio}_${safeMes}_v${newVersion}_${timestamp}.pdf`;
+            filePath = path.join(baseDir, fileName);
+        }
 
         fs.writeFileSync(filePath, pdfBuffer);
 
@@ -568,8 +577,10 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
 
         const pagos: PagoNomina[] = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM pagos_nomina WHERE nomina_detalle_id = ? ORDER BY fecha ASC`,
-                [nomina_detalle_id],
+                `SELECT * FROM pagos_nomina 
+                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
+                 ORDER BY fecha_pago ASC`,
+                [empleado.id, periodo_mes, periodo_anio],
                 (err, rows: any[]) => {
                     if (err) reject(err);
                     else resolve(rows as PagoNomina[]);
@@ -621,14 +632,31 @@ router.post('/detalle/:id/pagos', verifyToken, checkPermission('nomina.gestion')
 
         if (!nominaDetalle) return res.status(404).json({ error: 'Nómina no encontrada' });
 
+        // REGLA: No permitir pagos si no es la versión activa (ABIERTA)
+        if (nominaDetalle.estado !== 'ABIERTA') {
+            return res.status(400).json({ 
+                error: 'No se pueden registrar pagos en una versión histórica o cerrada. Por favor use la versión activa.' 
+            });
+        }
+
         const pagoId: number = await new Promise((resolve, reject) => {
             db.run(
                 `
               INSERT INTO pagos_nomina (
-                nomina_detalle_id, empleado_id, fecha, tipo, valor, usuario_nombre, observaciones
-              ) VALUES (?, ?, ?, ?, ?, ?, ?)
+                nomina_detalle_id, empleado_id, periodo_mes, periodo_anio, fecha_pago, tipo, valor, usuario_nombre, observaciones
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
-                [nomina_detalle_id, nominaDetalle.empleado_id, fechaPago, tipoPago, valor, usuario_nombre, observaciones || null],
+                [
+                    nomina_detalle_id, 
+                    nominaDetalle.empleado_id, 
+                    nominaDetalle.periodo_mes, 
+                    nominaDetalle.periodo_anio, 
+                    fechaPago, 
+                    tipoPago, 
+                    valor, 
+                    usuario_nombre, 
+                    observaciones || null
+                ],
                 function (err) {
                     if (err) reject(err);
                     else resolve(this.lastID);
@@ -636,10 +664,13 @@ router.post('/detalle/:id/pagos', verifyToken, checkPermission('nomina.gestion')
             );
         });
 
+        // El saldo se calcula sobre la versión activa menos TODOS los pagos del periodo
         const pagos: PagoNomina[] = await new Promise((resolve, reject) => {
             db.all(
-                `SELECT * FROM pagos_nomina WHERE nomina_detalle_id = ? ORDER BY fecha ASC`,
-                [nomina_detalle_id],
+                `SELECT * FROM pagos_nomina 
+                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
+                 ORDER BY fecha_pago ASC`,
+                [nominaDetalle.empleado_id, nominaDetalle.periodo_mes, nominaDetalle.periodo_anio],
                 (err, rows: any[]) => {
                     if (err) reject(err);
                     else resolve(rows as PagoNomina[]);
@@ -720,9 +751,21 @@ router.get('/historial', verifyToken, checkPermission('nomina.gestion'), async (
         const placeholders = ids.map(() => '?').join(',');
 
         const pagos: PagoNomina[] = await new Promise((resolve, reject) => {
+            let pagosWhere = 'WHERE empleado_id = ?';
+            const pagosParams: any[] = [empleado_id];
+            
+            if (periodo_mes) {
+                pagosWhere += ' AND periodo_mes = ?';
+                pagosParams.push(periodo_mes);
+            }
+            if (periodo_anio) {
+                pagosWhere += ' AND periodo_anio = ?';
+                pagosParams.push(periodo_anio);
+            }
+
             db.all(
-                `SELECT * FROM pagos_nomina WHERE nomina_detalle_id IN (${placeholders}) ORDER BY fecha ASC`,
-                ids,
+                `SELECT * FROM pagos_nomina ${pagosWhere} ORDER BY fecha_pago ASC`,
+                pagosParams,
                 (err, rows: any[]) => {
                     if (err) reject(err);
                     else resolve(rows as PagoNomina[]);

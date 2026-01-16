@@ -137,9 +137,35 @@ export class NominaService {
     }
 
     /**
+     * Obtener datos de la empresa de forma asíncrona
+     */
+    private static async obtenerDatosEmpresa(): Promise<any> {
+        return new Promise((resolve) => {
+            db.get('SELECT * FROM config_facturacion ORDER BY id DESC LIMIT 1', [], (err, emp: any) => {
+                if (err || !emp) {
+                    console.warn('No se encontraron datos de empresa en config_facturacion, usando valores por defecto');
+                    resolve({
+                        nombre_empresa: 'CASA MONTIS',
+                        nit: 'N/A',
+                        direccion: 'N/A',
+                        ciudad: '',
+                        departamento: '',
+                        telefonos: '[]',
+                        correo_electronico: 'N/A'
+                    });
+                } else {
+                    resolve(emp);
+                }
+            });
+        });
+    }
+
+    /**
      * Generar PDF de colilla de pago
      */
     static async generarPDFNomina(nominaDetalle: NominaDetalle, config: ConfiguracionNomina): Promise<Buffer> {
+        const empresa = await this.obtenerDatosEmpresa();
+        
         return new Promise((resolve, reject) => {
             const doc = new PDFDocument({ margin: 50 });
             const buffers: Buffer[] = [];
@@ -147,123 +173,120 @@ export class NominaService {
             doc.on('data', buffers.push.bind(buffers));
             doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-            db.get('SELECT * FROM config_facturacion ORDER BY id DESC LIMIT 1', [], (err, emp: any) => {
-                const empresa = emp || { nombre_empresa: 'CASA MONTIS', nit: 'N/A', direccion: 'N/A' };
-                
-                // Encabezado Compartido
-                this.dibujarHeaderEmpresa(doc, empresa);
-                doc.fontSize(14).font('Helvetica-Bold').text('COMPROBANTE DE NÓMINA', { align: 'center' });
-                doc.moveDown(0.5);
+            // Encabezado Compartido
+            this.dibujarHeaderEmpresa(doc, empresa);
+            doc.fontSize(14).font('Helvetica-Bold').text('COMPROBANTE DE NÓMINA', { align: 'center' });
+            doc.fontSize(10).font('Helvetica-Bold').text(`Versión: ${nominaDetalle.version || 1}`, { align: 'center' });
+            doc.moveDown(0.5);
 
-                // Información Empleado
-                if (nominaDetalle.empleado) {
-                    const e = nominaDetalle.empleado;
-                    doc.fontSize(10).font('Helvetica');
-                    doc.text(`Empleado: ${e.nombres} ${e.apellidos}`);
-                    doc.text(`Documento: ${e.numero_documento}`);
-                    doc.text(`Cargo: ${e.cargo}`);
-                    doc.text(`Salario Base: $${Math.round(e.salario_base).toLocaleString('es-CO')}`);
-                }
-                doc.moveDown(0.5);
-                
-                doc.text(`Días Trabajados: ${nominaDetalle.dias_trabajados}`);
-                doc.moveDown();
+            // Información Empleado
+            if (nominaDetalle.empleado) {
+                const e = nominaDetalle.empleado;
+                doc.fontSize(10).font('Helvetica');
+                doc.text(`Empleado: ${e.nombres} ${e.apellidos}`);
+                doc.text(`Documento: ${e.numero_documento}`);
+                doc.text(`Cargo: ${e.cargo}`);
+                doc.text(`Salario Base: $${Math.round(e.salario_base).toLocaleString('es-CO')}`);
+            }
+            doc.moveDown(0.5);
+            
+            doc.text(`Días Trabajados: ${nominaDetalle.dias_trabajados}`);
+            doc.moveDown();
 
-                const tableTop = doc.y;
-                const col1 = 50; const col2 = 250;
-                
-                doc.fontSize(12).text('DEVENGADOS', col1, tableTop, { underline: true });
-                doc.text('DEDUCCIONES', col2, tableTop, { underline: true });
-                doc.moveDown();
-                
-                let y = doc.y;
-                doc.fontSize(10);
-                
-                // Devengados
-                doc.text('Sueldo Básico:', col1, y);
-                doc.text(`$${Math.round(nominaDetalle.sueldo_basico).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+            const tableTop = doc.y;
+            const col1 = 50; const col2 = 250;
+            
+            doc.fontSize(12).text('DEVENGADOS', col1, tableTop, { underline: true });
+            doc.text('DEDUCCIONES', col2, tableTop, { underline: true });
+            doc.moveDown();
+            
+            let y = doc.y;
+            doc.fontSize(10);
+            
+            // Devengados
+            doc.text('Sueldo Básico:', col1, y);
+            doc.text(`$${Math.round(nominaDetalle.sueldo_basico).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+            y += 15;
+            
+            if (nominaDetalle.auxilio_transporte > 0) {
+                doc.text('Aux. Transporte:', col1, y);
+                doc.text(`$${Math.round(nominaDetalle.auxilio_transporte).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
                 y += 15;
-                
-                if (nominaDetalle.auxilio_transporte > 0) {
-                    doc.text('Aux. Transporte:', col1, y);
-                    doc.text(`$${Math.round(nominaDetalle.auxilio_transporte).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                    y += 15;
-                }
+            }
 
-                if (nominaDetalle.valor_dominicales_diurnas && nominaDetalle.valor_dominicales_diurnas > 0) {
-                    doc.text(`Rec. Dominical (${Math.round(nominaDetalle.horas_dominicales_diurnas || 0)}h):`, col1, y);
-                    doc.text(`$${Math.round(nominaDetalle.valor_dominicales_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                    y += 15;
-                }
+            if (nominaDetalle.valor_dominicales_diurnas && nominaDetalle.valor_dominicales_diurnas > 0) {
+                doc.text(`Rec. Dominical (${Math.round(nominaDetalle.horas_dominicales_diurnas || 0)}h):`, col1, y);
+                doc.text(`$${Math.round(nominaDetalle.valor_dominicales_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+                y += 15;
+            }
 
-                if (nominaDetalle.valor_festivas_diurnas && nominaDetalle.valor_festivas_diurnas > 0) {
-                    doc.text(`Rec. Festivo (${Math.round(nominaDetalle.horas_festivas_diurnas || 0)}h):`, col1, y);
-                    doc.text(`$${Math.round(nominaDetalle.valor_festivas_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                    y += 15;
-                }
+            if (nominaDetalle.valor_festivas_diurnas && nominaDetalle.valor_festivas_diurnas > 0) {
+                doc.text(`Rec. Festivo (${Math.round(nominaDetalle.horas_festivas_diurnas || 0)}h):`, col1, y);
+                doc.text(`$${Math.round(nominaDetalle.valor_festivas_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+                y += 15;
+            }
 
-                if (nominaDetalle.valor_extra_diurna_dominical && nominaDetalle.valor_extra_diurna_dominical > 0) {
-                    doc.text(`H. Extra Dom (${Math.round(nominaDetalle.horas_extra_diurna_dominical || 0)}h):`, col1, y);
-                    doc.text(`$${Math.round(nominaDetalle.valor_extra_diurna_dominical).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                    y += 15;
-                }
+            if (nominaDetalle.valor_extra_diurna_dominical && nominaDetalle.valor_extra_diurna_dominical > 0) {
+                doc.text(`H. Extra Dom (${Math.round(nominaDetalle.horas_extra_diurna_dominical || 0)}h):`, col1, y);
+                doc.text(`$${Math.round(nominaDetalle.valor_extra_diurna_dominical).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+                y += 15;
+            }
 
-                if (nominaDetalle.comisiones > 0) {
-                    doc.text('Comisiones:', col1, y);
-                    doc.text(`$${Math.round(nominaDetalle.comisiones).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                    y += 15;
-                }
-                
-                doc.font('Helvetica-Bold').text('TOTAL DEVENGADO:', col1, y + 10);
-                doc.text(`$${Math.round(nominaDetalle.total_devengado).toLocaleString('es-CO')}`, col1 + 100, y + 10, { align: 'right', width: 80 });
-                doc.font('Helvetica');
+            if (nominaDetalle.comisiones > 0) {
+                doc.text('Comisiones:', col1, y);
+                doc.text(`$${Math.round(nominaDetalle.comisiones).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+                y += 15;
+            }
+            
+            doc.font('Helvetica-Bold').text('TOTAL DEVENGADO:', col1, y + 10);
+            doc.text(`$${Math.round(nominaDetalle.total_devengado).toLocaleString('es-CO')}`, col1 + 100, y + 10, { align: 'right', width: 80 });
+            doc.font('Helvetica');
 
-                // Deducciones
-                let y2 = tableTop + 25;
-                doc.text('Salud (4%):', col2, y2);
-                doc.text(`$${Math.round(nominaDetalle.salud_empleado).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
+            // Deducciones
+            let y2 = tableTop + 25;
+            doc.text('Salud (4%):', col2, y2);
+            doc.text(`$${Math.round(nominaDetalle.salud_empleado).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
+            y2 += 15;
+            
+            doc.text('Pensión (4%):', col2, y2);
+            doc.text(`$${Math.round(nominaDetalle.pension_empleado).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
+            y2 += 15;
+            
+            if (nominaDetalle.otras_deducciones && nominaDetalle.otras_deducciones > 0) {
+                doc.text('Otros (Adelantos):', col2, y2);
+                doc.text(`$${Math.round(nominaDetalle.otras_deducciones).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
                 y2 += 15;
-                
-                doc.text('Pensión (4%):', col2, y2);
-                doc.text(`$${Math.round(nominaDetalle.pension_empleado).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
-                y2 += 15;
-                
-                if (nominaDetalle.otras_deducciones && nominaDetalle.otras_deducciones > 0) {
-                    doc.text('Otros (Adelantos):', col2, y2);
-                    doc.text(`$${Math.round(nominaDetalle.otras_deducciones).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
-                    y2 += 15;
-                }
-                
-                doc.font('Helvetica-Bold').text('TOTAL DEDUCCIONES:', col2, y2 + 10);
-                doc.text(`$${Math.round(nominaDetalle.total_deducciones).toLocaleString('es-CO')}`, col2 + 100, y2 + 10, { align: 'right', width: 80 });
-                doc.font('Helvetica');
+            }
+            
+            doc.font('Helvetica-Bold').text('TOTAL DEDUCCIONES:', col2, y2 + 10);
+            doc.text(`$${Math.round(nominaDetalle.total_deducciones).toLocaleString('es-CO')}`, col2 + 100, y2 + 10, { align: 'right', width: 80 });
+            doc.font('Helvetica');
 
-                const finalY = Math.max(y + 30, y2 + 30);
-                doc.y = finalY;
+            const finalY = Math.max(y + 30, y2 + 30);
+            doc.y = finalY;
 
-                // Trazabilidad
-                doc.moveDown(1);
-                doc.fontSize(8).font('Helvetica-Oblique');
-                doc.text(`Periodo: ${nominaDetalle.periodo_mes || 'N/A'} ${nominaDetalle.periodo_anio || ''}`, 50);
-                doc.text(`Generado el: ${new Date(nominaDetalle.fecha_generacion || Date.now()).toLocaleString()}`, 50);
-                doc.text(`Calculado por: ${nominaDetalle.usuario_nombre || 'Sistema'}`, 50);
-                
-                // NETO
-                doc.moveDown(4);
-                doc.fontSize(14).font('Helvetica-Bold').text(`NETO A PAGAR: $${Math.round(nominaDetalle.neto_pagado).toLocaleString('es-CO')}`, { align: 'center' });
-                doc.font('Helvetica');
+            // Trazabilidad
+            doc.moveDown(1);
+            doc.fontSize(8).font('Helvetica-Oblique');
+            doc.text(`Periodo: ${nominaDetalle.periodo_mes || 'N/A'} ${nominaDetalle.periodo_anio || ''}`, 50);
+            doc.text(`Generado el: ${new Date(nominaDetalle.fecha_generacion || Date.now()).toLocaleString()}`, 50);
+            doc.text(`Calculado por: ${nominaDetalle.usuario_nombre || 'Sistema'}`, 50);
+            
+            // NETO
+            doc.moveDown(4);
+            doc.fontSize(14).font('Helvetica-Bold').text(`NETO A PAGAR: $${Math.round(nominaDetalle.neto_pagado).toLocaleString('es-CO')}`, { align: 'center' });
+            doc.font('Helvetica');
 
-                // Firmas
-                doc.moveDown(4);
-                const firmaY = doc.y;
-                doc.moveTo(50, firmaY).lineTo(200, firmaY).stroke();
-                doc.text('Firma Empleador', 50, firmaY + 5, { width: 150, align: 'center' });
-                
-                doc.moveTo(350, firmaY).lineTo(500, firmaY).stroke();
-                doc.text('Firma Empleado', 350, firmaY + 5, { width: 150, align: 'center' });
+            // Firmas
+            doc.moveDown(4);
+            const firmaY = doc.y;
+            doc.moveTo(50, firmaY).lineTo(200, firmaY).stroke();
+            doc.text('Firma Empleador', 50, firmaY + 5, { width: 150, align: 'center' });
+            
+            doc.moveTo(350, firmaY).lineTo(500, firmaY).stroke();
+            doc.text('Firma Empleado', 350, firmaY + 5, { width: 150, align: 'center' });
 
-                doc.end();
-            });
+            doc.end();
         });
     }
 
@@ -271,6 +294,8 @@ export class NominaService {
      * Generar PDF de liquidación (Colombia - Reforzado)
      */
     static async generarPDFLiquidacion(liquidacion: any, empleado: Empleado): Promise<Buffer> {
+        const empresa = await this.obtenerDatosEmpresa();
+
         return new Promise((resolve, reject) => {
             const doc = new PDFDocument({ margin: 40 });
             const buffers: Buffer[] = [];
@@ -278,11 +303,8 @@ export class NominaService {
             doc.on('data', buffers.push.bind(buffers));
             doc.on('end', () => resolve(Buffer.concat(buffers)));
 
-            db.get('SELECT * FROM config_facturacion ORDER BY id DESC LIMIT 1', [], (err, emp: any) => {
-                const empresa = emp || { nombre_empresa: 'CASA MONTIS', nit: 'N/A', direccion: 'N/A' };
-
-                // Header Estandarizado
-                this.dibujarHeaderEmpresa(doc, empresa);
+            // Header Estandarizado
+            this.dibujarHeaderEmpresa(doc, empresa);
                 doc.fontSize(13).font('Helvetica-Bold').text('LIQUIDACIÓN DEFINITIVA DE PRESTACIONES SOCIALES', { align: 'center', underline: true });
                 doc.moveDown(0.5);
 
@@ -376,7 +398,6 @@ export class NominaService {
                 doc.text(`C.C. ${empleado.numero_documento}`, 350, currentY + 15, { width: 160, align: 'center' });
 
                 doc.end();
-            });
         });
     }
 

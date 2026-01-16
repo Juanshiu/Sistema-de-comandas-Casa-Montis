@@ -169,6 +169,13 @@ const GestionNomina: React.FC = () => {
             alert('Seleccione una nómina para registrar el pago');
             return;
         }
+
+        const selectedNomina = histNominas.find(n => n.id === selectedHistNominaId);
+        if (selectedNomina && selectedNomina.estado !== 'ABIERTA') {
+            alert('No se pueden registrar pagos en versiones históricas. Seleccione la versión activa (ABIERTA).');
+            return;
+        }
+
         if (!nuevoPagoValor || nuevoPagoValor <= 0) {
             alert('Ingrese un valor de pago válido');
             return;
@@ -183,9 +190,9 @@ const GestionNomina: React.FC = () => {
             await handleCargarHistorial();
             setNuevoPagoValor(0);
             setNuevoPagoFecha('');
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error registrando pago de nómina:', error);
-            alert('Error al registrar pago');
+            alert(error.response?.data?.error || 'Error al registrar pago');
         } finally {
             setHistoryLoading(false);
         }
@@ -710,9 +717,10 @@ const GestionNomina: React.FC = () => {
                                         </thead>
                                         <tbody>
                                             {histNominas.map((n) => {
-                                                const pagosNomina = histPagos.filter(p => p.nomina_detalle_id === n.id);
-                                                const totalPagado = pagosNomina.reduce((acc, p) => acc + p.valor, 0);
-                                                const saldo = Math.round((n.neto_pagado || 0) - totalPagado);
+                                                // El saldo se calcula sobre la versión activa del periodo menos TODOS los pagos del periodo
+                                                const totalPagadoPeriodo = histPagos.reduce((acc, p) => acc + p.valor, 0);
+                                                const isVersionActiva = n.estado === 'ABIERTA';
+                                                const saldo = isVersionActiva ? Math.round((n.neto_pagado || 0) - totalPagadoPeriodo) : 0;
                                                 const isSelected = selectedHistNominaId === n.id;
                                                 return (
                                                     <tr 
@@ -720,7 +728,14 @@ const GestionNomina: React.FC = () => {
                                                         className={`border-t ${isSelected ? 'bg-blue-50' : ''}`}
                                                     >
                                                         <td className="px-3 py-2 text-xs">{n.version || 1}</td>
-                                                        <td className="px-3 py-2 text-xs">{n.estado || 'ABIERTA'}</td>
+                                                        <td className="px-3 py-2 text-xs">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] ${
+                                                                n.estado === 'ABIERTA' ? 'bg-green-100 text-green-700' : 
+                                                                n.estado === 'AJUSTADA' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-700'
+                                                            }`}>
+                                                                {n.estado || 'ABIERTA'}
+                                                            </span>
+                                                        </td>
                                                         <td className="px-3 py-2 text-right">${Math.round(n.total_devengado).toLocaleString()}</td>
                                                         <td className="px-3 py-2 text-right">${Math.round(n.total_deducciones).toLocaleString()}</td>
                                                         <td className="px-3 py-2 text-right">${Math.round(n.neto_pagado).toLocaleString()}</td>
@@ -738,7 +753,7 @@ const GestionNomina: React.FC = () => {
                                                                 onClick={() => setSelectedHistNominaId(n.id)}
                                                                 className="text-xs px-2 py-1 rounded border text-blue-700 border-blue-200 hover:bg-blue-50"
                                                             >
-                                                                Detalle / Pagos (Saldo ${saldo.toLocaleString()})
+                                                                {n.estado === 'ABIERTA' ? 'Registrar Pago / Detalle' : 'Ver Detalle Histórico'}
                                                             </button>
                                                         </td>
                                                     </tr>
@@ -751,37 +766,65 @@ const GestionNomina: React.FC = () => {
                                 {selectedHistNominaId && (
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                                         <div className="bg-white border rounded-md p-4">
-                                            <h4 className="font-semibold text-sm mb-3">Pagos realizados</h4>
+                                            <div className="flex justify-between items-center mb-4">
+                                                <h4 className="font-semibold text-sm">Pagos del Periodo</h4>
+                                                {(() => {
+                                                    const selectedNomina = histNominas.find(n => n.id === selectedHistNominaId);
+                                                    if (selectedNomina && selectedNomina.estado === 'ABIERTA') {
+                                                        const totalPagado = histPagos.reduce((acc, p) => acc + p.valor, 0);
+                                                        const saldo = Math.round(selectedNomina.neto_pagado - totalPagado);
+                                                        return (
+                                                            <div className="text-right">
+                                                                <div className="text-[10px] text-gray-500 uppercase font-bold">Saldo Pendiente</div>
+                                                                <div className={`text-sm font-bold ${saldo > 0 ? 'text-red-600' : 'text-green-600'}`}>
+                                                                    ${saldo.toLocaleString()}
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    }
+                                                    return null;
+                                                })()}
+                                            </div>
+
                                             <div className="space-y-3">
-                                                <div className="grid grid-cols-4 gap-2 items-end mb-2">
-                                                    <div className="col-span-2">
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">Valor pago (quincena)</label>
-                                                        <input 
-                                                            type="number"
-                                                            className="w-full border rounded-md p-1 text-sm"
-                                                            value={nuevoPagoValor}
-                                                            onChange={(e) => setNuevoPagoValor(parseFloat(e.target.value))}
-                                                        />
+                                                {/* Solo mostrar formulario de pago para la versión ABIERTA */}
+                                                {histNominas.find(n => n.id === selectedHistNominaId)?.estado === 'ABIERTA' ? (
+                                                    <div className="grid grid-cols-4 gap-2 items-end mb-4 bg-gray-50 p-3 rounded-md border border-dashed border-gray-300">
+                                                        <div className="col-span-2">
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Valor pago (quincena)</label>
+                                                            <input 
+                                                                type="number"
+                                                                className="w-full border rounded-md p-1 text-sm"
+                                                                value={nuevoPagoValor}
+                                                                onChange={(e) => setNuevoPagoValor(parseFloat(e.target.value))}
+                                                                placeholder="$0"
+                                                            />
+                                                        </div>
+                                                        <div>
+                                                            <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
+                                                            <input 
+                                                                type="date"
+                                                                className="w-full border rounded-md p-1 text-sm"
+                                                                value={nuevoPagoFecha}
+                                                                onChange={(e) => setNuevoPagoFecha(e.target.value)}
+                                                            />
+                                                        </div>
+                                                        <div className="flex justify-end">
+                                                            <button
+                                                                onClick={handleRegistrarPago}
+                                                                disabled={historyLoading}
+                                                                className="w-full bg-emerald-600 text-white px-3 py-1.5 rounded-md text-xs font-bold hover:bg-emerald-700 disabled:bg-gray-400 shadow-sm"
+                                                            >
+                                                                REGISTRAR
+                                                            </button>
+                                                        </div>
                                                     </div>
-                                                    <div>
-                                                        <label className="block text-xs font-medium text-gray-600 mb-1">Fecha</label>
-                                                        <input 
-                                                            type="date"
-                                                            className="w-full border rounded-md p-1 text-sm"
-                                                            value={nuevoPagoFecha}
-                                                            onChange={(e) => setNuevoPagoFecha(e.target.value)}
-                                                        />
+                                                ) : (
+                                                    <div className="bg-amber-50 border border-amber-200 p-2 rounded text-[10px] text-amber-800 mb-4 flex items-center gap-2">
+                                                        <Info size={14} />
+                                                        Esta es una versión histórica. No se permiten nuevos pagos aquí.
                                                     </div>
-                                                    <div className="flex justify-end">
-                                                        <button
-                                                            onClick={handleRegistrarPago}
-                                                            disabled={historyLoading}
-                                                            className="w-full bg-emerald-600 text-white px-3 py-1 rounded-md text-xs hover:bg-emerald-700 disabled:bg-gray-400"
-                                                        >
-                                                            Registrar pago
-                                                        </button>
-                                                    </div>
-                                                </div>
+                                                )}
 
                                                 {histPagos.filter(p => p.nomina_detalle_id === selectedHistNominaId).length === 0 ? (
                                                     <p className="text-xs text-gray-500">No hay pagos registrados para esta nómina.</p>
