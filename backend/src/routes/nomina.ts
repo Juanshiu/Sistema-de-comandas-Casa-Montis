@@ -130,6 +130,7 @@ router.post('/calcular', verifyToken, checkPermission('nomina.gestion'), async (
 
         const { 
             dias_trabajados, 
+            horas_diurnas,
             horas_dominicales_diurnas, 
             horas_festivas_diurnas, 
             horas_extra_diurna_dominical, 
@@ -146,6 +147,7 @@ router.post('/calcular', verifyToken, checkPermission('nomina.gestion'), async (
             dias_trabajados || 30, 
             config,
             {
+                horas_diurnas,
                 horas_dominicales_diurnas,
                 horas_festivas_diurnas,
                 horas_extra_diurna_dominical,
@@ -325,6 +327,7 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
 
         const {
             dias_trabajados,
+            horas_diurnas,
             horas_dominicales_diurnas,
             horas_festivas_diurnas,
             horas_extra_diurna_dominical,
@@ -341,6 +344,7 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
             dias_trabajados || 30,
             config,
             {
+                horas_diurnas,
                 horas_dominicales_diurnas,
                 horas_festivas_diurnas,
                 horas_extra_diurna_dominical,
@@ -436,6 +440,8 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
                   dias_trabajados,
                   sueldo_basico,
                   auxilio_transporte,
+                  horas_diurnas,
+                  valor_diurnas,
                   horas_extras,
                   recargos,
                   comisiones,
@@ -464,7 +470,7 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
                   pdf_version,
                   pdf_path
                 ) VALUES (
-                  0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+                  0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
                 )
               `,
                 [
@@ -472,6 +478,8 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
                     nominaCalculada.dias_trabajados,
                     nominaCalculada.sueldo_basico,
                     nominaCalculada.auxilio_transporte,
+                    nominaCalculada.horas_diurnas || 0,
+                    nominaCalculada.valor_diurnas || 0,
                     nominaCalculada.horas_extras || 0,
                     nominaCalculada.recargos || 0,
                     nominaCalculada.comisiones || 0,

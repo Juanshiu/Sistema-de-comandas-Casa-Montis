@@ -332,6 +332,7 @@ export const apiService = {
     empleadoId: number,
     diasTrabajados: number,
     extraData?: {
+      horas_diurnas?: number;
       horas_dominicales_diurnas?: number;
       horas_festivas_diurnas?: number;
       horas_extra_diurna_dominical?: number;
@@ -353,6 +354,7 @@ export const apiService = {
   async guardarNominaDetalle(data: {
     empleado_id: number;
     dias_trabajados: number;
+    horas_diurnas?: number;
     horas_dominicales_diurnas?: number;
     horas_festivas_diurnas?: number;
     horas_extra_diurna_dominical?: number;

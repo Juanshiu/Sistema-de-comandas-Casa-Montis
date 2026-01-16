@@ -19,6 +19,7 @@ export class NominaService {
             horas_extra_diurna_dominical?: number;
             otras_deducciones?: number; // Para adelantos/préstamos
             comisiones?: number;
+            horas_diurnas?: number;
             periodo_mes?: string;
             periodo_anio?: number;
             usuario_nombre?: string;
@@ -31,10 +32,12 @@ export class NominaService {
         
         const valorHora = empleado.salario_base / config.horas_mensuales;
 
+        const horasDiurnas = extraData.horas_diurnas || 0;
         const horasDom = extraData.horas_dominicales_diurnas || 0;
         const horasFest = extraData.horas_festivas_diurnas || 0;
         const horasExtraDom = extraData.horas_extra_diurna_dominical || 0;
 
+        const valorDiurnas = Math.round(horasDiurnas * valorHora * (1 + (config.porc_recargo_diurno / 100)));
         const valorDominicales = Math.round(horasDom * valorHora * (1 + (config.porc_recargo_dominical / 100)));
         const valorFestivas = Math.round(horasFest * valorHora * (1 + (config.porc_recargo_festivo / 100)));
         const valorExtraDom = Math.round(horasExtraDom * valorHora * (1 + (config.porc_extra_diurna_dominical / 100)));
@@ -45,7 +48,7 @@ export class NominaService {
         }
 
         const comisiones = Math.round(extraData.comisiones || 0);
-        const totalDevengado = sueldoBasico + auxilioTransporte + valorDominicales + valorFestivas + valorExtraDom + comisiones;
+        const totalDevengado = sueldoBasico + auxilioTransporte + valorDiurnas + valorDominicales + valorFestivas + valorExtraDom + comisiones;
 
         // 2. Calcular Deducciones (Salud y Pension)
         let baseCotizacion = totalDevengado - auxilioTransporte;
@@ -110,8 +113,10 @@ export class NominaService {
             dias_trabajados: diasTrabajados,
             sueldo_basico: sueldoBasico,
             auxilio_transporte: auxilioTransporte,
+            horas_diurnas: horasDiurnas,
+            valor_diurnas: valorDiurnas,
             horas_extras: horasExtraDom, 
-            recargos: valorDominicales + valorFestivas,
+            recargos: valorDiurnas + valorDominicales + valorFestivas,
             horas_dominicales_diurnas: horasDom,
             horas_festivas_diurnas: horasFest,
             horas_extra_diurna_dominical: horasExtraDom,
@@ -211,6 +216,12 @@ export class NominaService {
             if (nominaDetalle.auxilio_transporte > 0) {
                 doc.text('Aux. Transporte:', col1, y);
                 doc.text(`$${Math.round(nominaDetalle.auxilio_transporte).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
+                y += 15;
+            }
+
+            if (nominaDetalle.valor_diurnas && nominaDetalle.valor_diurnas > 0) {
+                doc.text(`Rec. Diurno (${Math.round(nominaDetalle.horas_diurnas || 0)}h):`, col1, y);
+                doc.text(`$${Math.round(nominaDetalle.valor_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
                 y += 15;
             }
 

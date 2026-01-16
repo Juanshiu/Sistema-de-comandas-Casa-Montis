@@ -83,10 +83,11 @@ export const migrarNomina = async (): Promise<void> => {
               porc_vacaciones REAL NOT NULL,
               
               -- Recargos y Extras
-              porc_recargo_dominical REAL NOT NULL DEFAULT 75,
-              porc_recargo_festivo REAL NOT NULL DEFAULT 75,
-              porc_extra_diurna_dominical REAL NOT NULL DEFAULT 100,
-              horas_mensuales INTEGER NOT NULL DEFAULT 240,
+            porc_recargo_dominical REAL NOT NULL DEFAULT 75,
+            porc_recargo_festivo REAL NOT NULL DEFAULT 75,
+            porc_recargo_diurno REAL NOT NULL DEFAULT 25,
+            porc_extra_diurna_dominical REAL NOT NULL DEFAULT 100,
+            horas_mensuales INTEGER NOT NULL DEFAULT 240,
               
               vigente BOOLEAN DEFAULT TRUE,
               created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -113,14 +114,14 @@ export const migrarNomina = async (): Promise<void> => {
                             porc_salud_empleado, porc_pension_empleado, fondo_solidaridad_limite,
                             porc_salud_empleador, porc_pension_empleador, porc_caja_comp, porc_sena, porc_icbf,
                             porc_cesantias, porc_intereses_cesantias, porc_prima, porc_vacaciones,
-                            porc_recargo_dominical, porc_recargo_festivo, porc_extra_diurna_dominical, horas_mensuales
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                            porc_recargo_dominical, porc_recargo_festivo, porc_recargo_diurno, porc_extra_diurna_dominical, horas_mensuales
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `, [
                         2026, 1750905, 188423, 50000,
                         4.0, 4.0, 7003620, // 4 SMLV aprox
                         8.5, 12.0, 4.0, 2.0, 3.0,
                         8.33, 12.0, 8.33, 4.17,
-                        80, 80, 125, 220
+                        80, 80, 25, 125, 220
                     ], (err) => {
                         if(err) rej(err);
                         else res();
@@ -168,6 +169,8 @@ export const migrarNomina = async (): Promise<void> => {
               dias_trabajados INTEGER NOT NULL,
               sueldo_basico REAL NOT NULL,
               auxilio_transporte REAL NOT NULL,
+              horas_diurnas REAL DEFAULT 0,
+              valor_diurnas REAL DEFAULT 0,
               horas_extras REAL DEFAULT 0,
               recargos REAL DEFAULT 0,
                comisiones REAL DEFAULT 0,
@@ -219,8 +222,11 @@ export const migrarNomina = async (): Promise<void> => {
         const columnsToAdd = [
             { table: 'configuracion_nomina', col: 'porc_recargo_dominical', type: 'REAL DEFAULT 75' },
             { table: 'configuracion_nomina', col: 'porc_recargo_festivo', type: 'REAL DEFAULT 75' },
+            { table: 'configuracion_nomina', col: 'porc_recargo_diurno', type: 'REAL DEFAULT 25' },
             { table: 'configuracion_nomina', col: 'porc_extra_diurna_dominical', type: 'REAL DEFAULT 100' },
             { table: 'configuracion_nomina', col: 'horas_mensuales', type: 'INTEGER DEFAULT 240' },
+            { table: 'nomina_detalles', col: 'horas_diurnas', type: 'REAL DEFAULT 0' },
+            { table: 'nomina_detalles', col: 'valor_diurnas', type: 'REAL DEFAULT 0' },
             { table: 'nomina_detalles', col: 'horas_dominicales_diurnas', type: 'REAL DEFAULT 0' },
             { table: 'nomina_detalles', col: 'horas_festivas_diurnas', type: 'REAL DEFAULT 0' },
             { table: 'nomina_detalles', col: 'horas_extra_diurna_dominical', type: 'REAL DEFAULT 0' },

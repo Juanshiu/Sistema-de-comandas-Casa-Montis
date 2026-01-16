@@ -13,6 +13,7 @@ const GestionNomina: React.FC = () => {
     // Estado para "Correr Nómina"
     const [selectedEmpleadoId, setSelectedEmpleadoId] = useState<string>('');
     const [diasTrabajados, setDiasTrabajados] = useState(30);
+    const [horasDiurnas, setHorasDiurnas] = useState(0);
     const [horasDom, setHorasDom] = useState(0);
     const [horasFest, setHorasFest] = useState(0);
     const [horasExtraDom, setHorasExtraDom] = useState(0);
@@ -63,6 +64,7 @@ const GestionNomina: React.FC = () => {
         setLoading(true);
         try {
             const calculo = await apiService.calcularNomina(parseInt(selectedEmpleadoId), diasTrabajados, {
+                horas_diurnas: horasDiurnas,
                 horas_dominicales_diurnas: horasDom,
                 horas_festivas_diurnas: horasFest,
                 horas_extra_diurna_dominical: horasExtraDom,
@@ -93,6 +95,7 @@ const GestionNomina: React.FC = () => {
             const resultado = await apiService.guardarNominaDetalle({
                 empleado_id: parseInt(selectedEmpleadoId),
                 dias_trabajados: diasTrabajados,
+                horas_diurnas: horasDiurnas,
                 horas_dominicales_diurnas: horasDom,
                 horas_festivas_diurnas: horasFest,
                 horas_extra_diurna_dominical: horasExtraDom,
@@ -289,6 +292,15 @@ const GestionNomina: React.FC = () => {
                                 />
                             </div>
                             <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Horas Diurnas</label>
+                                <input 
+                                    type="number" 
+                                    className="w-full border rounded-md p-2"
+                                    value={horasDiurnas}
+                                    onChange={(e) => setHorasDiurnas(parseFloat(e.target.value))}
+                                />
+                            </div>
+                            <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Horas Dom.</label>
                                 <input 
                                     type="number" 
@@ -396,6 +408,12 @@ const GestionNomina: React.FC = () => {
                                                 <span>Sueldo Básico</span>
                                                 <span>${Math.round(nominaCalculada.sueldo_basico).toLocaleString()}</span>
                                             </div>
+                                            {nominaCalculada.valor_diurnas && nominaCalculada.valor_diurnas > 0 && (
+                                                <div className="flex justify-between">
+                                                    <span>Recargo Diurno ({Math.round(nominaCalculada.horas_diurnas || 0)}h)</span>
+                                                    <span>${Math.round(nominaCalculada.valor_diurnas).toLocaleString()}</span>
+                                                </div>
+                                            )}
                                             {nominaCalculada.auxilio_transporte > 0 && (
                                                 <div className="flex justify-between">
                                                     <span>Aux. Transporte</span>
@@ -564,6 +582,11 @@ const GestionNomina: React.FC = () => {
                                         <label className="block text-xs font-medium text-gray-500">Rec. Festivo (%)</label>
                                         <input type="number" step="0.1" className="w-full border p-1 rounded" 
                                             value={config.porc_recargo_festivo} onChange={e => setConfig({...config, porc_recargo_festivo: parseFloat(e.target.value)})}/>
+                                    </div>
+                                    <div>
+                                        <label className="block text-xs font-medium text-gray-500">Rec. Diurno (%)</label>
+                                        <input type="number" step="0.1" className="w-full border p-1 rounded" 
+                                            value={config.porc_recargo_diurno} onChange={e => setConfig({...config, porc_recargo_diurno: parseFloat(e.target.value)})}/>
                                     </div>
                                     <div>
                                         <label className="block text-xs font-medium text-gray-500">Extra Dom. (%)</label>

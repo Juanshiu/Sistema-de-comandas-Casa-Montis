@@ -215,6 +215,7 @@ export interface ConfiguracionNomina {
   // Recargos y Extras
   porc_recargo_dominical: number;
   porc_recargo_festivo: number;
+  porc_recargo_diurno: number;
   porc_extra_diurna_dominical: number;
   horas_mensuales: number;
   
@@ -258,6 +259,8 @@ export interface NominaDetalle {
   valor_dominicales_diurnas?: number;
   valor_festivas_diurnas?: number;
   valor_extra_diurna_dominical?: number;
+  horas_diurnas?: number;
+  valor_diurnas?: number;
 
   total_devengado: number;
   
