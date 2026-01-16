@@ -1,9 +1,23 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 export default function FacturaPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <p>Cargando factura...</p>
+        </div>
+      }
+    >
+      <FacturaContent />
+    </Suspense>
+  );
+}
+
+function FacturaContent() {
   const searchParams = useSearchParams();
   const data = searchParams.get('data');
 

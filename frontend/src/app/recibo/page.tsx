@@ -1,9 +1,23 @@
 'use client';
 
-import { useEffect } from 'react';
+import { Suspense, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 
 export default function ReciboPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="flex items-center justify-center min-h-screen">
+          <p>Cargando recibo...</p>
+        </div>
+      }
+    >
+      <ReciboContent />
+    </Suspense>
+  );
+}
+
+function ReciboContent() {
   const searchParams = useSearchParams();
   const data = searchParams.get('data');
 
