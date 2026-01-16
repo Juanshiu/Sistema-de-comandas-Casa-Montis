@@ -146,7 +146,7 @@ export default function Login() {
         {/* Footer */}
         <div className="text-center mt-8">
           <p className="text-primary-100 text-sm">
-            © 2025 Casa Montis. Todos los derechos reservados.
+            © 2026 Casa Montis. Todos los derechos reservados.
           </p>
         </div>
       </div>
