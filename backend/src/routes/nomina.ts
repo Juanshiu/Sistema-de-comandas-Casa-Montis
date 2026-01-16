@@ -587,7 +587,7 @@ router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), 
             db.all(
                 `SELECT * FROM pagos_nomina 
                  WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
-                 ORDER BY fecha_pago ASC`,
+                 ORDER BY fecha ASC`,
                 [empleado.id, periodo_mes, periodo_anio],
                 (err, rows: any[]) => {
                     if (err) reject(err);
@@ -651,7 +651,7 @@ router.post('/detalle/:id/pagos', verifyToken, checkPermission('nomina.gestion')
             db.run(
                 `
               INSERT INTO pagos_nomina (
-                nomina_detalle_id, empleado_id, periodo_mes, periodo_anio, fecha_pago, tipo, valor, usuario_nombre, observaciones
+                nomina_detalle_id, empleado_id, periodo_mes, periodo_anio, fecha, tipo, valor, usuario_nombre, observaciones
               ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
                 [
@@ -677,7 +677,7 @@ router.post('/detalle/:id/pagos', verifyToken, checkPermission('nomina.gestion')
             db.all(
                 `SELECT * FROM pagos_nomina 
                  WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
-                 ORDER BY fecha_pago ASC`,
+                 ORDER BY fecha ASC`,
                 [nominaDetalle.empleado_id, nominaDetalle.periodo_mes, nominaDetalle.periodo_anio],
                 (err, rows: any[]) => {
                     if (err) reject(err);
@@ -772,7 +772,7 @@ router.get('/historial', verifyToken, checkPermission('nomina.gestion'), async (
             }
 
             db.all(
-                `SELECT * FROM pagos_nomina ${pagosWhere} ORDER BY fecha_pago ASC`,
+                `SELECT * FROM pagos_nomina ${pagosWhere} ORDER BY fecha ASC`,
                 pagosParams,
                 (err, rows: any[]) => {
                     if (err) reject(err);
