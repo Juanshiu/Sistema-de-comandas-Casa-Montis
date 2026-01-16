@@ -14,6 +14,23 @@ interface ConfiguracionFacturacion {
   direccion: string;
   ubicacion_geografica: string;
   telefonos: string[];
+  
+  // Nuevos campos extendidos
+  representante_legal?: string;
+  tipo_identificacion?: string;
+  departamento?: string;
+  ciudad?: string;
+  telefono2?: string;
+  correo_electronico?: string;
+  responsabilidad_tributaria?: string;
+  tributos?: string[]; // Array de strings (interés dinámico)
+  zona?: string;
+  sitio_web?: string;
+  alias?: string;
+  actividad_economica?: string;
+  descripcion?: string;
+  logo?: string;
+
   created_at?: string;
   updated_at?: string;
 }
