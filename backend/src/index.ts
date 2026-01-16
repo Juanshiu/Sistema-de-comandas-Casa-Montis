@@ -13,6 +13,7 @@ import { migrarMultiplesMesas } from './database/migration-multiples-mesas';
 import { migrarPersonalizacionesProductos } from './database/migration-personalizaciones-productos';
 import { migrarUsuariosYRoles } from './database/migration-usuarios-roles';
 import { migrarColumnasComandas } from './database/migration-fix-comandas-columns';
+import { migrarNomina } from './database/migration-nomina';
 import { iniciarPluginImpresora } from './services/pluginImpresora';
 import authRoutes from './routes/auth';
 import usuariosRoutes from './routes/usuarios';
@@ -27,6 +28,8 @@ import reportesRoutes from './routes/reportes';
 import personalizacionesRoutes from './routes/personalizaciones';
 import sistemaRoutes from './routes/sistema';
 import configuracionFacturacionRoutes from './routes/configuracion-facturacion';
+import empleadosRoutes from './routes/empleados';
+import nominaRoutes from './routes/nomina';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -87,6 +90,8 @@ app.use('/api/reportes', reportesRoutes);
 app.use('/api/personalizaciones', personalizacionesRoutes);
 app.use('/api/sistema', sistemaRoutes);
 app.use('/api/configuracion/facturacion', configuracionFacturacionRoutes);
+app.use('/api/empleados', empleadosRoutes);
+app.use('/api/nomina', nominaRoutes);
 
 // Ruta de salud
 app.get('/health', (req, res) => {
@@ -141,6 +146,10 @@ async function startServer() {
     // Migrar usuarios y roles
     await migrarUsuariosYRoles();
     console.log('✅ Migración de usuarios y roles completada');
+
+    // Migrar nómina (empleados, configuración, etc.)
+    await migrarNomina();
+    console.log('✅ Migración de nómina completada');
 
     // Corregir columnas faltantes en comandas
     await migrarColumnasComandas();

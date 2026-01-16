@@ -1,5 +1,5 @@
 import axios from 'axios';
-import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial, PaginatedResponse } from '@/types';
+import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial, PaginatedResponse, Empleado, ConfiguracionNomina, NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, HistorialNomina } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -288,6 +288,157 @@ export const apiService = {
     telefonos: string[];
   }): Promise<any> {
     const response = await api.put('/configuracion/facturacion', config);
+    return response.data;
+  },
+
+  // ==================== EMPLEADOS ====================
+  async getEmpleados(): Promise<Empleado[]> {
+    const response = await api.get('/empleados');
+    return response.data;
+  },
+
+  async getEmpleadosActivos(): Promise<Empleado[]> {
+    const response = await api.get('/empleados/activos');
+    return response.data;
+  },
+
+  async createEmpleado(empleado: Partial<Empleado>): Promise<Empleado> {
+    const response = await api.post('/empleados', empleado);
+    return response.data;
+  },
+
+  async updateEmpleado(id: number, empleado: Partial<Empleado>): Promise<Empleado> {
+    const response = await api.put(`/empleados/${id}`, empleado);
+    return response.data;
+  },
+
+  async deleteEmpleado(id: number): Promise<void> {
+    await api.delete(`/empleados/${id}`);
+  },
+
+  // ==================== CONFIGURACIÓN NÓMINA ====================
+  async getConfiguracionNomina(): Promise<ConfiguracionNomina> {
+    const response = await api.get('/nomina/configuracion');
+    return response.data;
+  },
+
+  async updateConfiguracionNomina(config: Partial<ConfiguracionNomina>): Promise<ConfiguracionNomina> {
+    const response = await api.put('/nomina/configuracion', config);
+    return response.data;
+  },
+
+  // ==================== CÁLCULO Y GESTIÓN DE NÓMINA ====================
+  async calcularNomina(
+    empleadoId: number,
+    diasTrabajados: number,
+    extraData?: {
+      horas_dominicales_diurnas?: number;
+      horas_festivas_diurnas?: number;
+      horas_extra_diurna_dominical?: number;
+      comisiones?: number;
+      otras_deducciones?: number;
+      periodo_mes?: string;
+      periodo_anio?: number;
+      usuario_nombre?: string;
+    }
+  ): Promise<NominaDetalle> {
+    const response = await api.post('/nomina/calcular', {
+      empleado_id: empleadoId,
+      dias_trabajados: diasTrabajados,
+      ...extraData
+    });
+    return response.data;
+  },
+
+  async guardarNominaDetalle(data: {
+    empleado_id: number;
+    dias_trabajados: number;
+    horas_dominicales_diurnas?: number;
+    horas_festivas_diurnas?: number;
+    horas_extra_diurna_dominical?: number;
+    comisiones?: number;
+    otras_deducciones?: number;
+    periodo_mes?: string;
+    periodo_anio?: number;
+    usuario_nombre?: string;
+  }): Promise<{ detalle: NominaDetalle; pagos: PagoNomina[]; saldo_pendiente: number; info: string }> {
+    const response = await api.post('/nomina/detalle/guardar', data);
+    return response.data;
+  },
+
+  async getHistorialNomina(
+    empleadoId: number,
+    filtros?: { periodo_mes?: string; periodo_anio?: number }
+  ): Promise<{ nominas: NominaDetalle[]; pagos: PagoNomina[]; historial: HistorialNomina[] }> {
+    const params = new URLSearchParams({
+      empleado_id: empleadoId.toString(),
+      ...(filtros?.periodo_mes && { periodo_mes: filtros.periodo_mes }),
+      ...(filtros?.periodo_anio && { periodo_anio: filtros.periodo_anio.toString() })
+    });
+    const response = await api.get(`/nomina/historial?${params}`);
+    return response.data;
+  },
+
+  async registrarPagoNomina(
+    nominaDetalleId: number,
+    data: {
+      valor: number;
+      fecha?: string;
+      tipo?: 'QUINCENA' | 'AJUSTE' | 'COMPLEMENTO';
+      observaciones?: string;
+    }
+  ): Promise<PagoNomina> {
+    const response = await api.post(`/nomina/detalle/${nominaDetalleId}/pagos`, data);
+    return response.data;
+  },
+
+  async descargarPDFNomina(nominaDetalleId: number): Promise<Blob> {
+    const response = await api.get(`/nomina/detalle/${nominaDetalleId}/pdf`, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  async generarPDFPreview(nominaDetalle: NominaDetalle): Promise<Blob> {
+    const response = await api.post('/nomina/generar-pdf-preview', {
+      nomina_detalle: nominaDetalle
+    }, {
+      responseType: 'blob'
+    });
+    return response.data;
+  },
+
+  // ==================== LIQUIDACIÓN ====================
+  async calcularLiquidacion(
+    empleadoId: number,
+    fechaRetiro: Date,
+    motivoRetiro: string,
+    params?: {
+      base_liquidacion_manual?: number;
+      salario_fijo?: boolean;
+      promedio_12_meses?: number;
+      incluir_auxilio_transporte?: boolean;
+      dias_vacaciones?: number;
+      dias_prima?: number;
+      dias_cesantias?: number;
+      dias_sueldo_pendientes?: number;
+    }
+  ): Promise<Liquidacion> {
+    const response = await api.post('/nomina/liquidacion/calcular', {
+      empleado_id: empleadoId,
+      fecha_retiro: fechaRetiro.toISOString(),
+      motivo_retiro: motivoRetiro,
+      ...params
+    });
+    return response.data;
+  },
+
+  async generarPDFLiquidacion(liquidacion: Liquidacion): Promise<Blob> {
+    const response = await api.post('/nomina/liquidacion/pdf-preview', {
+      liquidacion
+    }, {
+      responseType: 'blob'
+    });
     return response.data;
   },
 };
