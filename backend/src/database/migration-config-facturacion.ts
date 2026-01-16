@@ -1,7 +1,7 @@
 import sqlite3 from 'sqlite3';
 import path from 'path';
 
-const dbPath = path.join(__dirname, '../../database/restaurante.db');
+const dbPath = path.join(__dirname, '../../database/casa_montis.db');
 
 export async function ejecutarMigracion() {
   return new Promise<void>((resolve, reject) => {
