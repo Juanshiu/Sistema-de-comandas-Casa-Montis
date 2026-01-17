@@ -321,8 +321,7 @@ export interface PagoNomina {
   empleado_id?: number;
   valor: number;
   tipo: 'QUINCENA' | 'AJUSTE' | 'COMPLEMENTO';
-  fecha_pago: Date | string;
-  fecha?: Date | string; // Alias para compatibilidad
+  fecha: Date | string;
   observaciones?: string;
   usuario_nombre?: string;
   created_at?: Date;

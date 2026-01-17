@@ -1,5 +1,10 @@
 import axios from 'axios';
-import { Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, ComandaHistorial, PaginatedResponse, Empleado, ConfiguracionNomina, NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, HistorialNomina } from '@/types';
+import { 
+  Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, 
+  ComandaHistorial, PaginatedResponse, Empleado, ConfiguracionNomina, 
+  NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, 
+  HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico 
+} from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
 
@@ -314,6 +319,21 @@ export const apiService = {
 
   async deleteEmpleado(id: number): Promise<void> {
     await api.delete(`/empleados/${id}`);
+  },
+
+  // Recursos Humanos - Contratos
+  async generarContrato(empleado_id: number, contrato_details: ContratoDetails): Promise<GenerarContratoResponse> {
+    const response = await api.post('/contratos/generar', { empleado_id, contrato_details });
+    return response.data;
+  },
+
+  async getContratosHistorial(empleado_id: number): Promise<ContratoHistorico[]> {
+    const response = await api.get(`/contratos/historial/${empleado_id}`);
+    return response.data;
+  },
+
+  async deleteContrato(id: number): Promise<void> {
+    await api.delete(`/contratos/${id}`);
   },
 
   // ==================== CONFIGURACIÓN NÓMINA ====================
