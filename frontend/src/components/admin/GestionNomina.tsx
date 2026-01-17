@@ -521,7 +521,7 @@ const GestionNomina: React.FC = () => {
                                                         <tbody>
                                                             {pagosRegistrados.map((p, idx) => (
                                                                 <tr key={idx} className="border-b">
-                                                                    <td className="p-2">{new Date(p.fecha || p.fecha_pago).toLocaleDateString()}</td>
+                                                                    <td className="p-2">{new Date(p.fecha).toLocaleDateString()}</td>
                                                                     <td className="p-2">{p.tipo}</td>
                                                                     <td className="p-2 text-right">${Math.round(p.valor).toLocaleString()}</td>
                                                                 </tr>
@@ -864,7 +864,7 @@ const GestionNomina: React.FC = () => {
                                                             <tbody>
                                                                 {histPagos.filter(p => p.nomina_detalle_id === selectedHistNominaId).map(p => (
                                                                     <tr key={p.id} className="border-t">
-                                                                        <td className="px-2 py-1">{new Date(p.fecha || p.fecha_pago).toLocaleDateString()}</td>
+                                                                        <td className="px-2 py-1">{new Date(p.fecha).toLocaleDateString()}</td>
                                                                         <td className="px-2 py-1">{p.tipo}</td>
                                                                         <td className="px-2 py-1 text-right">${Math.round(p.valor).toLocaleString()}</td>
                                                                     </tr>
