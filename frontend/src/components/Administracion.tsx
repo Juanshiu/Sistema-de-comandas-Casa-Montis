@@ -14,9 +14,10 @@ import GestionRoles from './admin/GestionRoles';
 import GestionEmpleados from './admin/GestionEmpleados';
 import GestionNomina from './admin/GestionNomina';
 import GestionLiquidacion from './admin/GestionLiquidacion';
+import GeneradorContratos from './admin/GeneradorContratos';
 import GestionEmpresa from './admin/GestionEmpresa';
 
-type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles' | 'empleados' | 'nomina' | 'liquidacion' | 'empresa';
+type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles' | 'empleados' | 'nomina' | 'liquidacion' | 'contratos' | 'empresa';
 
 interface Seccion {
   id: SeccionAdmin;
@@ -156,6 +157,14 @@ export default function Administracion() {
             icon: Calculator,
             descripcion: 'Cálculo de liquidación por retiro',
             component: GestionLiquidacion,
+            permisos: ['nomina.gestion']
+          },
+          {
+            id: 'contratos',
+            nombre: 'Generar Contrato',
+            icon: FileText,
+            descripcion: 'Generador de contratos laborales PDF',
+            component: GeneradorContratos,
             permisos: ['nomina.gestion']
           }
         ]

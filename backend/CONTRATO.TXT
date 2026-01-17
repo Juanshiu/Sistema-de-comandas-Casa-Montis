@@ -1,0 +1,74 @@
+CONTRATO DE TRABAJO A TÉRMINO FIJO INFERIOR A UN (1) AÑO
+Entre las partes:
+EMPLEADOR:
+Nombre completo: {{NOMBRE_EMPLEADOR}}
+Cédula / NIT: {{IDENTIFICACION_EMPLEADOR}}
+Razón social / Establecimiento: {{RAZON_SOCIAL}}
+Dirección: {{DIRECCION_EMPRESA}}
+Municipio: {{MUNICIPIO_EMPRESA}}
+Y por otra parte:
+TRABAJADOR(A):
+Nombre completo: {{NOMBRE_TRABAJADOR}}
+Cédula de ciudadanía: {{CEDULA_TRABAJADOR}}
+Dirección de domicilio: {{DIRECCION_TRABAJADOR}}
+Municipio: {{MUNICIPIO_TRABAJADOR}}
+Hemos convenido celebrar el presente CONTRATO DE TRABAJO A TÉRMINO FIJO, el cual se regirá por las normas del Código Sustantivo del Trabajo y las siguientes cláusulas:
+________________________________________
+ARTÍCULO 1. NATURALEZA DEL CONTRATO
+El presente contrato es de trabajo a término fijo inferior a un (1) año, conforme a lo establecido en la legislación laboral colombiana.
+ARTÍCULO 2. OBJETO Y CARGO
+El EMPLEADOR contrata al TRABAJADOR(A) para desempeñar el cargo de {{CARGO}}, obligándose este(a) a prestar sus servicios de manera personal, continua y subordinada.
+ARTÍCULO 3. FUNCIONES
+Además de las funciones propias del cargo, el TRABAJADOR(A) se compromete a:
+•	Cumplir con las instrucciones impartidas por el EMPLEADOR o su jefe inmediato.
+•	Mantener el orden, aseo e higiene del área de trabajo.
+•	Cumplir con las normas de manipulación de alimentos y buenas prácticas de manufactura (BPM).
+•	Utilizar correctamente los elementos, equipos y dotación suministrados.
+•	Acatar la minuta, recetas y lineamientos operativos del establecimiento.
+ARTÍCULO 4. LUGAR DE PRESTACIÓN DEL SERVICIO
+El TRABAJADOR(A) prestará sus servicios en {{DIRECCION_EMPRESA}}, correspondiente al establecimiento {{RAZON_SOCIAL}}, sin perjuicio de cambios razonables dentro del mismo municipio.
+ARTÍCULO 5. JORNADA LABORAL
+La jornada de trabajo será de {{DIAS_LABORADOS}}, en el siguiente horario:
+{{HORARIO_TRABAJO}}
+Cualquier labor adicional que constituya horas extras, dominicales o festivos se reconocerá y pagará conforme a la ley.
+ARTÍCULO 6. REMUNERACIÓN
+El EMPLEADOR pagará al TRABAJADOR(A) como salario la suma de {{SALARIO}}, equivalente a {{SALARIO_LETRAS}}, conforme al salario mínimo legal vigente o el salario pactado.
+ARTÍCULO 7. FORMA Y PERIODO DE PAGO
+El salario será pagado en forma {{PERIODO_PAGO}} mediante {{FORMA_PAGO}}, los días {{FECHAS_PAGO}}.
+ARTÍCULO 8. SEGURIDAD SOCIAL Y PARAFISCALES
+El EMPLEADOR afiliará al TRABAJADOR(A) al sistema de seguridad social integral (salud, pensión y riesgos laborales) y realizará los aportes de ley.
+ARTÍCULO 9. PERÍODO DE PRUEBA
+Se acuerda un período de prueba de {{PERIODO_PRUEBA}}, durante el cual cualquiera de las partes podrá dar por terminado el contrato sin previo aviso ni indemnización.
+ARTÍCULO 10. DURACIÓN
+El presente contrato tendrá una duración de {{DURACION_CONTRATO}}, iniciando el día {{FECHA_INICIO}} y finalizando el día {{FECHA_FIN}}, prorrogable automáticamente por un término igual, salvo preaviso escrito.
+ARTÍCULO 11. PREAVISO
+La parte que desee dar por terminado el contrato al vencimiento del término pactado deberá notificarlo por escrito con una antelación mínima de treinta (30) días calendario.
+
+
+ARTÍCULO 12. OBLIGACIONES DEL EMPLEADOR
+Además de las legales, son obligaciones del EMPLEADOR:
+•	Pagar oportunamente el salario.
+•	Proveer los elementos de trabajo.
+•	Garantizar condiciones dignas y seguras de trabajo.
+ARTÍCULO 13. OBLIGACIONES DEL TRABAJADOR(A)
+Además de las legales, son obligaciones del TRABAJADOR(A):
+•	Cumplir el horario y funciones asignadas.
+•	Guardar respeto a superiores, compañeros y clientes.
+•	Cuidar los bienes del establecimiento.
+ARTÍCULO 14. RÉGIMEN DISCIPLINARIO
+El incumplimiento de las obligaciones dará lugar a medidas disciplinarias proporcionales a la falta, tales como llamados de atención verbales o escritos, suspensiones temporales del contrato o terminación con justa causa, según la gravedad y reiteración de la conducta, garantizando el debido proceso.
+ARTÍCULO 15. TERMINACIÓN DEL CONTRATO
+El contrato podrá darse por terminado por las causales previstas en el artículo 62 del Código Sustantivo del Trabajo y demás normas concordantes.
+ARTÍCULO 16. INTEGRIDAD
+El presente contrato reemplaza cualquier acuerdo verbal o escrito anterior.
+ARTÍCULO 17. DOMICILIO
+Para todos los efectos legales, las partes fijan como domicilio el municipio de {{MUNICIPIO_EMPRESA}}.
+En señal de conformidad, se firma en dos (2) ejemplares del mismo tenor.
+Lugar y fecha: {{LUGAR_FIRMA}}, {{FECHA_FIRMA}}
+________________________________________
+EL EMPLEADOR,                                                        EL TRABAJADOR,
+
+
+____________________                                              ____________________
+{{NOMBRE_EMPLEADOR}}		                  {{NOMBRE_TRABAJADOR}} 
+C.C. {{IDENTIFICACION_EMPLEADOR}}	C.C. {{CEDULA_TRABAJADOR}}
