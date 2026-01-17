@@ -894,7 +894,7 @@ router.delete('/historial', verifyToken, checkPermission('nomina.gestion'), asyn
 
             nominasIds = await new Promise((resolve, reject) => {
                 db.all(
-                    `SELECT id FROM nomina_detalles WHERE periodo_mes = ? AND periodo_anio = ?`,
+                    `SELECT id FROM nomina_detalles WHERE UPPER(periodo_mes) = UPPER(?) AND periodo_anio = ?`,
                     [periodo_mes, periodo_anio],
                     (err, rows: any[]) => {
                         if (err) reject(err);

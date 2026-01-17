@@ -12,14 +12,14 @@ export default function ConfiguracionSistema() {
 
   // Estados para depuración de nómina
   const [tipoEliminacion, setTipoEliminacion] = useState<'periodo' | 'fecha'>('periodo');
-  const [mesEliminacion, setMesEliminacion] = useState('Enero');
+  const [mesEliminacion, setMesEliminacion] = useState('ENERO');
   const [anioEliminacion, setAnioEliminacion] = useState(new Date().getFullYear());
   const [fechaInicioEliminacion, setFechaInicioEliminacion] = useState('');
   const [fechaFinEliminacion, setFechaFinEliminacion] = useState('');
 
   const meses = [
-    'Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio',
-    'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'
+    'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO',
+    'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'
   ];
 
   // Eliminar Historial de Nómina
