@@ -62,6 +62,19 @@ Sistema integral de comandas para el restaurante Casa Montis, desarrollado con R
 
 - **Transacciones**: Consistencia de datos garantizada
 
+### � Gestión de Recursos Humanos (Nómina y Personal)
+- **Gestión de Empleados**: 
+  - CRUD completo de personal con datos detallados (cargo, contrato, salario, etc.)
+  - Control de estados y tipos de trabajadores
+- **Liquidación de Nómina**:
+  - Cálculo automático de devengados (horas extra, dominicales, festivos, comisiones)
+  - Deducciones automáticas (salud, pensión) y aportes de ley
+  - Generación de periodos mensuales y quincenales
+- **Liquidación de Prestaciones Sociales**:
+  - Cálculo de cesantías, intereses, primas y vacaciones
+  - Soporte para diferentes motivos de retiro (renuncia, despido con/sin justa causa)
+  - Historial detallado de liquidaciones con trazabilidad
+
 ### 🖨️ Sistema de Impresión Profesional
 - **Plugin HTTP Propio** (Puerto 8001):
   - Sin marcas de agua ni dependencias externas
@@ -122,7 +135,9 @@ Sistema-comandas/
 │   │   │   ├── facturas-nuevas.ts  # API de facturas
 │   │   │   ├── mesas.ts            # API de mesas
 │   │   │   ├── productos.ts        # API de productos
-│   │   │   └── salones.ts          # API de salones
+│   │   │   ├── salones.ts          # API de salones
+│   │   │   ├── empleados.ts        # API de empleados (RRHH)
+│   │   │   └── nomina.ts           # API de nómina y liquidaciones
 │   │   └── services/        # Servicios
 │   │       ├── printer.ts           # Servicio de impresión principal
 │   │       └── pluginImpresora.ts   # Plugin HTTP propio (Puerto 8001)
@@ -234,6 +249,13 @@ npm run dev
 - `GET /api/facturas/:id` - Obtener factura específica
 - `POST /api/facturas` - Crear factura y liberar mesa
 - `POST /api/facturas/:id/imprimir` - Reimprimir factura
+
+### Recursos Humanos (RRHH)
+- `GET /api/empleados` - Listar todos los empleados
+- `POST /api/empleados` - Registrar nuevo empleado
+- `GET /api/nomina/configuracion` - Obtener configuración de ley vigente
+- `POST /api/nomina/calcular` - Calcular nómina para un empleado
+- `POST /api/nomina/liquidar` - Calcular liquidación definitiva de prestaciones
 
 ### Personalizaciones
 - `GET /api/personalizaciones/categorias` - Obtener categorías de personalización
