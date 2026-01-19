@@ -62,7 +62,7 @@ Sistema integral de comandas para el restaurante Casa Montis, desarrollado con R
 
 - **Transacciones**: Consistencia de datos garantizada
 
-### � Gestión de Recursos Humanos (Nómina y Personal)
+### 👥 Gestión de Recursos Humanos (Nómina y Personal)
 - **Gestión de Empleados**: 
   - CRUD completo de personal con datos detallados (cargo, contrato, salario, etc.)
   - Control de estados y tipos de trabajadores
@@ -74,6 +74,20 @@ Sistema integral de comandas para el restaurante Casa Montis, desarrollado con R
   - Cálculo de cesantías, intereses, primas y vacaciones
   - Soporte para diferentes motivos de retiro (renuncia, despido con/sin justa causa)
   - Historial detallado de liquidaciones con trazabilidad
+
+### 🔐 Seguridad y Control de Acceso (Usuarios y Roles)
+- **Autenticación Multimodal**:
+  - **Login Seguro**: Autenticación por usuario y contraseña con hashing robusto (bcrypt).
+  - **Acceso por PIN**: Identificación rápida mediante código PIN para operaciones frecuentes en el punto de venta.
+  - **Sesiones Persistentes**: Gestión de tokens de sesión con duración configurable (12 horas por defecto).
+- **Control de Acceso Basado en Roles (RBAC)**:
+  - **Perfiles Personalizados**: Creación de roles con nombres, descripciones y niveles de acceso específicos.
+  - **Permisos Granulares**: Sistema de permisos por módulo (ej: `comandas.crear`, `nomina.admin`, `usuarios.gestionar`).
+  - **Superusuarios**: Acceso total e irrestricto a todas las funciones críticas del sistema.
+- **Administración de Cuentas**:
+  - **Estado de Usuarios**: Control de activación/desactivación inmediata de cuentas.
+  - **Trazabilidad**: Registro automático del último inicio de sesión y fecha de creación de cada usuario.
+  - **Integración**: Vinculación directa entre usuarios del sistema y el personal registrado en RRHH.
 
 ### 🖨️ Sistema de Impresión Profesional
 - **Plugin HTTP Propio** (Puerto 8001):
@@ -121,8 +135,16 @@ Sistema-comandas/
 │   │   │   ├── ResumenComanda.tsx           # Vista previa y envío
 │   │   │   ├── InterfazCaja.tsx             # Procesamiento de pagos
 │   │   │   ├── HistorialComandas.tsx        # Historial completo
+│   │   │   ├── Login.tsx                    # Interfaz de acceso
 │   │   │   └── admin/                       # Componentes de administración
+│   │   │       ├── GestionEmpleados.tsx     # CRUD de empleados
+│   │   │       ├── GestionNomina.tsx        # Liquidación de nómina
+│   │   │       ├── GestionLiquidacion.tsx   # Prestaciones sociales
+│   │   │       ├── GestionUsuarios.tsx      # Control de usuarios
+│   │   │       └── GestionRoles.tsx         # Roles y permisos
 │   │   ├── types/           # Tipos TypeScript
+│   │   ├── contexts/        # Contextos de React
+│   │   │   └── AuthContext.tsx  # Estado de autenticación global
 │   │   └── services/        # Servicios de API
 │   ├── package.json
 │   └── tailwind.config.js
@@ -137,7 +159,10 @@ Sistema-comandas/
 │   │   │   ├── productos.ts        # API de productos
 │   │   │   ├── salones.ts          # API de salones
 │   │   │   ├── empleados.ts        # API de empleados (RRHH)
-│   │   │   └── nomina.ts           # API de nómina y liquidaciones
+│   │   │   ├── nomina.ts           # API de nómina y liquidaciones
+│   │   │   ├── auth.ts             # API de autenticación y sesiones
+│   │   │   ├── usuarios.ts         # API de gestión de usuarios
+│   │   │   └── roles.ts            # API de roles y permisos
 │   │   └── services/        # Servicios
 │   │       ├── printer.ts           # Servicio de impresión principal
 │   │       └── pluginImpresora.ts   # Plugin HTTP propio (Puerto 8001)
@@ -256,6 +281,18 @@ npm run dev
 - `GET /api/nomina/configuracion` - Obtener configuración de ley vigente
 - `POST /api/nomina/calcular` - Calcular nómina para un empleado
 - `POST /api/nomina/liquidar` - Calcular liquidación definitiva de prestaciones
+
+### Usuarios y Seguridad
+- `POST /api/auth/login` - Iniciar sesión y obtener token de sesión
+- `POST /api/auth/logout` - Cerrar sesión y revocar token
+- `GET /api/usuarios` - Listar todos los usuarios del sistema
+- `GET /api/usuarios/:id` - Ver detalles de un usuario específico
+- `POST /api/usuarios` - Registrar un nuevo usuario (requiere privilegios)
+- `PUT /api/usuarios/:id` - Actualizar información de usuario o cambiar contraseña
+- `GET /api/roles` - Listar roles configurados
+- `GET /api/roles/:id` - Ver rol con su matriz de permisos
+- `POST /api/roles` - Crear un nuevo rol personalizado
+- `PUT /api/roles/:id` - Modificar permisos de un rol existente
 
 ### Personalizaciones
 - `GET /api/personalizaciones/categorias` - Obtener categorías de personalización
@@ -382,6 +419,16 @@ Teléfono: 555-1234
 ### Panel de Administración
 
 El sistema incluye un panel completo de administración accesible desde la interfaz principal:
+
+**Gestión de Seguridad y Acceso:**
+- **Control de Usuarios**: Crear y administrar cuentas de acceso para el personal.
+- **Roles y Permisos**: Definir perfiles (Administrador, Mesero, Cajero) con permisos granulares.
+- **Auditoría de Acceso**: Seguimiento de últimos inicios de sesión y estados de cuenta.
+
+**Gestión de Recursos Humanos:**
+- **Expediente de Empleados**: Información personal, contractual y salarial centralizada.
+- **Procesamiento de Nómina**: Liquidación periódica con cálculos automáticos de ley.
+- **Liquidaciones Definitivas**: Gestión de retiros y pago de prestaciones sociales.
 
 **Gestión de Productos:**
 - Crear, editar y eliminar productos
@@ -547,18 +594,18 @@ PRINTER_COCINA_NAME=pos58
 ## 🔐 Seguridad y Mejores Prácticas
 
 **Implementado:**
-- Headers de seguridad con Helmet
-- Validación de datos en todas las rutas
-- Transacciones SQLite para integridad de datos
-- Manejo robusto de errores con logs detallados
-- Sanitización de inputs
+- **Autenticación y Autorización**: Sistema de sesiones seguro con hashing de contraseñas.
+- **Control de Roles (RBAC)**: Permisos granulares por módulo y rol de usuario.
+- **Seguridad de Red**: Headers de seguridad con Helmet.
+- **Validación de Datos**: Validación en todas las rutas de API.
+- **Integridad de Datos**: Transacciones SQLite para procesos críticos.
+- **Sanitización**: Limpieza de inputs para prevenir inyecciones.
 
 **Recomendaciones Futuras:**
-- Implementar autenticación JWT para usuarios
-- Agregar roles (mesero, cajero, admin)
-- Backup automático de base de datos
-- HTTPS en producción
-- Rate limiting en endpoints
+- Implementar autenticación JWT (actualmente usa sesiones en DB).
+- Backup automático de base de datos en la nube.
+- Configuración de HTTPS en producción.
+- Rate limiting para prevenir ataques de fuerza bruta.
 
 ## 📈 Escalabilidad y Roadmap
 
@@ -568,13 +615,14 @@ PRINTER_COCINA_NAME=pos58
 - ✅ Sistema multi-canal (mesa/domicilio)
 - ✅ Edición de comandas sin duplicados
 - ✅ Impresión con encoding perfecto
+- ✅ Gestión completa de RRHH y Nómina
+- ✅ Autenticación y Control de Roles (RBAC)
 
 ### Próximas Funcionalidades
-- 🔄 Autenticación y gestión de usuarios
 - 🔄 Reportes y analíticas avanzadas
 - 🔄 Integración con delivery apps (Uber Eats, Rappi)
 - 🔄 App móvil nativa (React Native)
-- 🔄 Sistema de inventario
+- 🔄 Sistema de inventario avanzado
 - 🔄 CRM de clientes frecuentes
 
 ### Escalabilidad Multi-Punto
