@@ -329,6 +329,14 @@ export class NominaService {
                 currentY += 15;
                 doc.font('Helvetica').fontSize(8);
                 
+                const formatDateLocal = (d: any) => {
+                    const date = d instanceof Date ? d : new Date(d);
+                    const year = date.getFullYear();
+                    const month = String(date.getMonth() + 1).padStart(2, '0');
+                    const day = String(date.getDate()).padStart(2, '0');
+                    return `${day}/${month}/${year}`;
+                };
+
                 doc.text(`Nombre: ${empleado.nombres} ${empleado.apellidos}`, colA, currentY);
                 doc.text(`Contrato: ${liquidacion.tipo_contrato}`, colB, currentY);
                 currentY += 12;
@@ -336,10 +344,10 @@ export class NominaService {
                 doc.text(`Motivo: ${liquidacion.motivo_retiro.replace(/_/g, ' ')}`, colB, currentY);
                 currentY += 12;
                 doc.text(`Cargo: ${empleado.cargo}`, colA, currentY);
-                doc.text(`Fecha Ingreso: ${new Date(liquidacion.fecha_inicio_contrato).toLocaleDateString()}`, colB, currentY);
+                doc.text(`Fecha Ingreso: ${formatDateLocal(liquidacion.fecha_inicio_contrato)}`, colB, currentY);
                 currentY += 12;
                 doc.text(`Salario Base: $${Math.round(liquidacion.bases.salario_base).toLocaleString()}`, colA, currentY);
-                doc.text(`Fecha Retiro: ${new Date(liquidacion.fecha_fin_contrato).toLocaleDateString()}`, colB, currentY);
+                doc.text(`Fecha Retiro: ${formatDateLocal(liquidacion.fecha_fin_contrato)}`, colB, currentY);
                 currentY += 12;
                 doc.text(`Base Prestaciones: $${Math.round(liquidacion.bases.base_prestaciones).toLocaleString()}`, colA, currentY);
                 doc.text(`Días Laborados: ${liquidacion.dias_laborados_total}`, colB, currentY);
@@ -413,20 +421,64 @@ export class NominaService {
     }
 
     /**
+     * Parsea una fecha YYYY-MM-DD a objeto Date local para evitar desfases de zona horaria
+     */
+    private static parseLocalDate(dateInput: string | Date): Date {
+        if (dateInput instanceof Date) return dateInput;
+        if (!dateInput) return new Date();
+        
+        // Si ya viene con formato ISO completo, intentar parsear
+        if (dateInput.includes('T')) return new Date(dateInput);
+
+        const parts = dateInput.split('-');
+        if (parts.length === 3) {
+            const year = parseInt(parts[0]);
+            const month = parseInt(parts[1]) - 1;
+            const day = parseInt(parts[2]);
+            return new Date(year, month, day);
+        }
+        return new Date(dateInput);
+    }
+
+    /**
      * Calcular Liquidación de Prestaciones Sociales (Colombia)
      */
     static async calcularLiquidacion(
         empleado: Empleado, 
-        fechaRetiro: Date, 
+        fechaRetiro: Date | string, 
         config: ConfiguracionNomina,
         motivoRetiro: string,
         params: any = {}
     ): Promise<any> {
-        const fechaInicio = new Date(empleado.fecha_inicio);
-        const fechaFin = new Date(fechaRetiro);
+        const fechaInicio = this.parseLocalDate(empleado.fecha_inicio);
+        const fechaFin = this.parseLocalDate(fechaRetiro);
         
-        const diffTime = Math.abs(fechaFin.getTime() - fechaInicio.getTime());
-        const diasLaboradosTotal = Math.ceil(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        // Cálculo de días laborados usando convención 360 días (30 días por mes)
+        // Para prestaciones sociales en Colombia se usa (Año*360 + Mes*30 + Día)
+        const calcularDias360 = (fInicio: Date, fFin: Date) => {
+            const d1 = fInicio.getDate();
+            const m1 = fInicio.getMonth() + 1;
+            const y1 = fInicio.getFullYear();
+            
+            let d2 = fFin.getDate();
+            const m2 = fFin.getMonth() + 1;
+            const y2 = fFin.getFullYear();
+
+            // Ajuste para el último día del mes (convención 30 días)
+            // Si el mes tiene 31 días y es el día 31, se toma como 30
+            // Si es febrero (28 o 29) y es el último día, se toma como 30 para cálculos laborales
+            const isLastDayOfMonth = (date: Date) => {
+                const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+                return nextDay.getMonth() !== date.getMonth();
+            };
+
+            const adjustedD2 = isLastDayOfMonth(fFin) ? 30 : d2;
+            const adjustedD1 = (isLastDayOfMonth(fInicio) && d1 > 28) ? 30 : d1;
+
+            return ((y2 - y1) * 360) + ((m2 - m1) * 30) + (adjustedD2 - adjustedD1) + 1;
+        };
+
+        const diasLaboradosTotal = calcularDias360(fechaInicio, fechaFin);
         
         let baseSalarial = params.salarioEsFijo === false && params.promedio12Meses 
             ? params.promedio12Meses 
@@ -439,8 +491,14 @@ export class NominaService {
         let basePrestaciones = baseSalarial + (incluyeAuxilio ? config.auxilio_transporte : 0);
         let baseVacaciones = baseSalarial;
 
-        const diasCesantias = params.diasCesantiasPendientes ?? this.calcularDiasProporcionalesAnio(fechaInicio, fechaFin);
-        const diasPrima = params.diasPrimaPendientes ?? this.calcularDiasProporcionalesSemestre(fechaInicio, fechaFin);
+        // Para días de cesantías y prima, también usamos convención 360
+        const calcularDias360Proporcional = (fInicio: Date, fFin: Date, inicioPeriodo: Date) => {
+            const realInicio = fInicio > inicioPeriodo ? fInicio : inicioPeriodo;
+            return calcularDias360(realInicio, fFin);
+        };
+
+        const diasCesantias = params.diasCesantiasPendientes ?? calcularDias360Proporcional(fechaInicio, fechaFin, new Date(fechaFin.getFullYear(), 0, 1));
+        const diasPrima = params.diasPrimaPendientes ?? calcularDias360Proporcional(fechaInicio, fechaFin, new Date(fechaFin.getFullYear(), fechaFin.getMonth() < 6 ? 0 : 6, 1));
         const diasVacaciones = params.diasVacacionesPendientes ?? (diasCesantias);
 
         const cesantias = (basePrestaciones * diasCesantias) / 360;
@@ -500,7 +558,12 @@ export class NominaService {
             }
         }
 
-        const diasSueldoPendientes = params.diasSueldoPendientes ?? fechaFin.getDate();
+        const isLastDayOfMonth = (date: Date) => {
+            const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
+            return nextDay.getMonth() !== date.getMonth();
+        };
+
+        const diasSueldoPendientes = params.diasSueldoPendientes ?? (isLastDayOfMonth(fechaFin) ? 30 : fechaFin.getDate());
         const valorDiaSueldo = Math.floor(baseSalarial / 30);
         const salarioPendiente = valorDiaSueldo * diasSueldoPendientes;
         const auxTranspPendiente = incluyeAuxilio ? Math.floor((config.auxilio_transporte / 30) * diasSueldoPendientes) : 0;

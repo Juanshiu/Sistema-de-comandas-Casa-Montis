@@ -196,7 +196,7 @@ router.post('/liquidacion/calcular', verifyToken, checkPermission('nomina.gestio
         // 3. Calcular
         const liquidacion = await NominaService.calcularLiquidacion(
             empleado, 
-            fecha_retiro ? new Date(fecha_retiro) : new Date(), 
+            fecha_retiro || new Date(), 
             config, 
             motivo_retiro || 'RENUNCIA_VOLUNTARIA',
             {
@@ -214,49 +214,41 @@ router.post('/liquidacion/calcular', verifyToken, checkPermission('nomina.gestio
         // 4. Guardar Auditoría (Trazabilidad obligatoria)
         const usuario_nombre = (req as any).user?.usuario || 'Sistema';
 
-        await new Promise<void>((resolve, reject) => {
-            db.run(`
-                INSERT INTO historial_liquidaciones (
-                    empleado_id, fecha_liquidacion, fecha_inicio_contrato, fecha_fin_contrato,
-                    tipo_contrato, tipo_terminacion, salario_fijo, base_calculo,
-                    base_calculo_detalle, dias_laborados, cesantias, intereses_cesantias,
-                    prima_servicios, vacaciones, indemnizacion, total_liquidacion,
-                    usuario_genero, version_normativa
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `, [
-                empleado.id, 
-                new Date().toISOString(),
-                (liquidacion.fecha_inicio_contrato as any) ? new Date(liquidacion.fecha_inicio_contrato).toISOString() : empleado.fecha_inicio,
-                (liquidacion.fecha_fin_contrato as any) ? new Date(liquidacion.fecha_fin_contrato).toISOString() : liquidacion.fecha_fin_contrato,
-                empleado.tipo_contrato,
-                motivo_retiro || 'RENUNCIA_VOLUNTARIA',
-                empleado.salario_integral ? 0 : 1,
-                liquidacion.base_liquidacion,
-                JSON.stringify(liquidacion.detalles || {}),
-                liquidacion.dias_laborados_total,
-                liquidacion.cesantias,
-                liquidacion.intereses_cesantias,
-                liquidacion.prima_servicios,
-                liquidacion.vacaciones,
-                liquidacion.indemnizacion || 0,
-                liquidacion.total_liquidacion,
-                usuario_nombre,
-                '2026-Colombia'
-            ], (err) => {
-                if (err) {
-                    console.error('Error guardando auditoría de liquidación:', err);
-                    // No rechazamos, solo log
-                    resolve();
-                } else {
-                    resolve();
-                }
-            });
+        db.run(`
+            INSERT INTO historial_liquidaciones (
+                empleado_id, fecha_liquidacion, fecha_inicio_contrato, fecha_fin_contrato,
+                tipo_contrato, tipo_terminacion, salario_fijo, base_calculo,
+                base_calculo_detalle, dias_laborados, cesantias, intereses_cesantias,
+                prima_servicios, vacaciones, indemnizacion, total_liquidacion,
+                usuario_genero, version_normativa
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `, [
+            empleado.id, 
+            new Date().toISOString(),
+            liquidacion.fecha_inicio_contrato instanceof Date ? liquidacion.fecha_inicio_contrato.toISOString().split('T')[0] : liquidacion.fecha_inicio_contrato,
+            liquidacion.fecha_fin_contrato instanceof Date ? liquidacion.fecha_fin_contrato.toISOString().split('T')[0] : liquidacion.fecha_fin_contrato,
+            empleado.tipo_contrato,
+            motivo_retiro || 'RENUNCIA_VOLUNTARIA',
+            empleado.salario_integral ? 0 : 1,
+            liquidacion.bases.base_prestaciones,
+            JSON.stringify(liquidacion.detalles || {}),
+            liquidacion.dias_laborados_total,
+            liquidacion.detalles.cesantias.valor,
+            liquidacion.detalles.intereses.valor,
+            liquidacion.detalles.prima.valor,
+            liquidacion.detalles.vacaciones.valor,
+            liquidacion.detalles.indemnizacion.valor,
+            liquidacion.total_liquidacion,
+            usuario_nombre,
+            liquidacion.version_normativa
+        ], (err) => {
+            if (err) {
+                console.error('Error al guardar historial de liquidación:', err);
+            }
+            // Adjuntar datos de usuario para el PDF posterior
+            (liquidacion as any).usuario_genero = usuario_nombre;
+            res.json(liquidacion);
         });
-        
-        // Adjuntar datos de usuario para el PDF posterior
-        (liquidacion as any).usuario_genero = usuario_nombre;
-        
-        res.json(liquidacion);
 
     } catch (error: any) {
         console.error('Error calculando liquidación:', error);

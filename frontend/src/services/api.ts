@@ -444,7 +444,7 @@ export const apiService = {
   // ==================== LIQUIDACIÓN ====================
   async calcularLiquidacion(
     empleadoId: number,
-    fechaRetiro: Date,
+    fechaRetiro: Date | string,
     motivoRetiro: string,
     params?: {
       base_liquidacion_manual?: number;
@@ -459,7 +459,7 @@ export const apiService = {
   ): Promise<Liquidacion> {
     const response = await api.post('/nomina/liquidacion/calcular', {
       empleado_id: empleadoId,
-      fecha_retiro: fechaRetiro.toISOString(),
+      fecha_retiro: fechaRetiro instanceof Date ? fechaRetiro.toISOString() : fechaRetiro,
       motivo_retiro: motivoRetiro,
       ...params
     });

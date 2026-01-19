@@ -60,7 +60,7 @@ const GestionLiquidacion: React.FC = () => {
         try {
             const res = await apiService.calcularLiquidacion(
                 parseInt(selectedEmpleadoId),
-                new Date(fechaRetiro),
+                fechaRetiro, // Pasar el string YYYY-MM-DD directamente
                 motivoRetiro,
                 {
                     base_liquidacion_manual: baseManual > 0 ? baseManual : undefined,
@@ -80,6 +80,16 @@ const GestionLiquidacion: React.FC = () => {
         } finally {
             setLoading(false);
         }
+    };
+
+    const formatDate = (dateStr: string | Date) => {
+        if (!dateStr) return 'N/A';
+        if (dateStr instanceof Date) return dateStr.toLocaleDateString();
+        const parts = dateStr.split('T')[0].split('-');
+        if (parts.length === 3) {
+            return `${parts[2]}/${parts[1]}/${parts[0]}`;
+        }
+        return new Date(dateStr).toLocaleDateString();
     };
 
     const selectedEmpleado = empleados.find(e => e.id === parseInt(selectedEmpleadoId));
@@ -119,7 +129,7 @@ const GestionLiquidacion: React.FC = () => {
                         <div className="bg-blue-50 p-3 rounded-md text-xs space-y-1">
                             <p><strong>Cargo:</strong> {selectedEmpleado.cargo}</p>
                             <p><strong>Contrato:</strong> {selectedEmpleado.tipo_contrato}</p>
-                            <p><strong>Fecha Ingreso:</strong> {new Date(selectedEmpleado.fecha_inicio).toLocaleDateString()}</p>
+                            <p><strong>Fecha Ingreso:</strong> {formatDate(selectedEmpleado.fecha_inicio)}</p>
                             <p><strong>Sueldo Base:</strong> ${selectedEmpleado.salario_base.toLocaleString()}</p>
                         </div>
                     )}
@@ -152,7 +162,7 @@ const GestionLiquidacion: React.FC = () => {
                         <>
                             {selectedEmpleado?.es_periodo_prueba && 
                              selectedEmpleado.fecha_fin_periodo_prueba && 
-                             new Date(fechaRetiro) <= new Date(selectedEmpleado.fecha_fin_periodo_prueba) ? (
+                             fechaRetiro <= selectedEmpleado.fecha_fin_periodo_prueba ? (
                                 <div className="p-3 bg-red-100 border border-red-200 rounded-md flex gap-2">
                                     <AlertCircle size={16} className="text-red-700 shrink-0" />
                                     <p className="text-[10px] font-bold text-red-800 uppercase">
@@ -205,19 +215,6 @@ const GestionLiquidacion: React.FC = () => {
                         </div>
                     )}
 
-                    <div className="flex items-center gap-2 p-2 bg-gray-50 rounded border border-gray-100">
-                        <input 
-                            type="checkbox" 
-                            id="incluirAux"
-                            className="w-4 h-4 text-blue-600"
-                            checked={incluirAuxTransp}
-                            onChange={(e) => setIncluirAuxTransp(e.target.checked)}
-                        />
-                        <label htmlFor="incluirAux" className="text-sm font-medium text-gray-700 cursor-pointer">
-                            Incluir Auxilio de Transporte
-                        </label>
-                    </div>
-
                     <div className="grid grid-cols-3 gap-2">
                         <div>
                             <label className="block text-[10px] font-bold text-gray-500 uppercase">Días Vac.</label>
@@ -243,7 +240,7 @@ const GestionLiquidacion: React.FC = () => {
                             <p><strong>ALERTA LEGAL:</strong> {
                                 selectedEmpleado?.es_periodo_prueba && 
                                 selectedEmpleado.fecha_fin_periodo_prueba && 
-                                new Date(fechaRetiro) <= new Date(selectedEmpleado.fecha_fin_periodo_prueba)
+                                fechaRetiro <= selectedEmpleado.fecha_fin_periodo_prueba
                                 ? "Esta terminación ocurre en PERÍODO DE PRUEBA. Según el Art. 76 del CST, no se genera derecho a indemnización."
                                 : "Esta terminación genera derecho a indemnización según Ley 789/2002. El sistema calculará el valor proporcional."
                             }</p>
