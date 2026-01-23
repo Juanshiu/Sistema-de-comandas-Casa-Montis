@@ -20,6 +20,7 @@ interface ProductoForm {
   tiene_personalizacion: boolean;
   personalizaciones_habilitadas: string[];
   usa_inventario: boolean;
+  usa_insumos: boolean;
   cantidad_inicial: number | null;
   cantidad_actual: number | null;
 }
@@ -30,6 +31,7 @@ export default function GestionProductos() {
   const [filtroCategoria, setFiltroCategoria] = useState<string | 'todas'>('todas');
   const [categoriasDisponibles, setCategoriasDisponibles] = useState<string[]>([]);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
+  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO'>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -43,6 +45,7 @@ export default function GestionProductos() {
     tiene_personalizacion: false,
     personalizaciones_habilitadas: [],
     usa_inventario: false,
+    usa_insumos: false,
     cantidad_inicial: null,
     cantidad_actual: null
   });
@@ -51,6 +54,7 @@ export default function GestionProductos() {
     cargarProductos();
     cargarCategorias();
     cargarCategoriasPersonalizacion();
+    cargarRiesgosProductos();
   }, []);
 
   useEffect(() => {
@@ -97,6 +101,19 @@ export default function GestionProductos() {
     }
   };
 
+  const cargarRiesgosProductos = async () => {
+    try {
+      const response = await apiService.getRiesgoProductos();
+      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
+      response.forEach(item => {
+        mapa[item.producto_id] = item.estado;
+      });
+      setRiesgosProductos(mapa);
+    } catch (err) {
+      console.error('Error al cargar riesgos de productos:', err);
+    }
+  };
+
   const iniciarCreacion = () => {
     setCreandoNuevo(true);
     setEditandoId(null);
@@ -109,6 +126,7 @@ export default function GestionProductos() {
       tiene_personalizacion: false,
       personalizaciones_habilitadas: [],
       usa_inventario: false,
+      usa_insumos: false,
       cantidad_inicial: null,
       cantidad_actual: null
     });
@@ -126,6 +144,7 @@ export default function GestionProductos() {
       tiene_personalizacion: producto.tiene_personalizacion || false,
       personalizaciones_habilitadas: producto.personalizaciones_habilitadas || [],
       usa_inventario: producto.usa_inventario || false,
+      usa_insumos: producto.usa_insumos || false,
       cantidad_inicial: producto.cantidad_inicial || null,
       cantidad_actual: producto.cantidad_actual || null
     });
@@ -143,6 +162,7 @@ export default function GestionProductos() {
       tiene_personalizacion: false,
       personalizaciones_habilitadas: [],
       usa_inventario: false,
+      usa_insumos: false,
       cantidad_inicial: null,
       cantidad_actual: null
     });
@@ -213,6 +233,7 @@ export default function GestionProductos() {
       }
 
       await cargarProductos();
+      await cargarRiesgosProductos();
       cancelarEdicion();
     } catch (err) {
       setError('Error al guardar el producto');
@@ -228,6 +249,7 @@ export default function GestionProductos() {
     try {
       await apiService.deleteProducto(id);
       await cargarProductos();
+      await cargarRiesgosProductos();
     } catch (err) {
       setError('Error al eliminar el producto');
       console.error('Error:', err);
@@ -360,6 +382,28 @@ export default function GestionProductos() {
                 placeholder="Descripción opcional del producto"
               />
             </div>
+          </div>
+
+          {/* Inventario Avanzado (Insumos) */}
+          <div className="mt-6 border-t pt-6">
+            <div className="flex items-center mb-2">
+              <input
+                type="checkbox"
+                id="usa_insumos"
+                checked={formulario.usa_insumos}
+                onChange={(e) => setFormulario(prev => ({
+                  ...prev,
+                  usa_insumos: e.target.checked
+                }))}
+                className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded cursor-pointer"
+              />
+              <label htmlFor="usa_insumos" className="ml-2 block text-sm font-medium text-secondary-700 cursor-pointer">
+                Usar inventario por insumos (modo avanzado)
+              </label>
+            </div>
+            <p className="text-sm text-secondary-600 ml-6">
+              Si está activo y el producto tiene receta, se descontarán insumos en lugar del inventario simple.
+            </p>
           </div>
 
           {/* Sección de Personalizaciones */}
@@ -582,6 +626,12 @@ export default function GestionProductos() {
                     Inventario
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                    Usa insumos
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                    Riesgo insumos
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                     Estado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
@@ -647,6 +697,32 @@ export default function GestionProductos() {
                         <span className="text-xs text-secondary-500 italic">
                           Sin control
                         </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {producto.usa_insumos ? (
+                        <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                          ✅ Activo
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">No</span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      {riesgosProductos[producto.id] ? (
+                        <span
+                          className={`text-xs px-2 py-1 rounded ${
+                            riesgosProductos[producto.id] === 'CRITICO'
+                              ? 'bg-red-100 text-red-700'
+                              : riesgosProductos[producto.id] === 'BAJO'
+                                ? 'bg-yellow-100 text-yellow-700'
+                                : 'bg-green-100 text-green-700'
+                          }`}
+                        >
+                          {riesgosProductos[producto.id]}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-400">—</span>
                       )}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">

@@ -10,6 +10,7 @@ interface PersonalizacionForm {
   nombre: string;
   precio_adicional: number;
   usa_inventario: boolean;
+  usa_insumos: boolean;
   cantidad_inicial: number;
   cantidad_actual: number;
 }
@@ -25,6 +26,7 @@ export default function GestionPersonalizaciones() {
   const [items, setItems] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
   const [tipos, setTipos] = useState<any[]>([]);
+  const [riesgosPersonalizaciones, setRiesgosPersonalizaciones] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO'>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | number | null>(null);
@@ -34,6 +36,7 @@ export default function GestionPersonalizaciones() {
     nombre: '',
     precio_adicional: 0,
     usa_inventario: false,
+    usa_insumos: false,
     cantidad_inicial: 0,
     cantidad_actual: 0
   });
@@ -45,6 +48,7 @@ export default function GestionPersonalizaciones() {
 
   useEffect(() => {
     cargarCategorias();
+    cargarRiesgosPersonalizaciones();
   }, []);
 
   useEffect(() => {
@@ -100,11 +104,25 @@ export default function GestionPersonalizaciones() {
       }
       
       setError(null);
+      await cargarRiesgosPersonalizaciones();
     } catch (err) {
       setError(`Error al cargar ${tipoActivo}`);
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarRiesgosPersonalizaciones = async () => {
+    try {
+      const response = await apiService.getRiesgoPersonalizaciones();
+      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
+      response.forEach(item => {
+        mapa[item.item_personalizacion_id] = item.estado;
+      });
+      setRiesgosPersonalizaciones(mapa);
+    } catch (err) {
+      console.error('Error al cargar riesgos de personalizaciones:', err);
     }
   };
 
@@ -115,6 +133,7 @@ export default function GestionPersonalizaciones() {
       nombre: '',
       precio_adicional: 0,
       usa_inventario: false,
+      usa_insumos: false,
       cantidad_inicial: 0,
       cantidad_actual: 0
     });
@@ -127,6 +146,7 @@ export default function GestionPersonalizaciones() {
       nombre: item.nombre,
       precio_adicional: item.precio_adicional,
       usa_inventario: Boolean(item.usa_inventario),
+      usa_insumos: Boolean(item.usa_insumos),
       cantidad_inicial: item.cantidad_inicial || 0,
       cantidad_actual: item.cantidad_actual || 0
     });
@@ -139,6 +159,7 @@ export default function GestionPersonalizaciones() {
       nombre: '',
       precio_adicional: 0,
       usa_inventario: false,
+      usa_insumos: false,
       cantidad_inicial: 0,
       cantidad_actual: 0
     });
@@ -179,6 +200,7 @@ export default function GestionPersonalizaciones() {
         nombre: formulario.nombre,
         precio_adicional: formulario.precio_adicional,
         usa_inventario: formulario.usa_inventario,
+        usa_insumos: formulario.usa_insumos,
         cantidad_inicial: formulario.usa_inventario ? formulario.cantidad_inicial : null,
         cantidad_actual: formulario.usa_inventario ? (creandoNuevo ? formulario.cantidad_inicial : formulario.cantidad_actual) : null
       };
@@ -532,6 +554,28 @@ export default function GestionPersonalizaciones() {
             </div>
           </div>
 
+          {/* Inventario Avanzado (Insumos) */}
+          <div className="mt-4 pt-4 border-t border-secondary-200">
+            <div className="flex items-center mb-2">
+              <input
+                type="checkbox"
+                id="usa_insumos"
+                checked={formulario.usa_insumos}
+                onChange={(e) => setFormulario(prev => ({
+                  ...prev,
+                  usa_insumos: e.target.checked
+                }))}
+                className="w-4 h-4 text-primary-600 bg-gray-100 border-gray-300 rounded focus:ring-primary-500"
+              />
+              <label htmlFor="usa_insumos" className="ml-2 text-sm font-medium text-secondary-700">
+                Usar insumos (ajustes de receta)
+              </label>
+            </div>
+            <p className="text-xs text-secondary-500 ml-6">
+              Si está activo, los ajustes de insumos de esta personalización se aplicarán al confirmar la comanda.
+            </p>
+          </div>
+
           {/* Sistema de Inventario */}
           <div className="mt-4 pt-4 border-t border-secondary-200">
             <div className="flex items-center mb-4">
@@ -755,6 +799,12 @@ export default function GestionPersonalizaciones() {
                       Inventario
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Usa insumos
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                      Riesgo insumos
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                       Disponibilidad
                     </th>
                     <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
@@ -806,6 +856,32 @@ export default function GestionPersonalizaciones() {
                             </div>
                           ) : (
                             <span className="text-sm text-gray-400">Sin control</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {Boolean(item.usa_insumos) ? (
+                            <span className="text-xs bg-blue-100 text-blue-800 px-2 py-1 rounded">
+                              ✅ Activo
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">No</span>
+                          )}
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                          {riesgosPersonalizaciones[item.id] ? (
+                            <span
+                              className={`text-xs px-2 py-1 rounded ${
+                                riesgosPersonalizaciones[item.id] === 'CRITICO'
+                                  ? 'bg-red-100 text-red-700'
+                                  : riesgosPersonalizaciones[item.id] === 'BAJO'
+                                    ? 'bg-yellow-100 text-yellow-700'
+                                    : 'bg-green-100 text-green-700'
+                              }`}
+                            >
+                              {riesgosPersonalizaciones[item.id]}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-gray-400">—</span>
                           )}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap">
