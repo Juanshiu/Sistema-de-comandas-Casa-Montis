@@ -1,7 +1,7 @@
 import { db } from './init';
 import { migrationExists, markMigrationExecuted } from './migration-control';
 
-export async function ejecutarMigracionConfigFacturacion() {
+export async function ejecutarMigracionConfigFacturacion(poblarDatos: boolean = true) {
   const migrationName = 'config_facturacion_v1';
   
   if (await migrationExists(migrationName)) {
@@ -83,6 +83,13 @@ export async function ejecutarMigracionConfigFacturacion() {
         }
         
         console.log('✅ Tabla config_facturacion creada/verificada');
+
+        if (!poblarDatos) {
+          await markMigrationExecuted(migrationName);
+          console.log('✅ Migración marcada como ejecutada (sin poblar datos)');
+          resolve();
+          return;
+        }
 
         // Insertar configuración inicial con datos actuales si no existe
         db.run(`

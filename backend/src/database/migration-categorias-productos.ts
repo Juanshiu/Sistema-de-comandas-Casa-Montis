@@ -10,7 +10,7 @@ import { db } from './init';
  * 4. NO modifica tabla productos (para mantener compatibilidad)
  */
 
-async function ejecutarMigracion() {
+export async function migrarCategoriasProductos() {
   return new Promise<void>((resolve, reject) => {
     db.serialize(() => {
       console.log('🔄 Iniciando migración de categorías de productos...');
@@ -61,11 +61,11 @@ async function ejecutarMigracion() {
               [categoria],
               (err: any) => {
                 if (err) {
-                  console.error(`❌ Error al insertar categoría "${categoria}":`, err);
+                  // console.error(`❌ Error al insertar categoría "${categoria}":`, err);
                   errores++;
                 } else {
                   insertados++;
-                  console.log(`✅ Categoría insertada: ${categoria}`);
+                  // console.log(`✅ Categoría insertada: ${categoria}`);
                 }
 
                 // Verificar si es la última iteración
@@ -87,7 +87,7 @@ async function ejecutarMigracion() {
 
 // Ejecutar migración
 if (require.main === module) {
-  ejecutarMigracion()
+  migrarCategoriasProductos()
     .then(() => {
       console.log('🎉 Migración finalizada');
       process.exit(0);
@@ -97,5 +97,3 @@ if (require.main === module) {
       process.exit(1);
     });
 }
-
-export { ejecutarMigracion };

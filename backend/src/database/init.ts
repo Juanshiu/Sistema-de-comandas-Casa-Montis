@@ -21,16 +21,30 @@ export const db = new sqlite3.Database(dbPath, (err) => {
 export const initDatabase = async (): Promise<void> => {
   return new Promise((resolve, reject) => {
     db.serialize(() => {
+      // Tabla Salones
+      db.run(`
+        CREATE TABLE IF NOT EXISTS salones (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          nombre TEXT NOT NULL UNIQUE,
+          descripcion TEXT,
+          activo BOOLEAN DEFAULT 1,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+
       // Tabla Mesas
       db.run(`
         CREATE TABLE IF NOT EXISTS mesas (
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           numero TEXT NOT NULL UNIQUE,
           capacidad INTEGER NOT NULL,
+          salon_id INTEGER,
           salon TEXT DEFAULT 'Principal',
           ocupada BOOLEAN DEFAULT FALSE,
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (salon_id) REFERENCES salones(id)
         )
       `);
 
@@ -57,6 +71,8 @@ export const initDatabase = async (): Promise<void> => {
           total REAL NOT NULL,
           estado TEXT DEFAULT 'pendiente',
           observaciones_generales TEXT,
+          usuario_id INTEGER,
+          usuario_nombre TEXT,
           fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
           fecha_actualizacion DATETIME DEFAULT CURRENT_TIMESTAMP
         )
@@ -102,6 +118,9 @@ export const initDatabase = async (): Promise<void> => {
           total REAL NOT NULL,
           metodo_pago TEXT NOT NULL,
           cajero TEXT NOT NULL,
+          monto_pagado REAL,
+          cambio REAL DEFAULT 0,
+          usuario_id INTEGER,
           fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
           FOREIGN KEY (comanda_id) REFERENCES comandas (id),
           FOREIGN KEY (mesa_id) REFERENCES mesas (id)
