@@ -16,6 +16,7 @@ import { migrarColumnasComandas } from './database/migration-fix-comandas-column
 import { migrarNomina } from './database/migration-nomina';
 import { migrarContratos } from './database/migration-contratos';
 import { ejecutarMigracionConfigFacturacion } from './database/migration-config-facturacion';
+import { migrarInventarioAvanzado } from './database/migration-inventario-avanzado';
 import { iniciarPluginImpresora } from './services/pluginImpresora';
 import authRoutes from './routes/auth';
 import usuariosRoutes from './routes/usuarios';
@@ -30,6 +31,8 @@ import reportesRoutes from './routes/reportes';
 import personalizacionesRoutes from './routes/personalizaciones';
 import sistemaRoutes from './routes/sistema';
 import configuracionFacturacionRoutes from './routes/configuracion-facturacion';
+import configuracionSistemaRoutes from './routes/configuracion-sistema';
+import inventarioAvanzadoRoutes from './routes/inventario-avanzado';
 import empleadosRoutes from './routes/empleados';
 import nominaRoutes from './routes/nomina';
 import contratosRoutes from './routes/contratos';
@@ -93,6 +96,8 @@ app.use('/api/reportes', reportesRoutes);
 app.use('/api/personalizaciones', personalizacionesRoutes);
 app.use('/api/sistema', sistemaRoutes);
 app.use('/api/configuracion/facturacion', configuracionFacturacionRoutes);
+app.use('/api/configuracion/sistema', configuracionSistemaRoutes);
+app.use('/api/inventario-avanzado', inventarioAvanzadoRoutes);
 app.use('/api/empleados', empleadosRoutes);
 app.use('/api/nomina', nominaRoutes);
 app.use('/api/contratos', contratosRoutes);
@@ -154,6 +159,10 @@ async function startServer() {
     // Migrar configuración de facturación (datos de la empresa)
     await ejecutarMigracionConfigFacturacion();
     console.log('✅ Migración de configuración de facturación completada');
+
+    // Migrar inventario avanzado (consolidado)
+    await migrarInventarioAvanzado();
+    console.log('✅ Migración de inventario avanzado consolidada completada');
 
     // Migrar nómina (empleados, configuración, etc.)
     await migrarNomina();
