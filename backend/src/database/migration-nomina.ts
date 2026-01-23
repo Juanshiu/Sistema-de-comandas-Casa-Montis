@@ -117,7 +117,7 @@ export const migrarNomina = async (): Promise<void> => {
                             porc_recargo_dominical, porc_recargo_festivo, porc_recargo_diurno, porc_extra_diurna_dominical, horas_mensuales
                         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                     `, [
-                        2026, 1750905, 188423, 50000,
+                        2026, 1750905, 249095, 52374,
                         4.0, 4.0, 7003620, // 4 SMLV aprox
                         8.5, 12.0, 4.0, 2.0, 3.0,
                         8.33, 12.0, 8.33, 4.17,
