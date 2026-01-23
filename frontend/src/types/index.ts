@@ -27,8 +27,62 @@ export interface Producto {
   tiene_personalizacion?: boolean;
   personalizaciones_habilitadas?: string[]; // Array de nombres de categorías de personalización
   usa_inventario?: boolean;
+  usa_insumos?: boolean;
   cantidad_inicial?: number | null;
   cantidad_actual?: number | null;
+}
+
+export interface Insumo {
+  id: number;
+  nombre: string;
+  unidad_medida: 'g' | 'kg' | 'ml' | 'unidad' | string;
+  stock_actual: number;
+  stock_minimo: number;
+  stock_critico: number;
+  costo_unitario?: number | null;
+  activo?: boolean;
+  estado?: 'OK' | 'BAJO' | 'CRITICO';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface RecetaProductoInsumo {
+  producto_id: number;
+  insumo_id: number;
+  cantidad_usada: number;
+  insumo_nombre?: string;
+  unidad_medida?: string;
+}
+
+export interface AjustePersonalizacionInsumo {
+  item_personalizacion_id: number;
+  insumo_id: number;
+  cantidad_ajuste: number;
+  insumo_nombre?: string;
+  unidad_medida?: string;
+}
+
+export interface ConfiguracionSistema {
+  id?: number;
+  inventario_avanzado: boolean;
+  critico_modo?: 'CRITICO' | 'BAJO' | 'NUNCA';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InsumoHistorial {
+  id: number;
+  fecha_hora: string;
+  insumo_id: number;
+  insumo_nombre?: string;
+  cantidad: number;
+  unidad_medida: string;
+  producto_id?: number | null;
+  producto_nombre?: string | null;
+  comanda_id?: string | null;
+  tipo_evento: string;
+  motivo?: string | null;
+  usuario_id?: number | null;
 }
 
 export type CategoriaProducto = 
@@ -66,6 +120,7 @@ export interface ItemPersonalizacion {
   activo: boolean;
   disponible?: number | boolean;
   usa_inventario?: boolean | number;
+  usa_insumos?: boolean | number;
   cantidad_inicial?: number | null;
   cantidad_actual?: number | null;
 }
@@ -90,6 +145,15 @@ export interface DatosCliente {
   direccion: string;
   telefono?: string;
   es_para_llevar: boolean; // true = cliente recoge, false = domicilio
+}
+
+export interface FormularioComanda {
+  mesas: Mesa[];
+  items: ItemComanda[];
+  tipo_pedido?: 'mesa' | 'domicilio';
+  tipo_servicio?: string;
+  datos_cliente?: DatosCliente;
+  observaciones_generales?: string;
 }
 
 export interface Comanda {

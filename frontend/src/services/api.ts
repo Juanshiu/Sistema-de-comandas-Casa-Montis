@@ -3,7 +3,8 @@ import {
   Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, 
   ComandaHistorial, PaginatedResponse, Empleado, ConfiguracionNomina, 
   NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, 
-  HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico 
+  HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico,
+  Insumo, RecetaProductoInsumo, AjustePersonalizacionInsumo, ConfiguracionSistema, InsumoHistorial
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -149,6 +150,111 @@ export const apiService = {
 
   async deleteProducto(id: number): Promise<void> {
     await api.delete(`/productos/${id}`);
+  },
+
+  // Configuración de Sistema
+  async getConfiguracionSistema(): Promise<ConfiguracionSistema> {
+    const response = await api.get('/configuracion/sistema');
+    return response.data;
+  },
+
+  async updateConfiguracionSistema(config: ConfiguracionSistema): Promise<ConfiguracionSistema> {
+    const response = await api.put('/configuracion/sistema', config);
+    return response.data;
+  },
+
+  // Inventario Avanzado - Insumos
+  async getInsumos(): Promise<Insumo[]> {
+    const response = await api.get('/inventario-avanzado/insumos');
+    return response.data;
+  },
+
+  async createInsumo(insumo: Partial<Insumo>): Promise<Insumo> {
+    const response = await api.post('/inventario-avanzado/insumos', insumo);
+    return response.data;
+  },
+
+  async updateInsumo(id: number, insumo: Partial<Insumo>): Promise<Insumo> {
+    const response = await api.put(`/inventario-avanzado/insumos/${id}`, insumo);
+    return response.data;
+  },
+
+  async deleteInsumo(id: number): Promise<void> {
+    await api.delete(`/inventario-avanzado/insumos/${id}`);
+  },
+
+  async ajustarInsumo(id: number, data: { cantidad: number; motivo?: string }): Promise<Insumo> {
+    const response = await api.post(`/inventario-avanzado/insumos/${id}/ajuste`, data);
+    return response.data;
+  },
+
+  async getInsumoHistorial(insumoId?: number, limit?: number): Promise<InsumoHistorial[]> {
+    const params: any = {};
+    if (insumoId) params.insumo_id = insumoId;
+    if (limit) params.limit = limit;
+    const response = await api.get('/inventario-avanzado/insumos/historial', { params });
+    return response.data;
+  },
+
+  async getRiesgoProductos(): Promise<{ producto_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' }[]> {
+    const response = await api.get('/inventario-avanzado/riesgo/productos');
+    return response.data;
+  },
+
+  async getRiesgoPersonalizaciones(): Promise<{ item_personalizacion_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' }[]> {
+    const response = await api.get('/inventario-avanzado/riesgo/personalizaciones');
+    return response.data;
+  },
+
+  // Inventario Avanzado - Recetas
+  async getRecetaProducto(productoId: number): Promise<RecetaProductoInsumo[]> {
+    const response = await api.get(`/inventario-avanzado/recetas/productos/${productoId}`);
+    return response.data;
+  },
+
+  async updateRecetaProducto(productoId: number, items: RecetaProductoInsumo[]): Promise<any> {
+    const response = await api.put(`/inventario-avanzado/recetas/productos/${productoId}`, { items });
+    return response.data;
+  },
+
+  async getAjustesPersonalizacion(itemId: number): Promise<AjustePersonalizacionInsumo[]> {
+    const response = await api.get(`/inventario-avanzado/recetas/personalizaciones/${itemId}`);
+    return response.data;
+  },
+
+  async updateAjustesPersonalizacion(itemId: number, items: AjustePersonalizacionInsumo[]): Promise<any> {
+    const response = await api.put(`/inventario-avanzado/recetas/personalizaciones/${itemId}`, { items });
+    return response.data;
+  },
+
+  async exportarInsumos(): Promise<Blob> {
+    const response = await api.get('/inventario-avanzado/insumos/export', { responseType: 'blob' });
+    return response.data;
+  },
+
+  async importarInsumos(fileBase64: string): Promise<any> {
+    const response = await api.post('/inventario-avanzado/insumos/import', { fileBase64 });
+    return response.data;
+  },
+
+  async exportarRecetas(): Promise<Blob> {
+    const response = await api.get('/inventario-avanzado/recetas/export', { responseType: 'blob' });
+    return response.data;
+  },
+
+  async importarRecetas(fileBase64: string): Promise<any> {
+    const response = await api.post('/inventario-avanzado/recetas/import', { fileBase64 });
+    return response.data;
+  },
+
+  async exportarProductosExcel(): Promise<Blob> {
+    const response = await api.get('/inventario-avanzado/productos/export', { responseType: 'blob' });
+    return response.data;
+  },
+
+  async importarProductosExcel(fileBase64: string): Promise<any> {
+    const response = await api.post('/inventario-avanzado/productos/import', { fileBase64 });
+    return response.data;
   },
 
   // Comandas
