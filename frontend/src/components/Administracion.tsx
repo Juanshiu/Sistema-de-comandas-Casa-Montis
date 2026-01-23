@@ -5,6 +5,7 @@ import { Settings, Package, Tags, Utensils, Users, Home, Shield, UtensilsCrossed
 import GestionProductos from './admin/GestionProductos';
 import GestionCategorias from './admin/GestionCategorias';
 import GestionPersonalizaciones from './admin/GestionPersonalizaciones';
+import GestionInventarioAvanzado from './admin/GestionInventarioAvanzado';
 import GestionMesas from './admin/GestionMesas';
 import GestionSalones from './admin/GestionSalones';
 import ConfiguracionSistema from './admin/ConfiguracionSistema';
@@ -17,7 +18,7 @@ import GestionLiquidacion from './admin/GestionLiquidacion';
 import GeneradorContratos from './admin/GeneradorContratos';
 import GestionEmpresa from './admin/GestionEmpresa';
 
-type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles' | 'empleados' | 'nomina' | 'liquidacion' | 'contratos' | 'empresa';
+type SeccionAdmin = 'productos' | 'categorias' | 'personalizaciones' | 'inventario_avanzado' | 'mesas' | 'salones' | 'sistema' | 'facturacion' | 'usuarios' | 'roles' | 'empleados' | 'nomina' | 'liquidacion' | 'contratos' | 'empresa';
 
 interface Seccion {
   id: SeccionAdmin;
@@ -87,6 +88,14 @@ export default function Administracion() {
           icon: Utensils,
           descripcion: 'Opciones de caldos, principios y proteínas',
           component: GestionPersonalizaciones,
+          permisos: ['gestion_menu']
+        },
+        {
+          id: 'inventario_avanzado',
+          nombre: 'Inventario Avanzado',
+          icon: Settings,
+          descripcion: 'Insumos, recetas y ajustes por personalización',
+          component: GestionInventarioAvanzado,
           permisos: ['gestion_menu']
         },
       ],
