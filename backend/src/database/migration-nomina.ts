@@ -83,11 +83,11 @@ export const migrarNomina = async (): Promise<void> => {
               porc_vacaciones REAL NOT NULL,
               
               -- Recargos y Extras
-            porc_recargo_dominical REAL NOT NULL DEFAULT 75,
-            porc_recargo_festivo REAL NOT NULL DEFAULT 75,
+            porc_recargo_dominical REAL NOT NULL DEFAULT 80,
+            porc_recargo_festivo REAL NOT NULL DEFAULT 80,
             porc_recargo_diurno REAL NOT NULL DEFAULT 25,
-            porc_extra_diurna_dominical REAL NOT NULL DEFAULT 100,
-            horas_mensuales INTEGER NOT NULL DEFAULT 240,
+            porc_extra_diurna_dominical REAL NOT NULL DEFAULT 105,
+            horas_mensuales INTEGER NOT NULL DEFAULT 220,
               
               vigente BOOLEAN DEFAULT TRUE,
               created_at DATETIME DEFAULT CURRENT_TIMESTAMP
@@ -121,7 +121,7 @@ export const migrarNomina = async (): Promise<void> => {
                         4.0, 4.0, 7003620, // 4 SMLV aprox
                         8.5, 12.0, 4.0, 2.0, 3.0,
                         8.33, 12.0, 8.33, 4.17,
-                        80, 80, 25, 125, 220
+                        80, 80, 25, 105, 220
                     ], (err) => {
                         if(err) rej(err);
                         else res();
@@ -220,11 +220,11 @@ export const migrarNomina = async (): Promise<void> => {
 
         // ALTER TABLES para compatibilidad (si ya existen las tablas)
         const columnsToAdd = [
-            { table: 'configuracion_nomina', col: 'porc_recargo_dominical', type: 'REAL DEFAULT 75' },
-            { table: 'configuracion_nomina', col: 'porc_recargo_festivo', type: 'REAL DEFAULT 75' },
+            { table: 'configuracion_nomina', col: 'porc_recargo_dominical', type: 'REAL DEFAULT 80' },
+            { table: 'configuracion_nomina', col: 'porc_recargo_festivo', type: 'REAL DEFAULT 80' },
             { table: 'configuracion_nomina', col: 'porc_recargo_diurno', type: 'REAL DEFAULT 25' },
-            { table: 'configuracion_nomina', col: 'porc_extra_diurna_dominical', type: 'REAL DEFAULT 100' },
-            { table: 'configuracion_nomina', col: 'horas_mensuales', type: 'INTEGER DEFAULT 240' },
+            { table: 'configuracion_nomina', col: 'porc_extra_diurna_dominical', type: 'REAL DEFAULT 105' },
+            { table: 'configuracion_nomina', col: 'horas_mensuales', type: 'INTEGER DEFAULT 220' },
             { table: 'nomina_detalles', col: 'horas_diurnas', type: 'REAL DEFAULT 0' },
             { table: 'nomina_detalles', col: 'valor_diurnas', type: 'REAL DEFAULT 0' },
             { table: 'nomina_detalles', col: 'horas_dominicales_diurnas', type: 'REAL DEFAULT 0' },
