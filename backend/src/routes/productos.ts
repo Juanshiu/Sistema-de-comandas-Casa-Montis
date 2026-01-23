@@ -34,8 +34,9 @@ router.get('/all', (req: Request, res: Response) => {
       ...producto,
       disponible: Boolean(producto.disponible),
       tiene_personalizacion: Boolean(producto.tiene_personalizacion),
-      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas) : [],
+      personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(String(producto.personalizaciones_habilitadas)) : [],
       usa_inventario: Boolean(producto.usa_inventario),
+      usa_insumos: Boolean(producto.usa_insumos),
       cantidad_inicial: producto.cantidad_inicial,
       cantidad_actual: producto.cantidad_actual
     }));
@@ -61,6 +62,7 @@ router.get('/categoria/:categoria', (req: Request, res: Response) => {
       tiene_personalizacion: Boolean(producto.tiene_personalizacion),
       personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : [],
       usa_inventario: Boolean(producto.usa_inventario),
+      usa_insumos: Boolean(producto.usa_insumos),
       cantidad_inicial: producto.cantidad_inicial,
       cantidad_actual: producto.cantidad_actual
     }));
@@ -92,6 +94,7 @@ router.get('/', (req: Request, res: Response) => {
       tiene_personalizacion: Boolean(producto.tiene_personalizacion),
       personalizaciones_habilitadas: producto.personalizaciones_habilitadas ? JSON.parse(producto.personalizaciones_habilitadas as string) : [],
       usa_inventario: Boolean(producto.usa_inventario),
+      usa_insumos: Boolean(producto.usa_insumos),
       cantidad_inicial: producto.cantidad_inicial,
       cantidad_actual: producto.cantidad_actual
     }));
@@ -119,8 +122,9 @@ router.get('/:id', (req: Request, res: Response) => {
       ...row,
       disponible: Boolean(row.disponible),
       tiene_personalizacion: Boolean(row.tiene_personalizacion),
-      personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : [],
+      personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(String(row.personalizaciones_habilitadas)) : [],
       usa_inventario: Boolean(row.usa_inventario),
+      usa_insumos: Boolean(row.usa_insumos),
       cantidad_inicial: row.cantidad_inicial,
       cantidad_actual: row.cantidad_actual
     };
@@ -140,6 +144,7 @@ router.post('/', (req: Request, res: Response) => {
     tiene_personalizacion = false,
     personalizaciones_habilitadas = [],
     usa_inventario = false,
+    usa_insumos = false,
     cantidad_inicial = null
   } = req.body;
   
@@ -162,9 +167,9 @@ router.post('/', (req: Request, res: Response) => {
     INSERT INTO productos (
       nombre, descripcion, precio, categoria, disponible, 
       tiene_personalizacion, personalizaciones_habilitadas,
-      usa_inventario, cantidad_inicial, cantidad_actual
+      usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual
     ) 
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   db.run(query, [
@@ -176,6 +181,7 @@ router.post('/', (req: Request, res: Response) => {
     tiene_personalizacion ? 1 : 0,
     personalizacionesJson,
     inventoryValues.usa_inventario_db,
+    usa_insumos ? 1 : 0,
     inventoryValues.cantidad_inicial_db,
     inventoryValues.cantidad_actual_db
   ], function(err: any) {
@@ -195,8 +201,9 @@ router.post('/', (req: Request, res: Response) => {
         ...row,
         disponible: Boolean(row.disponible),
         tiene_personalizacion: Boolean(row.tiene_personalizacion),
-        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : [],
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(String(row.personalizaciones_habilitadas)) : [],
         usa_inventario: Boolean(row.usa_inventario),
+        usa_insumos: Boolean(row.usa_insumos),
         cantidad_inicial: row.cantidad_inicial,
         cantidad_actual: row.cantidad_actual
       };
@@ -218,6 +225,7 @@ router.put('/:id', (req: Request, res: Response) => {
     tiene_personalizacion = false,
     personalizaciones_habilitadas = [],
     usa_inventario = false,
+    usa_insumos = false,
     cantidad_inicial = null,
     cantidad_actual = null
   } = req.body;
@@ -241,7 +249,7 @@ router.put('/:id', (req: Request, res: Response) => {
     UPDATE productos 
     SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, disponible = ?, 
         tiene_personalizacion = ?, personalizaciones_habilitadas = ?,
-        usa_inventario = ?, cantidad_inicial = ?, cantidad_actual = ?,
+      usa_inventario = ?, usa_insumos = ?, cantidad_inicial = ?, cantidad_actual = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `;
@@ -255,6 +263,7 @@ router.put('/:id', (req: Request, res: Response) => {
     tiene_personalizacion ? 1 : 0,
     personalizacionesJson,
     inventoryValues.usa_inventario_db,
+    usa_insumos ? 1 : 0,
     inventoryValues.cantidad_inicial_db,
     inventoryValues.cantidad_actual_db,
     id
@@ -279,8 +288,9 @@ router.put('/:id', (req: Request, res: Response) => {
         ...row,
         disponible: Boolean(row.disponible),
         tiene_personalizacion: Boolean(row.tiene_personalizacion),
-        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(row.personalizaciones_habilitadas) : [],
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(String(row.personalizaciones_habilitadas)) : [],
         usa_inventario: Boolean(row.usa_inventario),
+        usa_insumos: Boolean(row.usa_insumos),
         cantidad_inicial: row.cantidad_inicial,
         cantidad_actual: row.cantidad_actual
       };
@@ -300,6 +310,7 @@ router.patch('/:id', (req: Request, res: Response) => {
     categoria, 
     disponible,
     usa_inventario,
+    usa_insumos,
     cantidad_inicial,
     cantidad_actual
   } = req.body;
@@ -331,6 +342,10 @@ router.patch('/:id', (req: Request, res: Response) => {
   if (usa_inventario !== undefined) {
     fields.push('usa_inventario = ?');
     values.push(usa_inventario ? 1 : 0);
+  }
+  if (usa_insumos !== undefined) {
+    fields.push('usa_insumos = ?');
+    values.push(usa_insumos ? 1 : 0);
   }
   if (cantidad_inicial !== undefined) {
     fields.push('cantidad_inicial = ?');
@@ -374,7 +389,13 @@ router.patch('/:id', (req: Request, res: Response) => {
       
       const producto = {
         ...row,
-        disponible: Boolean(row.disponible)
+        disponible: Boolean(row.disponible),
+        tiene_personalizacion: Boolean(row.tiene_personalizacion),
+        personalizaciones_habilitadas: row.personalizaciones_habilitadas ? JSON.parse(String(row.personalizaciones_habilitadas)) : [],
+        usa_inventario: Boolean(row.usa_inventario),
+        usa_insumos: Boolean(row.usa_insumos),
+        cantidad_inicial: row.cantidad_inicial,
+        cantidad_actual: row.cantidad_actual
       };
       
       res.json(producto);

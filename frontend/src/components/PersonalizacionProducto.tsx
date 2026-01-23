@@ -68,6 +68,12 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
   const cargarOpcionesDinamicas = async () => {
     try {
       setLoading(true);
+
+      const riesgosResponse = await apiService.getRiesgoPersonalizaciones();
+      const riesgosMap: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
+      riesgosResponse.forEach(item => {
+        riesgosMap[item.item_personalizacion_id] = item.estado;
+      });
       
       // Obtener todas las categorías activas
       const todasCategorias = await apiService.getCategoriasPersonalizacion();
@@ -88,8 +94,14 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
           const itemsDisponibles = items.filter((item: any) => {
             const disponible = item.disponible === 1 || item.disponible === true;
             const usaInventario = Boolean(item.usa_inventario);
+            const usaInsumos = Boolean(item.usa_insumos);
+            const riesgoInsumos = usaInsumos ? riesgosMap[item.id] : null;
             
             if (!disponible) return false;
+
+            if (riesgoInsumos === 'CRITICO') {
+              return false;
+            }
             
             // Si usa inventario, verificar que tenga stock
             if (usaInventario) {

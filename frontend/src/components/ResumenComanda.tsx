@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { FormularioComanda, PersonalizacionItem } from '@/types';
+import { FormularioComanda, PersonalizacionItem, Mesa, ItemComanda } from '@/types';
 import { apiService } from '@/services/api';
 import { Printer, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
@@ -41,7 +41,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   };
 
   const calcularSubtotal = (): number => {
-    return formulario.items.reduce((total, item) => total + item.subtotal, 0);
+    return formulario.items.reduce((total: number, item: ItemComanda) => total + item.subtotal, 0);
   };
 
   const calcularTotal = (): number => {
@@ -135,8 +135,42 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
     } catch (error: any) {
       console.error('❌ Error al procesar comanda:', error);
       console.error('📋 Detalles del error:', error.response?.data);
-      const errorMessage = error.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} la comanda. Intente nuevamente.`;
-      setError(errorMessage);
+      const detalle = error.response?.data?.detalle;
+      if (detalle?.tipo === 'INSUMO' && detalle?.insumo_nombre && detalle?.disponible !== undefined) {
+        const disponible = `${detalle.disponible} ${detalle.unidad || ''}`.trim();
+        const exceso = detalle.exceso !== undefined ? `${detalle.exceso} ${detalle.unidad || ''}`.trim() : null;
+        const sugerencia = detalle.sugerencia_cantidad
+          ? `Debes quitar al menos ${detalle.sugerencia_cantidad} unidad(es) de productos que usen este insumo.`
+          : 'Debes ajustar la cantidad de productos que usan este insumo.';
+        setError(
+          `Inventario insuficiente para insumo: ${detalle.insumo_nombre}. Disponible: ${disponible}` +
+          (exceso ? `. Exceso: ${exceso}. ` : '. ') +
+          sugerencia
+        );
+      } else if (detalle?.tipo === 'PRODUCTO' && detalle?.producto_nombre && detalle?.disponible !== undefined) {
+        const exceso = detalle.exceso !== undefined ? detalle.exceso : null;
+        const sugerencia = detalle.sugerencia_cantidad
+          ? `Debes quitar al menos ${detalle.sugerencia_cantidad} unidad(es) de este producto.`
+          : 'Debes ajustar la cantidad de este producto.';
+        setError(
+          `Inventario insuficiente para producto: ${detalle.producto_nombre}. Disponible: ${detalle.disponible}` +
+          (exceso !== null ? `. Exceso: ${exceso}. ` : '. ') +
+          sugerencia
+        );
+      } else if (detalle?.tipo === 'PERSONALIZACION' && detalle?.personalizacion_nombre && detalle?.disponible !== undefined) {
+        const exceso = detalle.exceso !== undefined ? detalle.exceso : null;
+        const sugerencia = detalle.sugerencia_cantidad
+          ? `Debes quitar al menos ${detalle.sugerencia_cantidad} unidad(es) de esta personalización.`
+          : 'Debes ajustar la cantidad de esta personalización.';
+        setError(
+          `Inventario insuficiente para personalización: ${detalle.personalizacion_nombre}. Disponible: ${detalle.disponible}` +
+          (exceso !== null ? `. Exceso: ${exceso}. ` : '. ') +
+          sugerencia
+        );
+      } else {
+        const errorMessage = error.response?.data?.error || `Error al ${modoEdicion ? 'actualizar' : 'crear'} la comanda. Intente nuevamente.`;
+        setError(errorMessage);
+      }
     } finally {
       setEnviando(false);
       setMostrarDialogoImpresion(false);
@@ -146,7 +180,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
   const mostrarVistaPrevia = () => {
     // En modo edición, filtrar solo los nuevos items
     const itemsParaPrevia = modoEdicion ? 
-      formulario.items.filter(item => item.id.startsWith('temp_')) : 
+      formulario.items.filter((item: ItemComanda) => item.id.startsWith('temp_')) : 
       formulario.items;
     
     // Construir información de mesa o cliente según tipo de pedido
@@ -158,7 +192,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
         infoMesaOCliente = `DOMICILIO\nCliente: ${formulario.datos_cliente.nombre}\nTel: ${formulario.datos_cliente.telefono || 'N/A'}\nDirección: ${formulario.datos_cliente.direccion}`;
       }
     } else if (formulario.mesas && formulario.mesas.length > 0) {
-      infoMesaOCliente = `Mesa(s): ${formulario.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}\nCapacidad total: ${formulario.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0)} personas`;
+      infoMesaOCliente = `Mesa(s): ${formulario.mesas.map((m: Mesa) => `${m.salon} - ${m.numero}`).join(', ')}\nCapacidad total: ${formulario.mesas.reduce((sum: number, mesa: Mesa) => sum + mesa.capacidad, 0)} personas`;
     }
     
     const comandaInfo = `
@@ -170,7 +204,7 @@ ${modoEdicion ? '\n⚠️  ESTOS SON ITEMS ADICIONALES' : ''}
 ${modoEdicion ? '⚠️  PARA COMANDA EXISTENTE\n' : ''}
 
 PRODUCTOS:
-${itemsParaPrevia.map(item => {
+${itemsParaPrevia.map((item: ItemComanda) => {
   let itemText = `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString('es-CO')}`;
   if (item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0) {
     itemText += `\n   🔹 PERSONALIZACIÓN APLICADA`;
@@ -186,7 +220,7 @@ ${itemsParaPrevia.map(item => {
 
 ${formulario.observaciones_generales ? `\nObservaciones: ${formulario.observaciones_generales}` : ''}
 
-${modoEdicion ? 'TOTAL ADICIONAL' : 'SUBTOTAL'}: $${itemsParaPrevia.reduce((sum, item) => sum + item.subtotal, 0).toLocaleString('es-CO')}
+${modoEdicion ? 'TOTAL ADICIONAL' : 'SUBTOTAL'}: $${itemsParaPrevia.reduce((sum: number, item: ItemComanda) => sum + item.subtotal, 0).toLocaleString('es-CO')}
 ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
 =======================================
     `.trim();
@@ -266,8 +300,8 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
               <div>
                 <label className="block text-sm font-medium text-secondary-700 mb-2">Mesa</label>
                 <div className="p-3 bg-secondary-50 rounded-lg">
-                  {formulario.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')} 
-                  (Capacidad total: {formulario.mesas.reduce((sum, mesa) => sum + mesa.capacidad, 0)})
+                  {formulario.mesas.map((m: Mesa) => `${m.salon} - ${m.numero}`).join(', ')} 
+                  (Capacidad total: {formulario.mesas.reduce((sum: number, mesa: Mesa) => sum + mesa.capacidad, 0)})
                 </div>
               </div>
             )
@@ -312,7 +346,7 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
         </h3>
         
         {/* Leyenda de colores en modo edición */}
-        {modoEdicion && formulario.items.some(item => item.id.startsWith('temp_') || item.id.startsWith('item_')) && (
+        {modoEdicion && formulario.items.some((item: ItemComanda) => item.id.startsWith('temp_') || item.id.startsWith('item_')) && (
           <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
             <p className="text-sm font-medium text-blue-800 mb-2">Modo Edición - Agregando items adicionales:</p>
             <div className="flex gap-4 text-sm">
@@ -329,7 +363,7 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
         )}
         
         <div className="space-y-3">
-          {formulario.items.map((item) => {
+          {formulario.items.map((item: ItemComanda) => {
             const esItemAdicional = item.id.startsWith('temp_') || item.id.startsWith('item_');
             return (
             <div 
@@ -472,14 +506,14 @@ ${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
               <button
                 onClick={() => {
                   // Verificar si hay items nuevos (con ID temporal) o items con incremento de cantidad
-                  const hayItemsNuevos = formulario.items.some(item => 
+                  const hayItemsNuevos = formulario.items.some((item: ItemComanda) => 
                     typeof item.id === 'string' && (item.id.startsWith('temp_') || item.id.startsWith('item_'))
                   );
                   
                   // 🆕 NUEVO: Verificar si hay items con incremento de cantidad
                   // Esto solo aplica en modo edición, necesitaríamos acceso a items originales
                   // Por ahora, si hay items con IDs UUID válidos (no temp), asumimos que podrían tener incrementos
-                  const hayItemsExistentes = formulario.items.some(item => 
+                  const hayItemsExistentes = formulario.items.some((item: ItemComanda) => 
                     typeof item.id === 'string' && !item.id.startsWith('temp_') && !item.id.startsWith('item_') && item.id.includes('-')
                   );
                   

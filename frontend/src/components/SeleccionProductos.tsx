@@ -29,10 +29,12 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
   const [itemPersonalizando, setItemPersonalizando] = useState<string | null>(null);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<CategoriaPersonalizacion[]>([]);
   const [itemEliminando, setItemEliminando] = useState<{ id: string; nombre: string } | null>(null);
+  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO'>>({});
 
   useEffect(() => {
     cargarProductos();
     cargarCategoriasPersonalizacion();
+    cargarRiesgosProductos();
   }, [categoria]);
 
   const cargarCategoriasPersonalizacion = async () => {
@@ -59,6 +61,19 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
       console.error('Error:', err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const cargarRiesgosProductos = async () => {
+    try {
+      const response = await apiService.getRiesgoProductos();
+      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
+      response.forEach(item => {
+        mapa[item.producto_id] = item.estado;
+      });
+      setRiesgosProductos(mapa);
+    } catch (err) {
+      console.error('Error al cargar riesgos de productos:', err);
     }
   };
 
@@ -338,7 +353,8 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
               const inventoryStatus = producto.usa_inventario 
                 ? getInventoryStatus(producto.cantidad_actual, producto.cantidad_inicial)
                 : null;
-              const inventarioInsuficiente = inventoryStatus === 'DEPLETED';
+              const riesgoInsumos = producto.usa_insumos ? riesgosProductos[producto.id] : null;
+              const inventarioInsuficiente = inventoryStatus === 'DEPLETED' || riesgoInsumos === 'CRITICO';
               const inventarioBajo = inventoryStatus === 'LOW' || inventoryStatus === 'CRITICAL';
               
               return (
@@ -348,7 +364,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
                       {producto.nombre}
                       {inventarioInsuficiente && (
                         <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                          Agotado
+                          {riesgoInsumos === 'CRITICO' ? 'Agotado · Faltan insumos' : 'Agotado'}
                         </span>
                       )}
                       {inventarioBajo && !inventarioInsuficiente && (

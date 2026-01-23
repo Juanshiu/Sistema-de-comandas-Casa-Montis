@@ -8,6 +8,317 @@ import { verificarAutenticacion } from '../middleware/authMiddleware';
 
 const router = Router();
 
+const getAsync = (sql: string, params: any[] = []): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(row);
+    });
+  });
+};
+
+const allAsync = (sql: string, params: any[] = []): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(rows || []);
+    });
+  });
+};
+
+const runAsync = (sql: string, params: any[] = []): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, (err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+};
+
+const normalizarPersonalizacion = (personalizacion: any): any => {
+  if (!personalizacion) {
+    return null;
+  }
+
+  if (typeof personalizacion === 'string') {
+    try {
+      return JSON.parse(personalizacion);
+    } catch {
+      return null;
+    }
+  }
+
+  if (typeof personalizacion === 'object') {
+    return personalizacion;
+  }
+
+  return null;
+};
+
+const obtenerIdsPersonalizacion = (personalizacion: any): number[] => {
+  const normalizada = normalizarPersonalizacion(personalizacion);
+  if (!normalizada || typeof normalizada !== 'object') {
+    return [];
+  }
+
+  return Object.entries(normalizada)
+    .filter(([key, value]) => key !== 'precio_adicional' && value !== null && value !== undefined)
+    .map(([, value]) => Number(value))
+    .filter((value) => !Number.isNaN(value));
+};
+
+const normalizarCriticoModo = (valor?: string | null) => {
+  const modo = String(valor || '').toUpperCase();
+  if (modo === 'BAJO') return 'BAJO';
+  if (modo === 'NUNCA' || modo === 'SOLO_AVISAR') return 'NUNCA';
+  if (modo === 'BLOQUEAR') return 'CRITICO';
+  if (modo === 'CRITICO') return 'CRITICO';
+  return 'CRITICO';
+};
+
+// ===== FUNCIÓN AUXILIAR: DECREMENTAR INVENTARIO DE INSUMOS =====
+async function decrementarInventarioInsumos(
+  items: any[],
+  contexto?: { comandaId?: string; usuarioId?: number }
+): Promise<Set<number>> {
+  const productoIds = Array.from(new Set(items
+    .map(item => item.producto?.id)
+    .filter((id: any) => id !== null && id !== undefined)));
+
+  if (productoIds.length === 0) {
+    return new Set<number>();
+  }
+
+  const placeholders = productoIds.map(() => '?').join(',');
+  const productos = await allAsync(
+    `SELECT id, usa_insumos FROM productos WHERE id IN (${placeholders})`,
+    productoIds
+  );
+
+  const productosConInsumos = new Set<number>(
+    productos.filter(p => p.usa_insumos === 1).map(p => p.id)
+  );
+
+  const productosConInsumosArray = Array.from(productosConInsumos);
+  const recetaRows = productosConInsumosArray.length > 0
+    ? await allAsync(
+        `SELECT producto_id, insumo_id, cantidad_usada FROM producto_insumos WHERE producto_id IN (${productosConInsumosArray.map(() => '?').join(',')})`,
+        productosConInsumosArray
+      )
+    : [];
+
+  const recetaPorProducto = new Map<number, any[]>();
+  recetaRows.forEach(row => {
+    if (!recetaPorProducto.has(row.producto_id)) {
+      recetaPorProducto.set(row.producto_id, []);
+    }
+    recetaPorProducto.get(row.producto_id)!.push(row);
+  });
+
+  const productosConReceta = new Set<number>(
+    Array.from(recetaPorProducto.keys()).filter(id => (recetaPorProducto.get(id) || []).length > 0)
+  );
+
+  const personalizacionIds = Array.from(new Set(items
+    .flatMap(item => obtenerIdsPersonalizacion(item.personalizacion))));
+  const ajustesPorItem = new Map<number, any[]>();
+  const minConsumoPorUnidad = new Map<number, number>();
+
+  if (personalizacionIds.length > 0) {
+    const itemsUsaInsumosRows = await allAsync(
+      `SELECT id FROM items_personalizacion WHERE usa_insumos = 1 AND id IN (${personalizacionIds.map(() => '?').join(',')})`,
+      personalizacionIds
+    );
+    const itemsUsaInsumos = new Set<number>(itemsUsaInsumosRows.map(row => row.id));
+
+    if (itemsUsaInsumos.size > 0) {
+      const idsUsaInsumos = Array.from(itemsUsaInsumos);
+      const ajustesRows = await allAsync(
+        `SELECT item_personalizacion_id, insumo_id, cantidad_ajuste FROM personalizacion_insumos WHERE item_personalizacion_id IN (${idsUsaInsumos.map(() => '?').join(',')})`,
+        idsUsaInsumos
+      );
+
+      ajustesRows.forEach(row => {
+        if (!ajustesPorItem.has(row.item_personalizacion_id)) {
+          ajustesPorItem.set(row.item_personalizacion_id, []);
+        }
+        ajustesPorItem.get(row.item_personalizacion_id)!.push(row);
+      });
+    }
+  }
+
+  const consumoPorInsumo = new Map<number, number>();
+  const productosConConsumo = new Set<number>();
+  const tieneAjustesPersonalizacion = (personalizacion: any) => {
+    const ids = obtenerIdsPersonalizacion(personalizacion);
+    return ids.some(id => (ajustesPorItem.get(id) || []).length > 0);
+  };
+
+  const itemsConInsumos = items.filter(item => {
+    const productoId = item.producto?.id;
+    if (!productoId) {
+      return false;
+    }
+    return productosConReceta.has(productoId) || tieneAjustesPersonalizacion(item.personalizacion);
+  });
+
+  if (itemsConInsumos.length === 0) {
+    return new Set<number>();
+  }
+
+  itemsConInsumos.forEach(item => {
+    const productoId = item.producto?.id;
+    if (!productoId) return;
+
+    const receta = recetaPorProducto.get(productoId) || [];
+    const consumoPorUnidadItem = new Map<number, number>();
+    if (productosConReceta.has(productoId)) {
+      receta.forEach((row: any) => {
+        const cantidad = row.cantidad_usada * item.cantidad;
+        consumoPorInsumo.set(row.insumo_id, (consumoPorInsumo.get(row.insumo_id) || 0) + cantidad);
+        consumoPorUnidadItem.set(
+          row.insumo_id,
+          (consumoPorUnidadItem.get(row.insumo_id) || 0) + row.cantidad_usada
+        );
+      });
+    }
+
+    const personalizacionItemIds = obtenerIdsPersonalizacion(item.personalizacion);
+    personalizacionItemIds.forEach(itemId => {
+      const ajustes = ajustesPorItem.get(itemId) || [];
+      ajustes.forEach((ajuste: any) => {
+        const cantidad = ajuste.cantidad_ajuste * item.cantidad;
+        consumoPorInsumo.set(ajuste.insumo_id, (consumoPorInsumo.get(ajuste.insumo_id) || 0) + cantidad);
+        consumoPorUnidadItem.set(
+          ajuste.insumo_id,
+          (consumoPorUnidadItem.get(ajuste.insumo_id) || 0) + ajuste.cantidad_ajuste
+        );
+      });
+    });
+
+    consumoPorUnidadItem.forEach((cantidadPorUnidad, insumoId) => {
+      const positiva = cantidadPorUnidad > 0 ? cantidadPorUnidad : 0;
+      if (positiva === 0) return;
+      const actualMin = minConsumoPorUnidad.get(insumoId);
+      if (actualMin === undefined || positiva < actualMin) {
+        minConsumoPorUnidad.set(insumoId, positiva);
+      }
+    });
+
+    if (productosConReceta.has(productoId)) {
+      productosConConsumo.add(productoId);
+    }
+  });
+
+  const insumoIds = Array.from(consumoPorInsumo.keys()).filter(id => {
+    const cantidad = consumoPorInsumo.get(id) || 0;
+    return cantidad !== 0;
+  });
+
+  if (insumoIds.length === 0) {
+    return productosConReceta;
+  }
+
+  const insumos = await allAsync(
+    `SELECT * FROM insumos WHERE id IN (${insumoIds.map(() => '?').join(',')})`,
+    insumoIds
+  );
+
+  const configSistema = await getAsync('SELECT critico_modo FROM config_sistema ORDER BY id DESC LIMIT 1');
+  const criticoModo = normalizarCriticoModo(configSistema?.critico_modo);
+
+  const insumosMap = new Map<number, any>();
+  insumos.forEach(insumo => insumosMap.set(insumo.id, insumo));
+
+  for (const insumoId of insumoIds) {
+    const requerido = consumoPorInsumo.get(insumoId) || 0;
+    if (requerido < 0) {
+      throw new Error(`Consumo inválido de insumo (negativo): ${insumoId}`);
+    }
+    if (requerido === 0) {
+      continue;
+    }
+
+    const insumo = insumosMap.get(insumoId);
+    if (!insumo) {
+      throw new Error(`Insumo no encontrado: ${insumoId}`);
+    }
+
+    if (insumo.stock_actual === null || insumo.stock_actual === undefined) {
+      throw new Error(`Stock no disponible para insumo: ${insumo.nombre}`);
+    }
+
+    if (insumo.stock_actual < requerido) {
+      const exceso = requerido - insumo.stock_actual;
+      const minPorUnidad = minConsumoPorUnidad.get(insumoId) || null;
+      const sugerenciaCantidad = minPorUnidad ? Math.ceil(exceso / minPorUnidad) : null;
+      throw {
+        code: 'INSUMO_INSUFICIENTE',
+        insumo_id: insumoId,
+        insumo_nombre: insumo.nombre,
+        disponible: insumo.stock_actual,
+        requerido,
+        exceso,
+        unidad: insumo.unidad_medida,
+        sugerencia_cantidad: sugerenciaCantidad
+      };
+    }
+
+    const nuevoStock = insumo.stock_actual - requerido;
+    const estadoFinal = nuevoStock <= insumo.stock_critico
+      ? 'CRITICO'
+      : nuevoStock <= insumo.stock_minimo
+        ? 'BAJO'
+        : 'OK';
+
+    if (criticoModo === 'BAJO' && (estadoFinal === 'BAJO' || estadoFinal === 'CRITICO')) {
+      throw new Error(`Insumo en estado bajo/crítico: ${insumo.nombre}`);
+    }
+    if (criticoModo === 'CRITICO' && estadoFinal === 'CRITICO') {
+      throw new Error(`Insumo en estado crítico: ${insumo.nombre}`);
+    }
+  }
+
+  for (const insumoId of insumoIds) {
+    const requerido = consumoPorInsumo.get(insumoId) || 0;
+    if (requerido === 0) {
+      continue;
+    }
+    const insumo = insumosMap.get(insumoId);
+    const nuevoStock = insumo.stock_actual - requerido;
+    await runAsync(
+      'UPDATE insumos SET stock_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [nuevoStock, insumoId]
+    );
+
+    await runAsync(
+      `INSERT INTO insumo_historial (insumo_id, cantidad, unidad_medida, producto_id, comanda_id, tipo_evento, motivo, usuario_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+      , [
+        insumoId,
+        requerido * -1,
+        insumo.unidad_medida,
+        null,
+        contexto?.comandaId || null,
+        'COMANDA',
+        'Consumo por comanda',
+        contexto?.usuarioId || null
+      ]
+    );
+  }
+
+  return productosConReceta;
+}
+
 // ===== FUNCIÓN AUXILIAR: DECREMENTAR INVENTARIO DE PERSONALIZACIONES =====
 /**
  * Decrementa el inventario de las personalizaciones usadas en items
@@ -15,187 +326,137 @@ const router = Router();
  * @returns Promise que resuelve cuando se completa el proceso
  */
 async function decrementarInventarioPersonalizaciones(items: any[]): Promise<void> {
-  const promises: Promise<void>[] = [];
-  
+  const consumoPorItem = new Map<number, number>();
+
   for (const item of items) {
-    // Si no tiene personalización, continuar
-    if (!item.personalizacion || typeof item.personalizacion !== 'object') {
+    const personalizacion = normalizarPersonalizacion(item.personalizacion);
+    if (!personalizacion || typeof personalizacion !== 'object') {
       continue;
     }
-    
-    const personalizacion = item.personalizacion;
-    
-    // Iterar sobre cada categoría en la personalización
+
     for (const [categoriaId, itemId] of Object.entries(personalizacion)) {
-      // Saltar la clave precio_adicional
       if (categoriaId === 'precio_adicional' || itemId === null || itemId === undefined) {
         continue;
       }
-      
+
       const itemIdNum = Number(itemId);
-      if (isNaN(itemIdNum)) continue;
-      
-      // Crear promesa para decrementar este item
-      promises.push(
-        new Promise<void>((resolve, reject) => {
-          // Obtener info del item de personalización
-          db.get(
-            'SELECT * FROM items_personalizacion WHERE id = ?',
-            [itemIdNum],
-            (err: any, itemPers: any) => {
-              if (err) {
-                console.error(`❌ Error al obtener item personalización ${itemIdNum}:`, err);
-                resolve(); // No fallar la transacción completa
-                return;
-              }
-              
-              if (!itemPers) {
-                console.warn(`⚠️  Item personalización ${itemIdNum} no encontrado`);
-                resolve();
-                return;
-              }
-              
-              // Si no usa inventario, continuar
-              if (!itemPers.usa_inventario) {
-                resolve();
-                return;
-              }
-              
-              // Verificar inventario disponible
-              if (itemPers.cantidad_actual === null || itemPers.cantidad_actual < item.cantidad) {
-                console.error(`❌ Inventario insuficiente para ${itemPers.nombre}: disponible=${itemPers.cantidad_actual}, necesario=${item.cantidad}`);
-                reject(new Error(`Inventario insuficiente para personalización: ${itemPers.nombre}`));
-                return;
-              }
-              
-              // Decrementar inventario
-              const nuevaCantidad = itemPers.cantidad_actual - item.cantidad;
-              
-              db.run(
-                'UPDATE items_personalizacion SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-                [nuevaCantidad, itemIdNum],
-                (err: any) => {
-                  if (err) {
-                    console.error(`❌ Error al decrementar inventario de ${itemPers.nombre}:`, err);
-                    reject(err);
-                    return;
-                  }
-                  
-                  console.log(`✅ Inventario decrementado: ${itemPers.nombre} (${itemPers.cantidad_actual} → ${nuevaCantidad})`);
-                  
-                  // Si llegó a 0, marcar como no disponible
-                  if (nuevaCantidad <= 0) {
-                    db.run(
-                      'UPDATE items_personalizacion SET disponible = 0 WHERE id = ?',
-                      [itemIdNum],
-                      (err: any) => {
-                        if (err) {
-                          console.error(`❌ Error al marcar como no disponible ${itemPers.nombre}:`, err);
-                        } else {
-                          console.log(`⚠️  ${itemPers.nombre} marcado como NO DISPONIBLE (inventario agotado)`);
-                        }
-                      }
-                    );
-                  }
-                  
-                  resolve();
-                }
-              );
-            }
-          );
-        })
-      );
+      if (Number.isNaN(itemIdNum)) {
+        continue;
+      }
+
+      consumoPorItem.set(itemIdNum, (consumoPorItem.get(itemIdNum) || 0) + item.cantidad);
     }
   }
-  
-  await Promise.all(promises);
+
+  const itemIds = Array.from(consumoPorItem.keys());
+  if (itemIds.length === 0) {
+    return;
+  }
+
+  const itemsPers = await allAsync(
+    `SELECT * FROM items_personalizacion WHERE id IN (${itemIds.map(() => '?').join(',')})`,
+    itemIds
+  );
+
+  for (const itemPers of itemsPers) {
+    if (!itemPers.usa_inventario) {
+      continue;
+    }
+
+    const requerido = consumoPorItem.get(itemPers.id) || 0;
+    if (requerido <= 0) {
+      continue;
+    }
+
+    if (itemPers.cantidad_actual === null || itemPers.cantidad_actual < requerido) {
+      const disponible = itemPers.cantidad_actual ?? 0;
+      const exceso = requerido - disponible;
+      console.error(`❌ Inventario insuficiente para ${itemPers.nombre}: disponible=${disponible}, necesario=${requerido}`);
+      throw {
+        code: 'PERSONALIZACION_INSUFICIENTE',
+        item_personalizacion_id: itemPers.id,
+        nombre: itemPers.nombre,
+        disponible,
+        requerido,
+        exceso,
+        sugerencia_cantidad: exceso
+      };
+    }
+
+    const nuevaCantidad = itemPers.cantidad_actual - requerido;
+    await runAsync(
+      'UPDATE items_personalizacion SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [nuevaCantidad, itemPers.id]
+    );
+
+    if (nuevaCantidad <= 0) {
+      await runAsync('UPDATE items_personalizacion SET disponible = 0 WHERE id = ?', [itemPers.id]);
+    }
+  }
 }
 
 // Función para decrementar inventario de productos
-async function decrementarInventarioProductos(items: any[]): Promise<void> {
-  const promises: Promise<void>[] = [];
-  
+async function decrementarInventarioProductos(items: any[], productosExcluidos: Set<number> = new Set()): Promise<void> {
+  const consumoPorProducto = new Map<number, number>();
+
   for (const item of items) {
     if (!item.producto || !item.producto.id) {
       continue;
     }
-    
+
     const productoId = item.producto.id;
-    const cantidadRequerida = item.cantidad;
-    
-    // Crear promesa para decrementar este producto
-    promises.push(
-      new Promise<void>((resolve, reject) => {
-        // Obtener info del producto
-        db.get(
-          'SELECT * FROM productos WHERE id = ?',
-          [productoId],
-          (err: any, producto: any) => {
-            if (err) {
-              console.error(`❌ Error al obtener producto ${productoId}:`, err);
-              resolve(); // No fallar la transacción completa
-              return;
-            }
-            
-            if (!producto) {
-              console.warn(`⚠️  Producto ${productoId} no encontrado`);
-              resolve();
-              return;
-            }
-            
-            // Si no usa inventario, continuar
-            if (!producto.usa_inventario) {
-              resolve();
-              return;
-            }
-            
-            // Verificar inventario disponible
-            if (producto.cantidad_actual === null || producto.cantidad_actual < cantidadRequerida) {
-              console.error(`❌ Inventario insuficiente para ${producto.nombre}: disponible=${producto.cantidad_actual}, necesario=${cantidadRequerida}`);
-              reject(new Error(`Inventario insuficiente para producto: ${producto.nombre}`));
-              return;
-            }
-            
-            // Decrementar inventario
-            const nuevaCantidad = producto.cantidad_actual - cantidadRequerida;
-            
-            db.run(
-              'UPDATE productos SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-              [nuevaCantidad, productoId],
-              (err: any) => {
-                if (err) {
-                  console.error(`❌ Error al decrementar inventario de ${producto.nombre}:`, err);
-                  reject(err);
-                  return;
-                }
-                
-                console.log(`✅ Inventario de producto decrementado: ${producto.nombre} (${producto.cantidad_actual} → ${nuevaCantidad})`);
-                
-                // Si llegó a 0, marcar como no disponible
-                if (nuevaCantidad <= 0) {
-                  db.run(
-                    'UPDATE productos SET disponible = 0 WHERE id = ?',
-                    [productoId],
-                    (err: any) => {
-                      if (err) {
-                        console.error(`❌ Error al marcar como no disponible ${producto.nombre}:`, err);
-                      } else {
-                        console.log(`⚠️  ${producto.nombre} marcado como NO DISPONIBLE (inventario agotado)`);
-                      }
-                    }
-                  );
-                }
-                
-                resolve();
-              }
-            );
-          }
-        );
-      })
-    );
+    if (productosExcluidos.has(productoId)) {
+      continue;
+    }
+
+    consumoPorProducto.set(productoId, (consumoPorProducto.get(productoId) || 0) + item.cantidad);
   }
-  
-  await Promise.all(promises);
+
+  const productoIds = Array.from(consumoPorProducto.keys());
+  if (productoIds.length === 0) {
+    return;
+  }
+
+  const productos = await allAsync(
+    `SELECT * FROM productos WHERE id IN (${productoIds.map(() => '?').join(',')})`,
+    productoIds
+  );
+
+  for (const producto of productos) {
+    if (!producto.usa_inventario) {
+      continue;
+    }
+
+    const requerido = consumoPorProducto.get(producto.id) || 0;
+    if (requerido <= 0) {
+      continue;
+    }
+
+    if (producto.cantidad_actual === null || producto.cantidad_actual < requerido) {
+      const disponible = producto.cantidad_actual ?? 0;
+      const exceso = requerido - disponible;
+      console.error(`❌ Inventario insuficiente para ${producto.nombre}: disponible=${disponible}, necesario=${requerido}`);
+      throw {
+        code: 'PRODUCTO_INSUFICIENTE',
+        producto_id: producto.id,
+        nombre: producto.nombre,
+        disponible,
+        requerido,
+        exceso,
+        sugerencia_cantidad: exceso
+      };
+    }
+
+    const nuevaCantidad = producto.cantidad_actual - requerido;
+    await runAsync(
+      'UPDATE productos SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+      [nuevaCantidad, producto.id]
+    );
+
+    if (nuevaCantidad <= 0) {
+      await runAsync('UPDATE productos SET disponible = 0 WHERE id = ?', [producto.id]);
+    }
+  }
 }
 
 // Obtener todas las comandas
@@ -843,10 +1104,11 @@ router.post('/', verificarAutenticacion, (req: Request, res: Response) => {
       // Función auxiliar para insertar items
       function insertarItems() {
         // Primero validar y decrementar inventario de productos y personalizaciones
-        Promise.all([
-          decrementarInventarioProductos(comandaData.items),
-          decrementarInventarioPersonalizaciones(comandaData.items)
-        ])
+        decrementarInventarioInsumos(comandaData.items, { comandaId, usuarioId })
+          .then((productosConInsumos) => Promise.all([
+            decrementarInventarioProductos(comandaData.items, productosConInsumos),
+            decrementarInventarioPersonalizaciones(comandaData.items)
+          ]))
           .then(() => {
             // Insertar items
             const insertItemQuery = `
@@ -980,8 +1242,51 @@ router.post('/', verificarAutenticacion, (req: Request, res: Response) => {
           .catch((error: any) => {
             console.error('❌ Error al decrementar inventario:', error);
             db.run('ROLLBACK');
+            if (error?.code === 'INSUMO_INSUFICIENTE') {
+              return res.status(400).json({
+                error: `Inventario insuficiente para insumo: ${error.insumo_nombre}`,
+                detalle: {
+                  tipo: 'INSUMO',
+                  insumo_id: error.insumo_id,
+                  insumo_nombre: error.insumo_nombre,
+                  disponible: error.disponible,
+                  requerido: error.requerido,
+                  exceso: error.exceso,
+                  unidad: error.unidad,
+                  sugerencia_cantidad: error.sugerencia_cantidad
+                }
+              });
+            }
+            if (error?.code === 'PRODUCTO_INSUFICIENTE') {
+              return res.status(400).json({
+                error: `Inventario insuficiente para producto: ${error.nombre}`,
+                detalle: {
+                  tipo: 'PRODUCTO',
+                  producto_id: error.producto_id,
+                  producto_nombre: error.nombre,
+                  disponible: error.disponible,
+                  requerido: error.requerido,
+                  exceso: error.exceso,
+                  sugerencia_cantidad: error.sugerencia_cantidad
+                }
+              });
+            }
+            if (error?.code === 'PERSONALIZACION_INSUFICIENTE') {
+              return res.status(400).json({
+                error: `Inventario insuficiente para personalización: ${error.nombre}`,
+                detalle: {
+                  tipo: 'PERSONALIZACION',
+                  item_personalizacion_id: error.item_personalizacion_id,
+                  personalizacion_nombre: error.nombre,
+                  disponible: error.disponible,
+                  requerido: error.requerido,
+                  exceso: error.exceso,
+                  sugerencia_cantidad: error.sugerencia_cantidad
+                }
+              });
+            }
             return res.status(400).json({ 
-              error: error.message || 'Error al validar inventario de personalizaciones' 
+              error: error?.message || 'Error al validar inventario de personalizaciones' 
             });
           });
       }
@@ -1183,10 +1488,11 @@ router.put('/:id', (req: Request, res: Response) => {
       });
 
       // 7. Decrementar inventario solo de items nuevos (productos y personalizaciones)
-      Promise.all([
-        decrementarInventarioProductos(itemsNuevos),
-        decrementarInventarioPersonalizaciones(itemsNuevos)
-      ])
+      decrementarInventarioInsumos(itemsNuevos, { comandaId: id })
+        .then((productosConInsumos) => Promise.all([
+          decrementarInventarioProductos(itemsNuevos, productosConInsumos),
+          decrementarInventarioPersonalizaciones(itemsNuevos)
+        ]))
         .then(() => {
           // Ejecutar todas las operaciones de items
           Promise.all([...deletePromises, ...updatePromises, ...insertPromises])
@@ -1237,8 +1543,51 @@ router.put('/:id', (req: Request, res: Response) => {
         .catch((error: any) => {
           console.error('❌ Error al decrementar inventario en edición:', error);
           db.run('ROLLBACK');
+          if (error?.code === 'INSUMO_INSUFICIENTE') {
+            return res.status(400).json({
+              error: `Inventario insuficiente para insumo: ${error.insumo_nombre}`,
+              detalle: {
+                tipo: 'INSUMO',
+                insumo_id: error.insumo_id,
+                insumo_nombre: error.insumo_nombre,
+                disponible: error.disponible,
+                requerido: error.requerido,
+                exceso: error.exceso,
+                unidad: error.unidad,
+                sugerencia_cantidad: error.sugerencia_cantidad
+              }
+            });
+          }
+          if (error?.code === 'PRODUCTO_INSUFICIENTE') {
+            return res.status(400).json({
+              error: `Inventario insuficiente para producto: ${error.nombre}`,
+              detalle: {
+                tipo: 'PRODUCTO',
+                producto_id: error.producto_id,
+                producto_nombre: error.nombre,
+                disponible: error.disponible,
+                requerido: error.requerido,
+                exceso: error.exceso,
+                sugerencia_cantidad: error.sugerencia_cantidad
+              }
+            });
+          }
+          if (error?.code === 'PERSONALIZACION_INSUFICIENTE') {
+            return res.status(400).json({
+              error: `Inventario insuficiente para personalización: ${error.nombre}`,
+              detalle: {
+                tipo: 'PERSONALIZACION',
+                item_personalizacion_id: error.item_personalizacion_id,
+                personalizacion_nombre: error.nombre,
+                disponible: error.disponible,
+                requerido: error.requerido,
+                exceso: error.exceso,
+                sugerencia_cantidad: error.sugerencia_cantidad
+              }
+            });
+          }
           return res.status(400).json({ 
-            error: error.message || 'Error al validar inventario de personalizaciones' 
+            error: error?.message || 'Error al validar inventario de personalizaciones' 
           });
         });
     });

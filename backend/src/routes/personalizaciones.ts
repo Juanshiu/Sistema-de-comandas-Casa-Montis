@@ -164,7 +164,7 @@ router.get('/categorias/:categoriaId/items', (req: Request, res: Response) => {
 // Crear un nuevo item para una categoría
 router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
   const { categoriaId } = req.params;
-  const { nombre, descripcion, precio_adicional, usa_inventario, cantidad_inicial } = req.body;
+  const { nombre, descripcion, precio_adicional, usa_inventario, usa_insumos, cantidad_inicial } = req.body;
   
   if (!nombre) {
     return res.status(400).json({ error: 'El nombre es obligatorio' });
@@ -179,9 +179,9 @@ router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
   const query = `
     INSERT INTO items_personalizacion (
       categoria_id, nombre, descripcion, precio_adicional,
-      usa_inventario, cantidad_inicial, cantidad_actual
+      usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
   `;
   
   const cantidadIni = usaInv ? cantidad_inicial : null;
@@ -193,6 +193,7 @@ router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
     descripcion || null, 
     precio_adicional || 0,
     usaInv ? 1 : 0,
+    usa_insumos ? 1 : 0,
     cantidadIni,
     cantidadAct
   ], function(err: any) {
@@ -219,7 +220,7 @@ router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
 // Actualizar un item
 router.put('/categorias/:categoriaId/items/:itemId', (req: Request, res: Response) => {
   const { categoriaId, itemId } = req.params;
-  const { nombre, descripcion, precio_adicional, usa_inventario, cantidad_inicial, cantidad_actual } = req.body;
+  const { nombre, descripcion, precio_adicional, usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual } = req.body;
   
   // Validar inventario si está habilitado
   const usaInv = Boolean(usa_inventario);
@@ -233,7 +234,7 @@ router.put('/categorias/:categoriaId/items/:itemId', (req: Request, res: Respons
   const query = `
     UPDATE items_personalizacion 
     SET nombre = ?, descripcion = ?, precio_adicional = ?, 
-        usa_inventario = ?, cantidad_inicial = ?, cantidad_actual = ?,
+      usa_inventario = ?, usa_insumos = ?, cantidad_inicial = ?, cantidad_actual = ?,
         updated_at = CURRENT_TIMESTAMP
     WHERE id = ? AND categoria_id = ?
   `;
@@ -247,6 +248,7 @@ router.put('/categorias/:categoriaId/items/:itemId', (req: Request, res: Respons
     descripcion || null, 
     precio_adicional || 0, 
     usaInv ? 1 : 0,
+    usa_insumos ? 1 : 0,
     cantidadIni,
     cantidadAct,
     itemId, 
