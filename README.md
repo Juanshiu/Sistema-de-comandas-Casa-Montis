@@ -137,11 +137,21 @@ Sistema-comandas/
 │   │   │   ├── HistorialComandas.tsx        # Historial completo
 │   │   │   ├── Login.tsx                    # Interfaz de acceso
 │   │   │   └── admin/                       # Componentes de administración
-│   │   │       ├── GestionEmpleados.tsx     # CRUD de empleados
-│   │   │       ├── GestionNomina.tsx        # Liquidación de nómina
-│   │   │       ├── GestionLiquidacion.tsx   # Prestaciones sociales
-│   │   │       ├── GestionUsuarios.tsx      # Control de usuarios
-│   │   │       └── GestionRoles.tsx         # Roles y permisos
+│   │   │       ├── ConfiguracionSistema.tsx      # Configuración global del sistema
+│   │   │       ├── GeneradorContratos.tsx        # Generación de contratos
+│   │   │       ├── GestionCategorias.tsx         # Categorías (productos/personalizaciones)
+│   │   │       ├── GestionEmpleados.tsx          # CRUD de empleados
+│   │   │       ├── GestionEmpresa.tsx            # Datos de empresa
+│   │   │       ├── GestionFacturacion.tsx        # Configuración de facturación
+│   │   │       ├── GestionInventarioAvanzado.tsx # Insumos, recetas y ajustes
+│   │   │       ├── GestionLiquidacion.tsx        # Prestaciones sociales
+│   │   │       ├── GestionMesas.tsx              # Gestión de mesas
+│   │   │       ├── GestionNomina.tsx             # Liquidación de nómina
+│   │   │       ├── GestionPersonalizaciones.tsx  # Personalizaciones
+│   │   │       ├── GestionProductos.tsx          # Productos
+│   │   │       ├── GestionRoles.tsx              # Roles y permisos
+│   │   │       ├── GestionSalones.tsx            # Salones
+│   │   │       └── GestionUsuarios.tsx           # Control de usuarios
 │   │   ├── types/           # Tipos TypeScript
 │   │   ├── contexts/        # Contextos de React
 │   │   │   └── AuthContext.tsx  # Estado de autenticación global
@@ -152,20 +162,35 @@ Sistema-comandas/
 │   ├── src/
 │   │   ├── database/        # Configuración SQLite y migraciones
 │   │   ├── models/          # Tipos y modelos
+│   │   ├── middleware/      # Middleware
+│   │   │   └── authMiddleware.ts   # Autenticación y validación
 │   │   ├── routes/          # Rutas de API
-│   │   │   ├── comandas-nuevas.ts  # API de comandas (ACTIVA)
-│   │   │   ├── facturas-nuevas.ts  # API de facturas
-│   │   │   ├── mesas.ts            # API de mesas
-│   │   │   ├── productos.ts        # API de productos
-│   │   │   ├── salones.ts          # API de salones
-│   │   │   ├── empleados.ts        # API de empleados (RRHH)
-│   │   │   ├── nomina.ts           # API de nómina y liquidaciones
-│   │   │   ├── auth.ts             # API de autenticación y sesiones
-│   │   │   ├── usuarios.ts         # API de gestión de usuarios
-│   │   │   └── roles.ts            # API de roles y permisos
-│   │   └── services/        # Servicios
+│   │   │   ├── auth.ts                 # API de autenticación y sesiones
+│   │   │   ├── categorias.ts           # Categorías
+│   │   │   ├── comandas-nuevas.ts      # API de comandas (ACTIVA)
+│   │   │   ├── configuracion-facturacion.ts # Configuración de facturación
+│   │   │   ├── configuracion-sistema.ts     # Configuración del sistema (inventario)
+│   │   │   ├── contratos.ts            # Contratos
+│   │   │   ├── empleados.ts            # API de empleados (RRHH)
+│   │   │   ├── facturas-nuevas.ts       # API de facturas
+│   │   │   ├── inventario-avanzado.ts  # API de insumos, recetas y ajustes
+│   │   │   ├── mesas.ts                # API de mesas
+│   │   │   ├── nomina.ts               # API de nómina y liquidaciones
+│   │   │   ├── personalizaciones.ts    # API de personalizaciones
+│   │   │   ├── productos.ts            # API de productos
+│   │   │   ├── reportes.ts             # API de reportes
+│   │   │   ├── roles.ts                # API de roles y permisos
+│   │   │   ├── salones.ts              # API de salones
+│   │   │   ├── sistema.ts              # API de sistema
+│   │   │   └── usuarios.ts             # API de gestión de usuarios
+│   │   ├── services/        # Servicios
+│   │       ├── NominaService.ts      # Cálculos y utilidades de nómina
 │   │       ├── printer.ts           # Servicio de impresión principal
 │   │       └── pluginImpresora.ts   # Plugin HTTP propio (Puerto 8001)
+│   │   └── utils/           # Utilidades
+│   │       ├── dateUtils.ts          # Fechas y formatos
+│   │       ├── inventoryValidation.ts # Validación de inventario
+│   │       └── numeroALetras.ts      # Conversión a texto
 │   ├── package.json
 │   └── .env
 └── README.md
@@ -275,6 +300,26 @@ npm run dev
 - `POST /api/facturas` - Crear factura y liberar mesa
 - `POST /api/facturas/:id/imprimir` - Reimprimir factura
 
+### Inventario Avanzado
+- `GET /api/inventario-avanzado/insumos` - Listar insumos
+- `POST /api/inventario-avanzado/insumos` - Crear insumo
+- `PUT /api/inventario-avanzado/insumos/:id` - Actualizar insumo
+- `DELETE /api/inventario-avanzado/insumos/:id` - Eliminar insumo
+- `POST /api/inventario-avanzado/insumos/:id/ajuste` - Ajuste manual de stock
+- `GET /api/inventario-avanzado/insumos/historial` - Historial de movimientos
+- `GET /api/inventario-avanzado/recetas/productos/:productoId` - Obtener receta de producto
+- `PUT /api/inventario-avanzado/recetas/productos/:productoId` - Guardar receta de producto
+- `GET /api/inventario-avanzado/recetas/personalizaciones/:itemId` - Obtener ajustes de personalización
+- `PUT /api/inventario-avanzado/recetas/personalizaciones/:itemId` - Guardar ajustes de personalización
+- `GET /api/inventario-avanzado/riesgo/productos` - Estado de riesgo por producto
+- `GET /api/inventario-avanzado/riesgo/personalizaciones` - Estado de riesgo por personalización
+- `GET /api/inventario-avanzado/insumos/export` - Exportar insumos (Excel)
+- `POST /api/inventario-avanzado/insumos/import` - Importar insumos (Excel)
+- `GET /api/inventario-avanzado/recetas/export` - Exportar recetas (Excel)
+- `POST /api/inventario-avanzado/recetas/import` - Importar recetas (Excel)
+- `GET /api/inventario-avanzado/productos/export` - Exportar productos (Excel)
+- `POST /api/inventario-avanzado/productos/import` - Importar productos (Excel)
+
 ### Recursos Humanos (RRHH)
 - `GET /api/empleados` - Listar todos los empleados
 - `POST /api/empleados` - Registrar nuevo empleado
@@ -293,6 +338,10 @@ npm run dev
 - `GET /api/roles/:id` - Ver rol con su matriz de permisos
 - `POST /api/roles` - Crear un nuevo rol personalizado
 - `PUT /api/roles/:id` - Modificar permisos de un rol existente
+
+### Configuración del Sistema (Inventario)
+- `GET /api/configuracion/sistema` - Obtener configuración
+- `PUT /api/configuracion/sistema` - Actualizar configuración (`critico_modo`)
 
 ### Personalizaciones
 - `GET /api/personalizaciones/categorias` - Obtener categorías de personalización
@@ -453,6 +502,15 @@ El sistema incluye un panel completo de administración accesible desde la inter
 - Crear categorías personalizadas
 - Establecer precios adicionales
 
+**Inventario Avanzado (Insumos y Recetas):**
+- **Insumos** con stock mínimo/crítico y estado automático (OK/Bajo/Crítico)
+- **Recetas por producto** (consumo de insumos por unidad vendida)
+- **Ajustes por personalización** (insumos adicionales o negativos por ítem)
+- **Historial de movimientos** (consumos y ajustes manuales)
+- **Bloqueo configurable** al confirmar comandas (solo crítico / bajo+crítico / no bloquear)
+- **Importación y exportación Excel** por entidad
+- **Indicadores de riesgo** en productos y personalizaciones
+
 ### Base de Datos
 
 **Esquema Principal:**
@@ -467,6 +525,12 @@ El sistema incluye un panel completo de administración accesible desde la inter
 - `productos`: Catálogo completo
 - `facturas`: Registro de pagos
 - `personalizaciones_categorias` y `personalizaciones_opciones`
+- **Inventario avanzado**:
+  - `insumos`: catálogo de insumos y stock
+  - `producto_insumos`: receta por producto
+  - `personalizacion_insumos`: ajustes de insumos por personalización
+  - `insumo_historial`: historial de movimientos
+  - `config_sistema`: configuración de bloqueo (`critico_modo`)
 
 ### Historial y Reportes
 
