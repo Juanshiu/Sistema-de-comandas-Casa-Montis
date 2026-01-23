@@ -18,8 +18,47 @@ export interface Producto {
   tiene_personalizacion?: boolean;
   personalizaciones_habilitadas?: string | string[];
   usa_inventario?: boolean;
+  usa_insumos?: boolean;
   cantidad_inicial?: number | null;
   cantidad_actual?: number | null;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface Insumo {
+  id: number;
+  nombre: string;
+  unidad_medida: 'g' | 'kg' | 'ml' | 'unidad' | string;
+  stock_actual: number;
+  stock_minimo: number;
+  stock_critico: number;
+  costo_unitario?: number | null;
+  activo?: boolean;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface ProductoInsumo {
+  id: number;
+  producto_id: number;
+  insumo_id: number;
+  cantidad_usada: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface PersonalizacionInsumo {
+  id: number;
+  item_personalizacion_id: number;
+  insumo_id: number;
+  cantidad_ajuste: number;
+  created_at?: Date;
+  updated_at?: Date;
+}
+
+export interface ConfiguracionSistema {
+  id: number;
+  inventario_avanzado: boolean;
   created_at?: Date;
   updated_at?: Date;
 }
