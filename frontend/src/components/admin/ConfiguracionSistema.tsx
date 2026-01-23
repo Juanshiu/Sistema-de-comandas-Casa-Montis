@@ -209,7 +209,7 @@ export default function ConfiguracionSistema() {
     {
       id: 'limpiar-comandas',
       titulo: 'Limpiar Comandas Antiguas',
-      descripcion: 'Elimina comandas y facturas con más de 30 días. Ayuda a mantener la base de datos optimizada.',
+      descripcion: 'Elimina comandas y facturas con 30 días o más. Ayuda a mantener la base de datos optimizada.',
       icon: RefreshCw,
       color: 'yellow',
       peligro: 'medio',
@@ -400,7 +400,7 @@ export default function ConfiguracionSistema() {
 
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
               <p className="text-yellow-800 text-sm">
-                Se eliminarán todas las comandas y facturas con más de 30 días de antigüedad.
+                Se eliminarán todas las comandas y facturas con 30 días o más de antigüedad.
                 Esto ayuda a mantener la base de datos optimizada.
               </p>
             </div>

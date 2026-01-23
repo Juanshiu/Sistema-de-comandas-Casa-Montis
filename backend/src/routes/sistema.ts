@@ -283,44 +283,84 @@ router.post('/limpiar-comandas-antiguas', (req, res) => {
 
   console.log(`🗑️  Limpiando comandas anteriores a: ${fechaLimite}`);
 
-  // Primero eliminamos comandas antiguas
-  const queryComandas = 'DELETE FROM comandas WHERE fecha_creacion < ?';
-  
-  db.run(queryComandas, [fechaLimite], function(errComandas: any) {
-    if (errComandas) {
-      console.error('Error al limpiar comandas antiguas:', errComandas);
+  const detectarColumnaFecha = (tabla: string, cb: (err: any, columna?: string) => void) => {
+    db.all(`PRAGMA table_info(${tabla})`, [], (err: any, columns: any[]) => {
+      if (err) {
+        cb(err);
+        return;
+      }
+
+      const nombres = (columns || []).map((col) => col.name);
+      const columna = nombres.includes('fecha_creacion')
+        ? 'fecha_creacion'
+        : nombres.includes('fecha')
+        ? 'fecha'
+        : nombres.includes('created_at')
+        ? 'created_at'
+        : undefined;
+
+      cb(null, columna);
+    });
+  };
+
+  detectarColumnaFecha('comandas', (errComandasInfo, columnaComandas) => {
+    if (errComandasInfo || !columnaComandas) {
+      console.error('Error al detectar columna de fecha en comandas:', errComandasInfo);
       return res.status(500).json({ 
-        error: 'Error al limpiar comandas antiguas',
-        detalles: errComandas.message 
+        error: 'Error al detectar columna de fecha en comandas',
+        detalles: errComandasInfo?.message || 'Columna de fecha no encontrada'
       });
     }
 
-    const comandasEliminadas = this.changes;
-    console.log(`✅ Comandas eliminadas: ${comandasEliminadas}`);
-
-    // Luego eliminamos facturas antiguas
-    const queryFacturas = 'DELETE FROM facturas WHERE fecha_creacion < ?';
-    
-    db.run(queryFacturas, [fechaLimite], function(errFacturas: any) {
-      if (errFacturas) {
-        console.error('Error al limpiar facturas antiguas:', errFacturas);
+    detectarColumnaFecha('facturas', (errFacturasInfo, columnaFacturas) => {
+      if (errFacturasInfo || !columnaFacturas) {
+        console.error('Error al detectar columna de fecha en facturas:', errFacturasInfo);
         return res.status(500).json({ 
-          error: 'Error al limpiar facturas antiguas',
-          detalles: errFacturas.message 
+          error: 'Error al detectar columna de fecha en facturas',
+          detalles: errFacturasInfo?.message || 'Columna de fecha no encontrada'
         });
       }
 
-      const facturasEliminadas = this.changes;
-      const totalEliminadas = comandasEliminadas + facturasEliminadas;
-      console.log(`✅ Facturas eliminadas: ${facturasEliminadas}`);
-      console.log(`✅ Total registros eliminados: ${totalEliminadas}`);
+      // Primero eliminamos comandas antiguas
+      const queryComandas = `DELETE FROM comandas WHERE DATE(${columnaComandas}) <= DATE(?)`;
+      
+      db.run(queryComandas, [fechaLimite], function(errComandas: any) {
+        if (errComandas) {
+          console.error('Error al limpiar comandas antiguas:', errComandas);
+          return res.status(500).json({ 
+            error: 'Error al limpiar comandas antiguas',
+            detalles: errComandas.message 
+          });
+        }
 
-      res.json({ 
-        success: true, 
-        mensaje: `Se eliminaron ${totalEliminadas} registros antiguos`,
-        eliminadas: totalEliminadas,
-        comandas: comandasEliminadas,
-        facturas: facturasEliminadas
+        const comandasEliminadas = this.changes;
+        console.log(`✅ Comandas eliminadas: ${comandasEliminadas}`);
+
+        // Luego eliminamos facturas antiguas
+        const queryFacturas = `DELETE FROM facturas WHERE DATE(${columnaFacturas}) <= DATE(?)`;
+        
+        db.run(queryFacturas, [fechaLimite], function(errFacturas: any) {
+          if (errFacturas) {
+            console.error('Error al limpiar facturas antiguas:', errFacturas);
+            return res.status(500).json({ 
+              error: 'Error al limpiar facturas antiguas',
+              detalles: errFacturas.message 
+            });
+          }
+
+          const facturasEliminadas = this.changes;
+          const totalEliminadas = comandasEliminadas + facturasEliminadas;
+          console.log(`✅ Facturas eliminadas: ${facturasEliminadas}`);
+          console.log(`✅ Total registros eliminados: ${totalEliminadas}`);
+
+          res.json({ 
+            success: true, 
+            mensaje: `Se eliminaron ${totalEliminadas} registros antiguos`,
+            eliminadas: totalEliminadas,
+            comandas: comandasEliminadas,
+            facturas: facturasEliminadas
+          });
+        });
       });
     });
   });
