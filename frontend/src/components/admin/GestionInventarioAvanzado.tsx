@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin } from 'lucide-react';
+import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin, X, AlertCircle } from 'lucide-react';
 import { apiService } from '@/services/api';
 import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, CategoriaPersonalizacion, ItemPersonalizacion, InsumoHistorial, ConfiguracionSistema, Proveedor } from '@/types';
 
@@ -44,6 +44,7 @@ export default function GestionInventarioAvanzado() {
   const [proveedorEditandoId, setProveedorEditandoId] = useState<number | null>(null);
   const [verBancosId, setVerBancosId] = useState<number | null>(null);
   const [proveedorError, setProveedorError] = useState<string | null>(null);
+  const [mostrarModalProveedor, setMostrarModalProveedor] = useState(false);
   const [cargandoProveedores, setCargandoProveedores] = useState(false);
 
   const [insumos, setInsumos] = useState<Insumo[]>([]);
@@ -57,6 +58,7 @@ export default function GestionInventarioAvanzado() {
   });
   const [insumoEditandoId, setInsumoEditandoId] = useState<number | null>(null);
   const [insumoError, setInsumoError] = useState<string | null>(null);
+  const [mostrarModalInsumo, setMostrarModalInsumo] = useState(false);
 
   const [productos, setProductos] = useState<Producto[]>([]);
   const [productoSeleccionadoId, setProductoSeleccionadoId] = useState<number | null>(null);
@@ -166,6 +168,7 @@ export default function GestionInventarioAvanzado() {
   const iniciarEdicionProveedor = (p: Proveedor) => {
     setProveedorEditandoId(p.id);
     setProveedorForm({ ...p });
+    setMostrarModalProveedor(true);
   };
 
   const cancelarEdicionProveedor = () => {
@@ -177,6 +180,7 @@ export default function GestionInventarioAvanzado() {
       banco_nit_titular: '', banco_numero_cuenta: ''
     });
     setProveedorError(null);
+    setMostrarModalProveedor(false);
   };
 
   const eliminarProveedor = async (id: number) => {
@@ -330,6 +334,7 @@ export default function GestionInventarioAvanzado() {
       stock_critico: insumo.stock_critico,
       costo_unitario: insumo.costo_unitario ?? null
     });
+    setMostrarModalInsumo(true);
   };
 
   const cancelarEdicionInsumo = () => {
@@ -342,6 +347,8 @@ export default function GestionInventarioAvanzado() {
       stock_critico: 0,
       costo_unitario: null
     });
+    setMostrarModalInsumo(false);
+    setInsumoError(null);
   };
 
   const eliminarInsumo = async (id: number) => {
@@ -543,87 +550,128 @@ export default function GestionInventarioAvanzado() {
       </div>
 
       {tab === 'insumos' && (
-        <div className="bg-white rounded-lg shadow  space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Nombre *</label>
-              <input
-                className="input-field"
-                value={insumoForm.nombre}
-                onChange={(e) => setInsumoForm(prev => ({ ...prev, nombre: e.target.value }))}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Unidad de medida *</label>
-              <select
-                className="input-field"
-                value={insumoForm.unidad_medida}
-                onChange={(e) => setInsumoForm(prev => ({ ...prev, unidad_medida: e.target.value }))}
-              >
-                {unidades.map((u) => (
-                  <option key={u} value={u}>{u}</option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Stock actual *</label>
-              <input
-                type="number"
-                className="input-field"
-                value={insumoForm.stock_actual}
-                onChange={(e) => setInsumoForm(prev => ({ ...prev, stock_actual: Number(e.target.value) }))}
-                min="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Stock mínimo *</label>
-              <input
-                type="number"
-                className="input-field"
-                value={insumoForm.stock_minimo}
-                onChange={(e) => setInsumoForm(prev => ({ ...prev, stock_minimo: Number(e.target.value) }))}
-                min="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Stock crítico *</label>
-              <input
-                type="number"
-                className="input-field"
-                value={insumoForm.stock_critico}
-                onChange={(e) => setInsumoForm(prev => ({ ...prev, stock_critico: Number(e.target.value) }))}
-                min="0"
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Costo unitario (opcional)</label>
-              <input
-                type="number"
-                className="input-field"
-                value={insumoForm.costo_unitario ?? ''}
-                onChange={(e) => setInsumoForm(prev => ({ ...prev, costo_unitario: e.target.value === '' ? null : Number(e.target.value) }))}
-                min="0"
-              />
-            </div>
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold text-secondary-900">Inventario de Insumos</h3>
+            <button 
+              className="btn-primary flex items-center"
+              onClick={() => {
+                cancelarEdicionInsumo();
+                setMostrarModalInsumo(true);
+              }}
+            >
+              <Plus size={18} className="mr-2" />
+              Nuevo Insumo
+            </button>
           </div>
 
-          {insumoError && (
-            <div className="bg-red-50 border border-red-200 p-3 rounded">
-              <p className="text-sm text-red-700">{insumoError}</p>
+          {mostrarModalInsumo && (
+            <div className="fixed inset-0 bg-secondary-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
+                <div className="bg-white border-b px-6 py-4 flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-secondary-900">
+                    {insumoEditandoId ? 'Editar Insumo' : 'Nuevo Insumo'}
+                  </h3>
+                  <button onClick={cancelarEdicionInsumo} className="text-secondary-400 hover:text-secondary-600 transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Nombre del Insumo *</label>
+                      <input
+                        className="input-field w-full"
+                        placeholder="Ej: Tomate, Harina, Aceite..."
+                        value={insumoForm.nombre}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, nombre: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Unidad de medida *</label>
+                      <select
+                        className="input-field w-full"
+                        value={insumoForm.unidad_medida}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, unidad_medida: e.target.value }))}
+                      >
+                        {unidades.map((u) => (
+                          <option key={u} value={u}>{u}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Stock Actual *</label>
+                      <input
+                        type="number"
+                        className="input-field w-full"
+                        value={insumoForm.stock_actual}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, stock_actual: Number(e.target.value) }))}
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Costo Unitario (Opcional)</label>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400">$</span>
+                        <input
+                          type="number"
+                          className="input-field w-full pl-7"
+                          placeholder="0.00"
+                          value={insumoForm.costo_unitario ?? ''}
+                          onChange={(e) => setInsumoForm(prev => ({ ...prev, costo_unitario: e.target.value === '' ? null : Number(e.target.value) }))}
+                          min="0"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4 border-t">
+                    <div>
+                      <label className="block text-sm font-semibold mb-1 text-yellow-700">Stock Mínimo (Alerta Amarilla)</label>
+                      <input
+                        type="number"
+                        className="input-field w-full border-yellow-200 focus:ring-yellow-500"
+                        value={insumoForm.stock_minimo}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, stock_minimo: Number(e.target.value) }))}
+                        min="0"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold mb-1 text-red-700">Stock Crítico (Alerta Roja)</label>
+                      <input
+                        type="number"
+                        className="input-field w-full border-red-200 focus:ring-red-500"
+                        value={insumoForm.stock_critico}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, stock_critico: Number(e.target.value) }))}
+                        min="0"
+                      />
+                    </div>
+                  </div>
+
+                  {insumoError && (
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center text-red-700">
+                      <AlertCircle size={20} className="mr-2 flex-shrink-0" />
+                      <p className="text-sm">{insumoError}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-secondary-50 px-6 py-4 flex justify-end space-x-3">
+                  <button className="btn-secondary px-6" onClick={cancelarEdicionInsumo}>
+                    Cancelar
+                  </button>
+                  <button className="btn-primary flex items-center px-8" onClick={guardarInsumo}>
+                    <Save size={18} className="mr-2" />
+                    {insumoEditandoId ? 'Actualizar Cambios' : 'Crear Insumo'}
+                  </button>
+                </div>
+              </div>
             </div>
           )}
 
-          <div className="flex space-x-2">
-            <button className="btn-primary flex items-center" onClick={guardarInsumo}>
-              <Save size={16} className="mr-2" />
-              {insumoEditandoId ? 'Actualizar' : 'Crear'}
-            </button>
-            {insumoEditandoId && (
-              <button className="btn-secondary" onClick={cancelarEdicionInsumo}>Cancelar</button>
-            )}
-          </div>
-
-          <div className="overflow-x-auto">
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-secondary-200">
               <thead className="bg-secondary-50">
                 <tr>
@@ -680,6 +728,7 @@ export default function GestionInventarioAvanzado() {
             </table>
           </div>
         </div>
+      </div>
       )}
 
       {tab === 'recetas' && (
@@ -1016,154 +1065,187 @@ export default function GestionInventarioAvanzado() {
 
       {tab === 'proveedores' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow p-4 space-y-6">
-            <h3 className="text-lg font-semibold text-secondary-900 border-b pb-2">
-              {proveedorEditandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
-            </h3>
-            
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Nombre completo *</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.nombre || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, nombre: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">CC o NIT</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.documento || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, documento: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Teléfono</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.telefono || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, telefono: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Correo</label>
-                <input
-                  type="email"
-                  className="input-field"
-                  value={proveedorForm.correo || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, correo: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Dirección</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.direccion || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, direccion: e.target.value }))}
-                />
-              </div>
-              
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">País</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.pais || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, pais: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Departamento</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.departamento || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, departamento: e.target.value }))}
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Ciudad</label>
-                <input
-                  className="input-field"
-                  value={proveedorForm.ciudad || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, ciudad: e.target.value }))}
-                />
-              </div>
-              <div className="lg:col-span-2">
-                <label className="block text-sm font-medium text-secondary-700">Descripción (¿Qué artículos trae?)</label>
-                <input
-                  className="input-field"
-                  placeholder="Ej: Carnes, Verduras, Desechables..."
-                  value={proveedorForm.descripcion || ''}
-                  onChange={(e) => setProveedorForm(prev => ({ ...prev, descripcion: e.target.value }))}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-4 pt-4 border-t">
-              <h4 className="text-md font-medium text-secondary-800">Datos Bancarios (Opcional)</h4>
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">Nombre Banco</label>
-                  <input
-                    className="input-field"
-                    value={proveedorForm.banco_nombre || ''}
-                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_nombre: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">Tipo de Cuenta</label>
-                  <select
-                    className="input-field"
-                    value={proveedorForm.banco_tipo_cuenta || ''}
-                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_tipo_cuenta: e.target.value }))}
-                  >
-                    <option value="Ahorros">Ahorros</option>
-                    <option value="Corriente">Corriente</option>
-                  </select>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">Titular de Cuenta</label>
-                  <input
-                    className="input-field"
-                    value={proveedorForm.banco_titular || ''}
-                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_titular: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">NIT Titular</label>
-                  <input
-                    className="input-field"
-                    value={proveedorForm.banco_nit_titular || ''}
-                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_nit_titular: e.target.value }))}
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-secondary-700">Número de Cuenta</label>
-                  <input
-                    className="input-field"
-                    value={proveedorForm.banco_numero_cuenta || ''}
-                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_numero_cuenta: e.target.value }))}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {proveedorError && (
-              <div className="bg-red-50 border border-red-200 p-3 rounded">
-                <p className="text-sm text-red-700">{proveedorError}</p>
-              </div>
-            )}
-
-            <div className="flex space-x-2">
-              <button className="btn-primary flex items-center" onClick={guardarProveedor}>
-                <Save size={16} className="mr-2" />
-                {proveedorEditandoId ? 'Actualizar' : 'Guardar Proveedor'}
-              </button>
-              {proveedorEditandoId && (
-                <button className="btn-secondary" onClick={cancelarEdicionProveedor}>Cancelar</button>
-              )}
-            </div>
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold text-secondary-900">Gestión de Proveedores</h3>
+            <button 
+              className="btn-primary flex items-center"
+              onClick={() => {
+                cancelarEdicionProveedor();
+                setMostrarModalProveedor(true);
+              }}
+            >
+              <Plus size={18} className="mr-2" />
+              Nuevo Proveedor
+            </button>
           </div>
+
+          {mostrarModalProveedor && (
+            <div className="fixed inset-0 bg-secondary-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
+                <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
+                  <h3 className="text-xl font-bold text-secondary-900">
+                    {proveedorEditandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+                  </h3>
+                  <button onClick={cancelarEdicionProveedor} className="text-secondary-400 hover:text-secondary-600 transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-6">
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Nombre completo *</label>
+                      <input
+                        className="input-field w-full"
+                        placeholder="Nombre o Razón Social"
+                        value={proveedorForm.nombre || ''}
+                        onChange={(e) => setProveedorForm(prev => ({ ...prev, nombre: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">CC o NIT</label>
+                      <input
+                        className="input-field w-full"
+                        placeholder="Identificación fiscal"
+                        value={proveedorForm.documento || ''}
+                        onChange={(e) => setProveedorForm(prev => ({ ...prev, documento: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Teléfono</label>
+                      <input
+                        className="input-field w-full"
+                        placeholder="Número de contacto"
+                        value={proveedorForm.telefono || ''}
+                        onChange={(e) => setProveedorForm(prev => ({ ...prev, telefono: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Correo</label>
+                      <input
+                        type="email"
+                        className="input-field w-full"
+                        placeholder="correo@ejemplo.com"
+                        value={proveedorForm.correo || ''}
+                        onChange={(e) => setProveedorForm(prev => ({ ...prev, correo: e.target.value }))}
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Descripción (¿Qué artículos trae?)</label>
+                      <input
+                        className="input-field w-full"
+                        placeholder="Ej: Carnes, Verduras, Insumos de aseo..."
+                        value={proveedorForm.descripcion || ''}
+                        onChange={(e) => setProveedorForm(prev => ({ ...prev, descripcion: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="text-md font-bold text-secondary-800 flex items-center">
+                      <MapPin size={18} className="mr-2 text-primary-500" />
+                      Ubicación
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                      <div className="lg:col-span-2">
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Dirección</label>
+                        <input
+                          className="input-field w-full"
+                          value={proveedorForm.direccion || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, direccion: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Ciudad</label>
+                        <input
+                          className="input-field w-full"
+                          value={proveedorForm.ciudad || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, ciudad: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Departamento</label>
+                        <input
+                          className="input-field w-full"
+                          value={proveedorForm.departamento || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, departamento: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="text-md font-bold text-secondary-800 flex items-center">
+                      <CreditCard size={18} className="mr-2 text-primary-500" />
+                      Datos Bancarios (Opcional)
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Nombre Banco</label>
+                        <input
+                          className="input-field w-full"
+                          value={proveedorForm.banco_nombre || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_nombre: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Tipo de Cuenta</label>
+                        <select
+                          className="input-field w-full"
+                          value={proveedorForm.banco_tipo_cuenta || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_tipo_cuenta: e.target.value }))}
+                        >
+                          <option value="Ahorros">Ahorros</option>
+                          <option value="Corriente">Corriente</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Número de Cuenta</label>
+                        <input
+                          className="input-field w-full font-mono"
+                          value={proveedorForm.banco_numero_cuenta || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_numero_cuenta: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">Titular de Cuenta</label>
+                        <input
+                          className="input-field w-full"
+                          value={proveedorForm.banco_titular || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_titular: e.target.value }))}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-semibold text-secondary-700 mb-1">NIT Titular</label>
+                        <input
+                          className="input-field w-full"
+                          value={proveedorForm.banco_nit_titular || ''}
+                          onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_nit_titular: e.target.value }))}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {proveedorError && (
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center text-red-700">
+                      <AlertCircle size={20} className="mr-2 flex-shrink-0" />
+                      <p className="text-sm">{proveedorError}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="sticky bottom-0 bg-white border-t px-6 py-4 flex justify-end space-x-3">
+                  <button className="btn-secondary px-6" onClick={cancelarEdicionProveedor}>
+                    Cancelar
+                  </button>
+                  <button className="btn-primary flex items-center px-8" onClick={guardarProveedor}>
+                    <Save size={18} className="mr-2" />
+                    {proveedorEditandoId ? 'Actualizar Cambios' : 'Guardar Proveedor'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div className="bg-white rounded-lg shadow overflow-x-auto">
             <table className="min-w-full divide-y divide-secondary-200">
