@@ -506,9 +506,10 @@ router.get('/', (req: Request, res: Response) => {
         }
         
         const mesasQuery = `
-          SELECT m.* 
+          SELECT m.*, s.nombre as salon_nombre 
           FROM mesas m
           INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+          LEFT JOIN salones s ON m.salon_id = s.id
           WHERE cm.comanda_id = ?
         `;
         
@@ -524,7 +525,7 @@ router.get('/', (req: Request, res: Response) => {
               id: mesa.id,
               numero: mesa.numero,
               capacidad: mesa.capacidad,
-              salon: mesa.salon,
+              salon: mesa.salon_nombre || mesa.salon || 'Principal',
               ocupada: mesa.ocupada
             })),
             mesero: row.mesero,
@@ -639,9 +640,10 @@ router.get('/activas', (req: Request, res: Response) => {
         
         // Si es mesa, buscar las mesas asociadas
         const mesasQuery = `
-          SELECT m.* 
+          SELECT m.*, s.nombre as salon_nombre 
           FROM mesas m
           INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+          LEFT JOIN salones s ON m.salon_id = s.id
           WHERE cm.comanda_id = ?
         `;
         
@@ -694,7 +696,7 @@ router.get('/activas', (req: Request, res: Response) => {
                 id: mesa.id,
                 numero: mesa.numero,
                 capacidad: mesa.capacidad,
-                salon: mesa.salon,
+                salon: mesa.salon_nombre || mesa.salon || 'Principal',
                 ocupada: mesa.ocupada
               })),
               mesero: row.mesero,
@@ -856,9 +858,10 @@ router.get('/historial', (req: Request, res: Response) => {
             
             // Si es mesa, buscar las mesas asociadas
             const mesasQuery = `
-              SELECT m.* 
+              SELECT m.*, s.nombre as salon_nombre 
               FROM mesas m
               INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+              LEFT JOIN salones s ON m.salon_id = s.id
               WHERE cm.comanda_id = ?
             `;
             
@@ -874,7 +877,7 @@ router.get('/historial', (req: Request, res: Response) => {
                   id: mesa.id,
                   numero: mesa.numero,
                   capacidad: mesa.capacidad,
-                  salon: mesa.salon,
+                  salon: mesa.salon_nombre || mesa.salon || 'Principal',
                   ocupada: mesa.ocupada
                 })),
                 mesero: row.mesero,
@@ -934,9 +937,10 @@ router.get('/:id', (req: Request, res: Response) => {
     
     // Obtener las mesas de la comanda
     const mesasQuery = `
-      SELECT m.* 
+      SELECT m.*, s.nombre as salon_nombre 
       FROM mesas m
       INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+      LEFT JOIN salones s ON m.salon_id = s.id
       WHERE cm.comanda_id = ?
     `;
     
@@ -990,7 +994,7 @@ router.get('/:id', (req: Request, res: Response) => {
             id: mesa.id,
             numero: mesa.numero,
             capacidad: mesa.capacidad,
-            salon: mesa.salon,
+            salon: mesa.salon_nombre || mesa.salon || 'Principal',
             ocupada: mesa.ocupada
           })),
           mesero: comandaRow.mesero,
@@ -1682,9 +1686,10 @@ function formatItemForPrint(item: any) {
 function imprimirItemsAdicionales(comandaId: string, comandaRow: any, itemsParaImprimir: any[]) {
   if (comandaRow.tipo_pedido === 'mesa') {
     const mesasQuery = `
-      SELECT m.* 
+      SELECT m.*, s.nombre as salon_nombre 
       FROM mesas m
       INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+      LEFT JOIN salones s ON m.salon_id = s.id
       WHERE cm.comanda_id = ?
     `;
 
@@ -1695,7 +1700,7 @@ function imprimirItemsAdicionales(comandaId: string, comandaRow: any, itemsParaI
           id: m.id,
           numero: m.numero,
           capacidad: m.capacidad,
-          salon: m.salon,
+          salon: m.salon_nombre || m.salon || 'Principal',
           ocupada: m.ocupada
         })) : [],
         mesero: comandaRow.mesero,
@@ -1746,9 +1751,10 @@ function imprimirItemsAdicionales(comandaId: string, comandaRow: any, itemsParaI
 function imprimirComandaCompleta(comandaId: string, comandaRow: any, itemsParaImprimir: any[]) {
   if (comandaRow.tipo_pedido === 'mesa') {
     const mesasQuery = `
-      SELECT m.* 
+      SELECT m.*, s.nombre as salon_nombre 
       FROM mesas m
       INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+      LEFT JOIN salones s ON m.salon_id = s.id
       WHERE cm.comanda_id = ?
     `;
 
@@ -1759,7 +1765,7 @@ function imprimirComandaCompleta(comandaId: string, comandaRow: any, itemsParaIm
           id: m.id,
           numero: m.numero,
           capacidad: m.capacidad,
-          salon: m.salon,
+          salon: m.salon_nombre || m.salon || 'Principal',
           ocupada: m.ocupada
         })) : [],
         mesero: comandaRow.mesero,

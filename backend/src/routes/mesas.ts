@@ -97,15 +97,27 @@ router.patch('/:id', (req: Request, res: Response) => {
     }
     
     // Obtener la mesa actualizada
-    db.get('SELECT * FROM mesas WHERE id = ?', [id], (err: any, row: Mesa) => {
+    const queryUpdatedPatch = `
+      SELECT m.*, s.nombre as salon_nombre 
+      FROM mesas m 
+      LEFT JOIN salones s ON m.salon_id = s.id 
+      WHERE m.id = ?
+    `;
+    db.get(queryUpdatedPatch, [id], (err: any, row: any) => {
       if (err) {
         console.error('Error al obtener mesa actualizada:', err);
         return res.status(500).json({ error: 'Error al obtener la mesa actualizada' });
       }
       
       const mesa = {
-        ...row,
-        ocupada: Boolean(row.ocupada)
+        id: row.id,
+        numero: row.numero,
+        capacidad: row.capacidad,
+        salon_id: row.salon_id,
+        salon: row.salon_nombre || 'Sin salón',
+        ocupada: Boolean(row.ocupada),
+        created_at: row.created_at,
+        updated_at: row.updated_at
       };
       
       res.json(mesa);
@@ -144,15 +156,27 @@ router.post('/', (req: Request, res: Response) => {
       }
       
       // Obtener la mesa creada
-      db.get('SELECT * FROM mesas WHERE id = ?', [this.lastID], (err: any, row: Mesa) => {
+      const queryCreated = `
+        SELECT m.*, s.nombre as salon_nombre 
+        FROM mesas m 
+        LEFT JOIN salones s ON m.salon_id = s.id 
+        WHERE m.id = ?
+      `;
+      db.get(queryCreated, [this.lastID], (err: any, row: any) => {
         if (err) {
           console.error('Error al obtener mesa creada:', err);
           return res.status(500).json({ error: 'Error al obtener la mesa creada' });
         }
         
         const mesa = {
-          ...row,
-          ocupada: Boolean(row.ocupada)
+          id: row.id,
+          numero: row.numero,
+          capacidad: row.capacidad,
+          salon_id: row.salon_id,
+          salon: row.salon_nombre || 'Sin salón',
+          ocupada: Boolean(row.ocupada),
+          created_at: row.created_at,
+          updated_at: row.updated_at
         };
         
         res.status(201).json(mesa);
@@ -183,15 +207,27 @@ router.put('/:id', (req: Request, res: Response) => {
     }
     
     // Obtener la mesa actualizada
-    db.get('SELECT * FROM mesas WHERE id = ?', [id], (err: any, row: Mesa) => {
+    const queryUpdatedPut = `
+      SELECT m.*, s.nombre as salon_nombre 
+      FROM mesas m 
+      LEFT JOIN salones s ON m.salon_id = s.id 
+      WHERE m.id = ?
+    `;
+    db.get(queryUpdatedPut, [id], (err: any, row: any) => {
       if (err) {
         console.error('Error al obtener mesa actualizada:', err);
         return res.status(500).json({ error: 'Error al obtener la mesa actualizada' });
       }
       
       const mesa = {
-        ...row,
-        ocupada: Boolean(row.ocupada)
+        id: row.id,
+        numero: row.numero,
+        capacidad: row.capacidad,
+        salon_id: row.salon_id,
+        salon: row.salon_nombre || 'Sin salón',
+        ocupada: Boolean(row.ocupada),
+        created_at: row.created_at,
+        updated_at: row.updated_at
       };
       
       res.json(mesa);

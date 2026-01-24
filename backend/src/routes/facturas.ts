@@ -48,9 +48,10 @@ router.post('/', verificarAutenticacion, verificarPermiso('gestionar_caja'), (re
 
     // Obtener las mesas de la comanda
     const mesasQuery = `
-      SELECT m.* 
+      SELECT m.*, s.nombre as salon_nombre 
       FROM mesas m
       INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+      LEFT JOIN salones s ON m.salon_id = s.id
       WHERE cm.comanda_id = ?
     `;
 
@@ -59,6 +60,14 @@ router.post('/', verificarAutenticacion, verificarPermiso('gestionar_caja'), (re
         console.error('Error al obtener mesas de comanda:', err);
         return res.status(500).json({ error: 'Error al obtener las mesas de la comanda' });
       }
+      
+      const mesasFormatted = mesasRows.map(m => ({
+        id: m.id,
+        numero: m.numero,
+        capacidad: m.capacidad,
+        salon: m.salon_nombre || m.salon || 'Principal',
+        ocupada: m.ocupada
+      }));
 
       // Obtener los items de la comanda
       const itemsQuery = `
@@ -196,7 +205,7 @@ router.post('/', verificarAutenticacion, verificarPermiso('gestionar_caja'), (re
                         id: mesa.id,
                         numero: mesa.numero,
                         capacidad: mesa.capacidad,
-                        salon: mesa.salon
+                        salon: mesa.salon_nombre || mesa.salon || 'Principal'
                       })),
                       items: itemsRows.map(item => ({
                         id: item.id,
@@ -269,9 +278,10 @@ router.get('/', (req: Request, res: Response) => {
       return new Promise((resolve, reject) => {
         // Obtener mesas de la factura a través de la comanda
         const mesasQuery = `
-          SELECT m.* 
+          SELECT m.*, s.nombre as salon_nombre 
           FROM mesas m
           INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+          LEFT JOIN salones s ON m.salon_id = s.id
           WHERE cm.comanda_id = ?
         `;
         
@@ -288,7 +298,7 @@ router.get('/', (req: Request, res: Response) => {
               id: mesa.id,
               numero: mesa.numero,
               capacidad: mesa.capacidad,
-              salon: mesa.salon
+              salon: mesa.salon_nombre || mesa.salon || 'Principal'
             })),
             subtotal: row.subtotal,
             total: row.total,
@@ -340,9 +350,10 @@ router.get('/:id', (req: Request, res: Response) => {
 
     // Obtener las mesas de la factura
     const mesasQuery = `
-      SELECT m.* 
+      SELECT m.*, s.nombre as salon_nombre 
       FROM mesas m
       INNER JOIN comanda_mesas cm ON m.id = cm.mesa_id
+      LEFT JOIN salones s ON m.salon_id = s.id
       WHERE cm.comanda_id = ?
     `;
 
@@ -378,7 +389,7 @@ router.get('/:id', (req: Request, res: Response) => {
             id: mesa.id,
             numero: mesa.numero,
             capacidad: mesa.capacidad,
-            salon: mesa.salon
+            salon: mesa.salon_nombre || mesa.salon || 'Principal'
           })),
           items: itemsRows.map(item => ({
             id: item.id,
