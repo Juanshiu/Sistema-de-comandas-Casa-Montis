@@ -6,13 +6,16 @@ const router = Router();
 
 const UNIDADES_VALIDAS = ['g', 'kg', 'ml', 'unidad'];
 
-const calcularEstadoInsumo = (stockActual: number, stockMinimo: number, stockCritico: number) => {
+const calcularEstadoInsumo = (stockActual: number, stockMinimo: number, stockCritico: number, cantidadUsada: number = 0) => {
+  if (cantidadUsada > 0 && stockActual < cantidadUsada) return 'AGOTADO';
+  if (stockActual <= 0) return 'AGOTADO';
   if (stockActual <= stockCritico) return 'CRITICO';
   if (stockActual <= stockMinimo) return 'BAJO';
   return 'OK';
 };
 
 const combinarEstadoRiesgo = (estadoActual: string | null, nuevoEstado: string) => {
+  if (estadoActual === 'AGOTADO' || nuevoEstado === 'AGOTADO') return 'AGOTADO';
   if (estadoActual === 'CRITICO' || nuevoEstado === 'CRITICO') return 'CRITICO';
   if (estadoActual === 'BAJO' || nuevoEstado === 'BAJO') return 'BAJO';
   return 'OK';
@@ -377,7 +380,7 @@ router.delete('/historial/limpiar', async (req: Request, res: Response) => {
 router.get('/riesgo/productos', async (req: Request, res: Response) => {
   try {
     const rows = await allAsync(
-      `SELECT pi.producto_id, i.stock_actual, i.stock_minimo, i.stock_critico
+      `SELECT pi.producto_id, i.stock_actual, i.stock_minimo, i.stock_critico, pi.cantidad_usada
        FROM producto_insumos pi
        JOIN insumos i ON pi.insumo_id = i.id
        JOIN productos p ON pi.producto_id = p.id
@@ -386,7 +389,7 @@ router.get('/riesgo/productos', async (req: Request, res: Response) => {
 
     const riesgos = new Map<number, string>();
     rows.forEach(row => {
-      const estado = calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico);
+      const estado = calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico, row.cantidad_usada);
       const actual = riesgos.get(row.producto_id) || null;
       riesgos.set(row.producto_id, combinarEstadoRiesgo(actual, estado));
     });
@@ -403,7 +406,7 @@ router.get('/riesgo/productos', async (req: Request, res: Response) => {
 router.get('/riesgo/personalizaciones', async (req: Request, res: Response) => {
   try {
     const rows = await allAsync(
-      `SELECT pi.item_personalizacion_id, i.stock_actual, i.stock_minimo, i.stock_critico
+      `SELECT pi.item_personalizacion_id, i.stock_actual, i.stock_minimo, i.stock_critico, pi.cantidad_ajuste
        FROM personalizacion_insumos pi
        JOIN insumos i ON pi.insumo_id = i.id
        JOIN items_personalizacion ip ON pi.item_personalizacion_id = ip.id
@@ -412,7 +415,7 @@ router.get('/riesgo/personalizaciones', async (req: Request, res: Response) => {
 
     const riesgos = new Map<number, string>();
     rows.forEach(row => {
-      const estado = calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico);
+      const estado = calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico, row.cantidad_ajuste);
       const actual = riesgos.get(row.item_personalizacion_id) || null;
       riesgos.set(row.item_personalizacion_id, combinarEstadoRiesgo(actual, estado));
     });

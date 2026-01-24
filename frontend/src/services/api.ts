@@ -219,12 +219,12 @@ export const apiService = {
     return response.data;
   },
 
-  async getRiesgoProductos(): Promise<{ producto_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' }[]> {
+  async getRiesgoProductos(): Promise<{ producto_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO' }[]> {
     const response = await api.get('/inventario-avanzado/riesgo/productos');
     return response.data;
   },
 
-  async getRiesgoPersonalizaciones(): Promise<{ item_personalizacion_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' }[]> {
+  async getRiesgoPersonalizaciones(): Promise<{ item_personalizacion_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO' }[]> {
     const response = await api.get('/inventario-avanzado/riesgo/personalizaciones');
     return response.data;
   },

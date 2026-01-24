@@ -26,7 +26,7 @@ export default function GestionPersonalizaciones() {
   const [items, setItems] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
   const [tipos, setTipos] = useState<any[]>([]);
-  const [riesgosPersonalizaciones, setRiesgosPersonalizaciones] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO'>>({});
+  const [riesgosPersonalizaciones, setRiesgosPersonalizaciones] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<string | number | null>(null);
@@ -116,8 +116,8 @@ export default function GestionPersonalizaciones() {
   const cargarRiesgosPersonalizaciones = async () => {
     try {
       const response = await apiService.getRiesgoPersonalizaciones();
-      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
-      response.forEach(item => {
+      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
+      response.forEach((item: any) => {
         mapa[item.item_personalizacion_id] = item.estado;
       });
       setRiesgosPersonalizaciones(mapa);
@@ -871,11 +871,13 @@ export default function GestionPersonalizaciones() {
                           {riesgosPersonalizaciones[item.id] ? (
                             <span
                               className={`text-xs px-2 py-1 rounded ${
-                                riesgosPersonalizaciones[item.id] === 'CRITICO'
-                                  ? 'bg-red-100 text-red-700'
-                                  : riesgosPersonalizaciones[item.id] === 'BAJO'
-                                    ? 'bg-yellow-100 text-yellow-700'
-                                    : 'bg-green-100 text-green-700'
+                                riesgosPersonalizaciones[item.id] === 'AGOTADO'
+                                  ? 'bg-red-600 text-white font-bold shadow-sm'
+                                  : riesgosPersonalizaciones[item.id] === 'CRITICO'
+                                    ? 'bg-red-100 text-red-700'
+                                    : riesgosPersonalizaciones[item.id] === 'BAJO'
+                                      ? 'bg-yellow-100 text-yellow-700'
+                                      : 'bg-green-100 text-green-700'
                               }`}
                             >
                               {riesgosPersonalizaciones[item.id]}

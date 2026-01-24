@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { PersonalizacionItem, Producto, ItemPersonalizacion } from '@/types';
+import { PersonalizacionItem, Producto, ItemPersonalizacion, ConfiguracionSistema } from '@/types';
 import { apiService } from '@/services/api';
-import { CheckCircle2, XCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, AlertCircle } from 'lucide-react';
 
 interface CategoriaConItems {
   id: number;
@@ -69,8 +69,12 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
     try {
       setLoading(true);
 
-      const riesgosResponse = await apiService.getRiesgoPersonalizaciones();
-      const riesgosMap: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
+      const [riesgosResponse, config] = await Promise.all([
+        apiService.getRiesgoPersonalizaciones(),
+        apiService.getConfiguracionSistema()
+      ]);
+
+      const riesgosMap: Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
       riesgosResponse.forEach(item => {
         riesgosMap[item.item_personalizacion_id] = item.estado;
       });
@@ -88,9 +92,7 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
       const categoriasCompletas = await Promise.all(
         categoriasParaCargar.map(async (cat) => {
           const items = await apiService.getItemsPersonalizacion(cat.id);
-          // Filtrar items disponibles considerando:
-          // 1. disponible = 1 o true
-          // 2. Si usa inventario, cantidad_actual > 0
+          // Filtrar items disponibles considerando inventario y reglas de bloqueo
           const itemsDisponibles = items.filter((item: any) => {
             const disponible = item.disponible === 1 || item.disponible === true;
             const usaInventario = Boolean(item.usa_inventario);
@@ -99,11 +101,14 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
             
             if (!disponible) return false;
 
-            if (riesgoInsumos === 'CRITICO') {
-              return false;
-            }
+            // Bloqueo por Insumos
+            // AGOTADO siempre bloquea. Los demás dependen de la configuración.
+            if (riesgoInsumos === 'AGOTADO') return false;
             
-            // Si usa inventario, verificar que tenga stock
+            if (config.critico_modo === 'CRITICO' && riesgoInsumos === 'CRITICO') return false;
+            if (config.critico_modo === 'BAJO' && (riesgoInsumos === 'CRITICO' || riesgoInsumos === 'BAJO')) return false;
+            
+            // Si usa inventario físico, verificar que tenga stock
             if (usaInventario) {
               return item.cantidad_actual !== null && item.cantidad_actual > 0;
             }

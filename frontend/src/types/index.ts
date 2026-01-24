@@ -43,7 +43,7 @@ export interface Insumo {
   categoria_id?: number | null;
   categoria_nombre?: string | null;
   activo?: boolean;
-  estado?: 'OK' | 'BAJO' | 'CRITICO';
+  estado?: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO';
   created_at?: string;
   updated_at?: string;
 }

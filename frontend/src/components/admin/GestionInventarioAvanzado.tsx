@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin, X, AlertCircle, Search, Filter, Tag } from 'lucide-react';
+import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin, X, AlertCircle, Search, Filter, Tag, Coffee } from 'lucide-react';
 import { apiService } from '@/services/api';
 import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, CategoriaPersonalizacion, ItemPersonalizacion, InsumoHistorial, ConfiguracionSistema, Proveedor, InsumoCategoria } from '@/types';
 
@@ -856,6 +856,7 @@ export default function GestionInventarioAvanzado() {
                     </td>
                     <td className="px-4 py-2">
                       <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full ${
+                        insumo.estado === 'AGOTADO' ? 'bg-red-600 text-white' :
                         insumo.estado === 'CRITICO' ? 'bg-red-100 text-red-700 border border-red-200' :
                         insumo.estado === 'BAJO' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
                         'bg-green-100 text-green-700 border border-green-200'
@@ -902,12 +903,12 @@ export default function GestionInventarioAvanzado() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           {/* Recetas por producto */}
           <div className="bg-white rounded-xl shadow-sm border border-secondary-200 flex flex-col">
-            <div className="p-6 border-b border-secondary-100 bg-secondary-50/50 rounded-t-xl">
-              <h3 className="text-xl font-bold text-secondary-900 flex items-center gap-2">
-                <RefreshCw size={22} className="text-secondary-500" />
+            <div className="p-6 border-b border-secondary-100 bg-blue-50/50 rounded-t-xl">
+              <h3 className="text-xl font-bold text-blue-900 flex items-center gap-2">
+                <Coffee size={22} className="text-blue-600" />
                 Recetas por Producto
               </h3>
-              <p className="text-sm text-secondary-500 mt-1">Configura los insumos que se descuentan al vender un plato.</p>
+              <p className="text-sm text-blue-600/70 mt-1 font-medium">Configura los insumos que se descuentan al vender un plato.</p>
             </div>
 
             <div className="p-6 space-y-6 flex-grow">
@@ -1047,12 +1048,12 @@ export default function GestionInventarioAvanzado() {
 
           {/* Ajustes por personalización */}
           <div className="bg-white rounded-xl shadow-sm border border-secondary-200 flex flex-col">
-            <div className="p-6 border-b border-secondary-100 bg-secondary-50/50 rounded-t-xl">
-              <h3 className="text-xl font-bold text-secondary-900 flex items-center gap-2">
-                <Plus size={22} className="text-purple-500" />
+            <div className="p-6 border-b border-secondary-100 bg-purple-50/50 rounded-t-xl">
+              <h3 className="text-xl font-bold text-purple-900 flex items-center gap-2">
+                <Plus size={22} className="text-purple-600" />
                 Insumos por Adición / Opción
               </h3>
-              <p className="text-sm text-secondary-500 mt-1">Define qué ingredientes gasta una personalización extra.</p>
+              <p className="text-sm text-purple-600/70 mt-1 font-medium">Define qué ingredientes gasta una personalización extra.</p>
             </div>
 
             <div className="p-6 space-y-6 flex-grow">

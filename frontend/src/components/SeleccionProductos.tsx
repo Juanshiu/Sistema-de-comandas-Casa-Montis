@@ -1,9 +1,9 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { Producto, ItemComanda, PersonalizacionItem } from '@/types';
+import { Producto, ItemComanda, PersonalizacionItem, ConfiguracionSistema } from '@/types';
 import { apiService } from '@/services/api';
-import { Plus, Minus, Trash2, Settings } from 'lucide-react';
+import { Plus, Minus, Trash2, Settings, AlertCircle } from 'lucide-react';
 import { getPersonalizacionPorCategoria } from '@/utils/personalizacionUtils';
 import PersonalizacionProducto from './PersonalizacionProducto';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
@@ -29,13 +29,24 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
   const [itemPersonalizando, setItemPersonalizando] = useState<string | null>(null);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<CategoriaPersonalizacion[]>([]);
   const [itemEliminando, setItemEliminando] = useState<{ id: string; nombre: string } | null>(null);
-  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO'>>({});
+  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
+  const [configSistema, setConfigSistema] = useState<ConfiguracionSistema | null>(null);
 
   useEffect(() => {
     cargarProductos();
     cargarCategoriasPersonalizacion();
     cargarRiesgosProductos();
+    cargarConfiguracion();
   }, [categoria]);
+
+  const cargarConfiguracion = async () => {
+    try {
+      const config = await apiService.getConfiguracionSistema();
+      setConfigSistema(config);
+    } catch (err) {
+      console.error('Error al cargar configuración:', err);
+    }
+  };
 
   const cargarCategoriasPersonalizacion = async () => {
     try {
@@ -67,8 +78,8 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
   const cargarRiesgosProductos = async () => {
     try {
       const response = await apiService.getRiesgoProductos();
-      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
-      response.forEach(item => {
+      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
+      response.forEach((item: any) => {
         mapa[item.producto_id] = item.estado;
       });
       setRiesgosProductos(mapa);
@@ -354,21 +365,44 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
                 ? getInventoryStatus(producto.cantidad_actual, producto.cantidad_inicial)
                 : null;
               const riesgoInsumos = producto.usa_insumos ? riesgosProductos[producto.id] : null;
-              const inventarioInsuficiente = inventoryStatus === 'DEPLETED' || riesgoInsumos === 'CRITICO';
+              
+              // Determinar si debemos bloquear el producto basándonos en la configuración
+              const bloqueadoPorInventarioFisico = inventoryStatus === 'DEPLETED';
+              
+              // AGOTADO siempre bloquea (porque físicamente no hay insumos suficientes para 1 unidad)
+              // CRITICO/BAJO bloquean según la configuración del sistema
+              const bloqueadoPorInsumos = 
+                riesgoInsumos === 'AGOTADO' ||
+                (configSistema?.critico_modo === 'CRITICO' && riesgoInsumos === 'CRITICO') ||
+                (configSistema?.critico_modo === 'BAJO' && (riesgoInsumos === 'CRITICO' || riesgoInsumos === 'BAJO'));
+
+              const inventarioInsuficiente = bloqueadoPorInventarioFisico || bloqueadoPorInsumos;
+              
               const inventarioBajo = inventoryStatus === 'LOW' || inventoryStatus === 'CRITICAL';
+              const avisoSoloInformativo = !bloqueadoPorInsumos && (riesgoInsumos === 'CRITICO' || riesgoInsumos === 'BAJO');
               
               return (
                 <div key={producto.id} className="border border-secondary-200 rounded-lg p-4 bg-white">
                   <div className="mb-3">
-                    <h3 className="font-semibold text-secondary-800 mb-1">
+                    <h3 className="font-semibold text-secondary-800 mb-1 flex items-center flex-wrap gap-1">
                       {producto.nombre}
-                      {inventarioInsuficiente && (
-                        <span className="ml-2 text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
-                          {riesgoInsumos === 'CRITICO' ? 'Agotado · Faltan insumos' : 'Agotado'}
+                      {bloqueadoPorInventarioFisico && (
+                        <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                          Agotado
                         </span>
                       )}
-                      {inventarioBajo && !inventarioInsuficiente && (
-                        <span className="ml-2 text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
+                      {(bloqueadoPorInsumos || riesgoInsumos === 'AGOTADO') && !bloqueadoPorInventarioFisico && (
+                        <span className="text-xs bg-red-100 text-red-800 px-2 py-0.5 rounded">
+                          {riesgoInsumos === 'AGOTADO' ? 'Insumos Agotados' : 'Faltan insumos'}
+                        </span>
+                      )}
+                      {avisoSoloInformativo && !bloqueadoPorInsumos && (
+                        <span className="text-xs bg-orange-100 text-orange-800 px-2 py-0.5 rounded flex items-center gap-1">
+                          <AlertCircle size={12} /> Insumos en riesgo
+                        </span>
+                      )}
+                      {inventarioBajo && !inventarioInsuficiente && !avisoSoloInformativo && (
+                        <span className="text-xs bg-yellow-100 text-yellow-800 px-2 py-0.5 rounded">
                           Bajo stock
                         </span>
                       )}

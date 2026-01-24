@@ -31,7 +31,7 @@ export default function GestionProductos() {
   const [filtroCategoria, setFiltroCategoria] = useState<string | 'todas'>('todas');
   const [categoriasDisponibles, setCategoriasDisponibles] = useState<string[]>([]);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
-  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO'>>({});
+  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [editandoId, setEditandoId] = useState<number | null>(null);
@@ -104,8 +104,8 @@ export default function GestionProductos() {
   const cargarRiesgosProductos = async () => {
     try {
       const response = await apiService.getRiesgoProductos();
-      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO'> = {};
-      response.forEach(item => {
+      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
+      response.forEach((item: any) => {
         mapa[item.producto_id] = item.estado;
       });
       setRiesgosProductos(mapa);
@@ -711,12 +711,14 @@ export default function GestionProductos() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       {riesgosProductos[producto.id] ? (
                         <span
-                          className={`text-xs px-2 py-1 rounded ${
-                            riesgosProductos[producto.id] === 'CRITICO'
-                              ? 'bg-red-100 text-red-700'
-                              : riesgosProductos[producto.id] === 'BAJO'
-                                ? 'bg-yellow-100 text-yellow-700'
-                                : 'bg-green-100 text-green-700'
+                          className={`text-xs px-2 py-1 rounded font-bold ${
+                            riesgosProductos[producto.id] === 'AGOTADO'
+                              ? 'bg-red-600 text-white'
+                              : riesgosProductos[producto.id] === 'CRITICO'
+                                ? 'bg-red-100 text-red-700'
+                                : riesgosProductos[producto.id] === 'BAJO'
+                                  ? 'bg-yellow-100 text-yellow-700'
+                                  : 'bg-green-100 text-green-700'
                           }`}
                         >
                           {riesgosProductos[producto.id]}
