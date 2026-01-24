@@ -566,7 +566,7 @@ export default function GestionInventarioAvanzado() {
           </div>
 
           {mostrarModalInsumo && (
-            <div className="fixed inset-0 bg-secondary-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-2xl overflow-hidden">
                 <div className="bg-white border-b px-6 py-4 flex justify-between items-center">
                   <h3 className="text-xl font-bold text-secondary-900">
@@ -1080,7 +1080,7 @@ export default function GestionInventarioAvanzado() {
           </div>
 
           {mostrarModalProveedor && (
-            <div className="fixed inset-0 bg-secondary-900/50 backdrop-blur-sm z-[60] flex items-center justify-center p-4">
+            <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
               <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl max-h-[90vh] overflow-y-auto">
                 <div className="sticky top-0 bg-white border-b px-6 py-4 flex justify-between items-center z-10">
                   <h3 className="text-xl font-bold text-secondary-900">
