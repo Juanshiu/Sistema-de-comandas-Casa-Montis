@@ -5,7 +5,7 @@ import {
   NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, 
   HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico,
   Insumo, RecetaProductoInsumo, AjustePersonalizacionInsumo, ConfiguracionSistema, InsumoHistorial,
-  Proveedor
+  Proveedor, InsumoCategoria
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -209,10 +209,12 @@ export const apiService = {
     await api.delete(`/proveedores/${id}`);
   },
 
-  async getInsumoHistorial(insumoId?: number, limit?: number): Promise<InsumoHistorial[]> {
+  async getInsumoHistorial(insumoId?: number, limit?: number, fechaInicio?: string, fechaFin?: string): Promise<InsumoHistorial[]> {
     const params: any = {};
     if (insumoId) params.insumo_id = insumoId;
     if (limit) params.limit = limit;
+    if (fechaInicio) params.fecha_inicio = fechaInicio;
+    if (fechaFin) params.fecha_fin = fechaFin;
     const response = await api.get('/inventario-avanzado/insumos/historial', { params });
     return response.data;
   },
@@ -275,6 +277,42 @@ export const apiService = {
 
   async importarProductosExcel(fileBase64: string): Promise<any> {
     const response = await api.post('/inventario-avanzado/productos/import', { fileBase64 });
+    return response.data;
+  },
+
+  async exportarPersonalizaciones(): Promise<Blob> {
+    const response = await api.get('/personalizaciones/export', { responseType: 'blob' });
+    return response.data;
+  },
+
+  async importarPersonalizaciones(fileBase64: string): Promise<any> {
+    const response = await api.post('/personalizaciones/import', { fileBase64 });
+    return response.data;
+  },
+
+  // Categorías de Insumos
+  async getInsumoCategorias(): Promise<InsumoCategoria[]> {
+    const response = await api.get('/insumo-categorias');
+    return response.data;
+  },
+
+  async createInsumoCategoria(categoria: Partial<InsumoCategoria>): Promise<InsumoCategoria> {
+    const response = await api.post('/insumo-categorias', categoria);
+    return response.data;
+  },
+
+  async updateInsumoCategoria(id: number, categoria: Partial<InsumoCategoria>): Promise<InsumoCategoria> {
+    const response = await api.put(`/insumo-categorias/${id}`, categoria);
+    return response.data;
+  },
+
+  async deleteInsumoCategoria(id: number): Promise<void> {
+    await api.delete(`/insumo-categorias/${id}`);
+  },
+
+  // Limpieza de historial
+  async limpiarHistorialInsumos(dias: number): Promise<{ message: string, deletedCount: number }> {
+    const response = await api.delete(`/inventario-avanzado/historial/limpiar`, { data: { dias } });
     return response.data;
   },
 

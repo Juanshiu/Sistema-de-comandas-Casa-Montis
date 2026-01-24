@@ -40,8 +40,19 @@ export interface Insumo {
   stock_minimo: number;
   stock_critico: number;
   costo_unitario?: number | null;
+  categoria_id?: number | null;
+  categoria_nombre?: string | null;
   activo?: boolean;
   estado?: 'OK' | 'BAJO' | 'CRITICO';
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface InsumoCategoria {
+  id: number;
+  nombre: string;
+  descripcion?: string;
+  activo?: boolean;
   created_at?: string;
   updated_at?: string;
 }

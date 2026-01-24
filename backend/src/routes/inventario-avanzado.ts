@@ -122,7 +122,14 @@ const validarInsumo = (data: any) => {
 // ===================== INSUMOS =====================
 
 router.get('/insumos', (req: Request, res: Response) => {
-  db.all('SELECT * FROM insumos WHERE activo = 1 ORDER BY nombre', [], (err, rows: any[]) => {
+  const query = `
+    SELECT i.*, ic.nombre as categoria_nombre 
+    FROM insumos i 
+    LEFT JOIN insumo_categorias ic ON i.categoria_id = ic.id 
+    WHERE i.activo = 1 
+    ORDER BY i.nombre
+  `;
+  db.all(query, [], (err, rows: any[]) => {
     if (err) {
       console.error('Error al obtener insumos:', err);
       return res.status(500).json({ error: 'Error al obtener insumos' });
@@ -139,7 +146,7 @@ router.get('/insumos', (req: Request, res: Response) => {
 });
 
 router.post('/insumos', async (req: Request, res: Response) => {
-  const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario } = req.body;
+  const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id } = req.body;
   const validacion = validarInsumo({ nombre, unidad_medida, stock_actual, stock_minimo, stock_critico });
 
   if (validacion.errores.length > 0) {
@@ -148,15 +155,16 @@ router.post('/insumos', async (req: Request, res: Response) => {
 
   try {
     await runAsync(
-      `INSERT INTO insumos (nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario)
-       VALUES (?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO insumos (nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
       [
         nombre.trim(),
         unidad_medida,
         validacion.stockActual,
         validacion.stockMinimo,
         validacion.stockCritico,
-        normalizarNumero(costo_unitario)
+        normalizarNumero(costo_unitario),
+        categoria_id || null
       ]
     );
 
@@ -177,7 +185,7 @@ router.post('/insumos', async (req: Request, res: Response) => {
 
 router.put('/insumos/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, activo } = req.body;
+  const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id, activo } = req.body;
   const validacion = validarInsumo({ nombre, unidad_medida, stock_actual, stock_minimo, stock_critico });
 
   if (validacion.errores.length > 0) {
@@ -187,7 +195,7 @@ router.put('/insumos/:id', async (req: Request, res: Response) => {
   try {
     await runAsync(
       `UPDATE insumos
-       SET nombre = ?, unidad_medida = ?, stock_actual = ?, stock_minimo = ?, stock_critico = ?, costo_unitario = ?, activo = ?, updated_at = CURRENT_TIMESTAMP
+       SET nombre = ?, unidad_medida = ?, stock_actual = ?, stock_minimo = ?, stock_critico = ?, costo_unitario = ?, categoria_id = ?, activo = ?, updated_at = CURRENT_TIMESTAMP
        WHERE id = ?`,
       [
         nombre.trim(),
@@ -196,6 +204,7 @@ router.put('/insumos/:id', async (req: Request, res: Response) => {
         validacion.stockMinimo,
         validacion.stockCritico,
         normalizarNumero(costo_unitario),
+        categoria_id || null,
         activo === undefined ? 1 : (activo ? 1 : 0),
         id
       ]
@@ -290,15 +299,26 @@ router.post('/insumos/:id/ajuste', async (req: Request, res: Response) => {
 
 // Historial de movimientos
 router.get('/insumos/historial', async (req: Request, res: Response) => {
-  const { insumo_id, limit } = req.query;
+  const { insumo_id, limit, fecha_inicio, fecha_fin } = req.query;
   const limitNum = Math.min(Math.max(Number(limit) || 100, 1), 500);
 
   try {
     const params: any[] = [];
     let where = 'WHERE 1=1';
+    
     if (insumo_id) {
       where += ' AND h.insumo_id = ?';
       params.push(Number(insumo_id));
+    }
+
+    if (fecha_inicio) {
+      where += ' AND DATE(h.fecha_hora) >= DATE(?)';
+      params.push(fecha_inicio);
+    }
+
+    if (fecha_fin) {
+      where += ' AND DATE(h.fecha_hora) <= DATE(?)';
+      params.push(fecha_fin);
     }
 
     const rows = await allAsync(
@@ -317,6 +337,39 @@ router.get('/insumos/historial', async (req: Request, res: Response) => {
   } catch (error) {
     console.error('Error al obtener historial de insumos:', error);
     res.status(500).json({ error: 'Error al obtener historial de insumos' });
+  }
+});
+
+// Limpiar historial antiguo
+router.delete('/historial/limpiar', async (req: Request, res: Response) => {
+  const { dias } = req.body;
+  const diasNum = Number(dias);
+
+  if (isNaN(diasNum) || diasNum < 0) {
+    return res.status(400).json({ error: 'Días inválidos' });
+  }
+
+  try {
+    const query = `
+      DELETE FROM insumo_historial 
+      WHERE datetime(fecha_hora) < datetime('now', '-' || ? || ' days')
+    `;
+    
+    // Obtener cuántos se van a borrar (opcional para informar)
+    const countResult = await getAsync(
+      `SELECT COUNT(*) as count FROM insumo_historial WHERE datetime(fecha_hora) < datetime('now', '-' || ? || ' days')`,
+      [diasNum]
+    );
+
+    await runAsync(query, [diasNum]);
+
+    res.json({ 
+      message: `Se han eliminado ${countResult.count} registros del historial de más de ${diasNum} días.`,
+      deletedCount: countResult.count 
+    });
+  } catch (error) {
+    console.error('Error al limpiar historial:', error);
+    res.status(500).json({ error: 'Error al limpiar historial' });
   }
 });
 
