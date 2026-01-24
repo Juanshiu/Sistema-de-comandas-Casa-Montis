@@ -83,6 +83,27 @@ export interface InsumoHistorial {
   tipo_evento: string;
   motivo?: string | null;
   usuario_id?: number | null;
+  proveedor_id?: number | null;
+  proveedor_nombre?: string | null;
+}
+
+export interface Proveedor {
+  id: number;
+  nombre: string;
+  documento?: string;
+  telefono?: string;
+  correo?: string;
+  direccion?: string;  descripcion?: string;  pais?: string;
+  departamento?: string;
+  ciudad?: string;
+  banco_nombre?: string;
+  banco_tipo_cuenta?: string;
+  banco_titular?: string;
+  banco_nit_titular?: string;
+  banco_numero_cuenta?: string;
+  activo?: boolean;
+  created_at?: string;
+  updated_at?: string;
 }
 
 export type CategoriaProducto = 

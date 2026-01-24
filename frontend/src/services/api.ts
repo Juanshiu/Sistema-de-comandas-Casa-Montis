@@ -4,7 +4,8 @@ import {
   ComandaHistorial, PaginatedResponse, Empleado, ConfiguracionNomina, 
   NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, 
   HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico,
-  Insumo, RecetaProductoInsumo, AjustePersonalizacionInsumo, ConfiguracionSistema, InsumoHistorial
+  Insumo, RecetaProductoInsumo, AjustePersonalizacionInsumo, ConfiguracionSistema, InsumoHistorial,
+  Proveedor
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
@@ -183,9 +184,29 @@ export const apiService = {
     await api.delete(`/inventario-avanzado/insumos/${id}`);
   },
 
-  async ajustarInsumo(id: number, data: { cantidad: number; motivo?: string }): Promise<Insumo> {
+  async ajustarInsumo(id: number, data: { cantidad: number; motivo?: string; proveedor_id?: number }): Promise<Insumo> {
     const response = await api.post(`/inventario-avanzado/insumos/${id}/ajuste`, data);
     return response.data;
+  },
+
+  // Proveedores
+  async getProveedores(): Promise<Proveedor[]> {
+    const response = await api.get('/proveedores');
+    return response.data;
+  },
+
+  async createProveedor(proveedor: Partial<Proveedor>): Promise<any> {
+    const response = await api.post('/proveedores', proveedor);
+    return response.data;
+  },
+
+  async updateProveedor(id: number, proveedor: Partial<Proveedor>): Promise<any> {
+    const response = await api.put(`/proveedores/${id}`, proveedor);
+    return response.data;
+  },
+
+  async deleteProveedor(id: number): Promise<void> {
+    await api.delete(`/proveedores/${id}`);
   },
 
   async getInsumoHistorial(insumoId?: number, limit?: number): Promise<InsumoHistorial[]> {
