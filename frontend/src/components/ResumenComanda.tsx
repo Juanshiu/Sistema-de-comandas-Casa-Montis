@@ -7,6 +7,7 @@ import { Printer, Send, AlertCircle } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
 import { getIconoCategoria } from '@/utils/personalizacionUtils';
+import { usePersonalizaciones } from './shared/hooks/usePersonalizaciones';
 
 interface ResumenComandaProps {
   formulario: FormularioComanda;
@@ -17,28 +18,11 @@ interface ResumenComandaProps {
 
 export default function ResumenComanda({ formulario, onObservacionesChange, modoEdicion = false, comandaId }: ResumenComandaProps) {
   const { usuario } = useAuth();
+  const { ordenarPersonalizaciones, obtenerInfoPersonalizacion, loading: loadingPersonalizaciones } = usePersonalizaciones();
   const [enviando, setEnviando] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState(false);
   const [mostrarDialogoImpresion, setMostrarDialogoImpresion] = useState(false);
-  const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
-
-  useEffect(() => {
-    cargarCategoriasPersonalizacion();
-  }, []);
-
-  const cargarCategoriasPersonalizacion = async () => {
-    try {
-      const categorias = await apiService.getCategoriasPersonalizacion();
-      setCategoriasPersonalizacion(
-        categorias
-          .filter((cat: any) => cat.activo)
-          .sort((a: any, b: any) => a.orden - b.orden)
-      );
-    } catch (error) {
-      console.error('Error al cargar categorías de personalización:', error);
-    }
-  };
 
   const calcularSubtotal = (): number => {
     return formulario.items.reduce((total: number, item: ItemComanda) => total + item.subtotal, 0);
@@ -182,48 +166,127 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
     const itemsParaPrevia = modoEdicion ? 
       formulario.items.filter((item: ItemComanda) => item.id.startsWith('temp_')) : 
       formulario.items;
-    
-    // Construir información de mesa o cliente según tipo de pedido
-    let infoMesaOCliente = '';
+
+    const ANCHO_LINEA = 48;
+    const separador = '========================';
+    const separadorCorto = '------------------------';
+
+    const dividirTexto = (texto: string, maxLength: number): string[] => {
+      if (texto.length <= maxLength) return [texto];
+      const palabras = texto.split(' ');
+      const lineas: string[] = [];
+      let lineaActual = '';
+      palabras.forEach(palabra => {
+        if ((lineaActual + ' ' + palabra).trim().length <= maxLength) {
+          lineaActual = lineaActual ? lineaActual + ' ' + palabra : palabra;
+        } else {
+          if (lineaActual) lineas.push(lineaActual);
+          lineaActual = palabra;
+        }
+      });
+      if (lineaActual) lineas.push(lineaActual);
+      return lineas;
+    };
+
+    const lineas: string[] = [];
+    const fecha = new Date();
+
+    // Encabezado similar a printer.ts
+    lineas.push(`Fecha: ${fecha.toLocaleDateString('es-CO')}`);
+    lineas.push(`Hora:  ${fecha.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}`);
+    lineas.push(`Atendido por: ${usuario?.nombre_completo || 'Usuario del Sistema'}`);
+    lineas.push('');
+
+    // Información de mesa o cliente
     if (formulario.tipo_pedido === 'domicilio' && formulario.datos_cliente) {
       if (formulario.datos_cliente.es_para_llevar) {
-        infoMesaOCliente = `PARA LLEVAR\nCliente: ${formulario.datos_cliente.nombre}\nTel: ${formulario.datos_cliente.telefono || 'N/A'}`;
+        lineas.push(`PARA LLEVAR: ${formulario.datos_cliente.nombre}`);
       } else {
-        infoMesaOCliente = `DOMICILIO\nCliente: ${formulario.datos_cliente.nombre}\nTel: ${formulario.datos_cliente.telefono || 'N/A'}\nDirección: ${formulario.datos_cliente.direccion}`;
+        lineas.push(`DOMICILIO: ${formulario.datos_cliente.nombre}`);
+        if (formulario.datos_cliente.direccion) {
+          lineas.push('Dirección:');
+          const dirLineas = dividirTexto(formulario.datos_cliente.direccion, ANCHO_LINEA - 2);
+          dirLineas.forEach(l => lineas.push(`  ${l}`));
+        }
+      }
+      if (formulario.datos_cliente.telefono) {
+        lineas.push(`Tel: ${formulario.datos_cliente.telefono}`);
       }
     } else if (formulario.mesas && formulario.mesas.length > 0) {
-      infoMesaOCliente = `Mesa(s): ${formulario.mesas.map((m: Mesa) => `${m.salon} - ${m.numero}`).join(', ')}\nCapacidad total: ${formulario.mesas.reduce((sum: number, mesa: Mesa) => sum + mesa.capacidad, 0)} personas`;
+      const mesasTexto = formulario.mesas.map((m: Mesa) => `${m.numero}`).join(', ');
+      if (mesasTexto.length <= 24) {
+        lineas.push(`Mesa(s): ${mesasTexto}`);
+      } else {
+        lineas.push('Mesa(s):');
+        const mesasLineas = dividirTexto(mesasTexto, ANCHO_LINEA - 2);
+        mesasLineas.forEach(l => lineas.push(`  ${l}`));
+      }
     }
-    
-    const comandaInfo = `
-CASA MONTIS - VISTA PREVIA ${modoEdicion ? 'ITEMS ADICIONALES' : 'COMANDA'}
-=======================================
-Atendido por: ${usuario?.nombre_completo || 'Usuario del Sistema'}
-${infoMesaOCliente}
-${modoEdicion ? '\n⚠️  ESTOS SON ITEMS ADICIONALES' : ''}
-${modoEdicion ? '⚠️  PARA COMANDA EXISTENTE\n' : ''}
 
-PRODUCTOS:
-${itemsParaPrevia.map((item: ItemComanda) => {
-  let itemText = `${item.cantidad}x ${item.producto.nombre} - $${item.subtotal.toLocaleString('es-CO')}`;
-  if (item.personalizacion && Object.keys(item.personalizacion).filter(k => k !== 'precio_adicional').length > 0) {
-    itemText += `\n   🔹 PERSONALIZACIÓN APLICADA`;
-    if (item.personalizacion.precio_adicional && item.personalizacion.precio_adicional > 0) {
-      itemText += ` (+$${item.personalizacion.precio_adicional.toLocaleString('es-CO')})`;
+    lineas.push('');
+    lineas.push(separador);
+    if (modoEdicion) {
+      lineas.push('    ⚠️  ITEMS ADICIONALES');
+      lineas.push(separador);
     }
-  }
-  if (item.observaciones) {
-    itemText += `\n   Obs: ${item.observaciones}`;
-  }
-  return itemText;
-}).join('\n')}
+    lineas.push('');
 
-${formulario.observaciones_generales ? `\nObservaciones: ${formulario.observaciones_generales}` : ''}
+    // Items
+    if (itemsParaPrevia.length > 0) {
+      itemsParaPrevia.forEach((item: ItemComanda, index: number) => {
+        if (index > 0) lineas.push(separadorCorto);
 
-${modoEdicion ? 'TOTAL ADICIONAL' : 'SUBTOTAL'}: $${itemsParaPrevia.reduce((sum: number, item: ItemComanda) => sum + item.subtotal, 0).toLocaleString('es-CO')}
-${!modoEdicion ? `TOTAL: $${calcularTotal().toLocaleString('es-CO')}` : ''}
-=======================================
-    `.trim();
+        const nombreProducto = item.producto.nombre;
+        const cantidadTexto = `${item.cantidad}x`;
+        const productoCompleto = `${cantidadTexto} ${nombreProducto}`;
+
+        if (productoCompleto.length > ANCHO_LINEA) {
+          lineas.push(cantidadTexto);
+          lineas.push(`  ${nombreProducto}`);
+        } else {
+          lineas.push(productoCompleto);
+        }
+
+        // Personalización
+        if (item.personalizacion && Object.keys(item.personalizacion).length > 0) {
+          const entradasOrdenadas = ordenarPersonalizaciones(item.personalizacion);
+          entradasOrdenadas.forEach(([catId, itemId]) => {
+            const info = obtenerInfoPersonalizacion(parseInt(catId), itemId);
+            if (info) {
+              lineas.push(`  ${info.item}`);
+            }
+          });
+        }
+
+        // Observaciones del item
+        if (item.observaciones && item.observaciones.trim() !== '') {
+          lineas.push('');
+          lineas.push('  OBSERVACIONES:');
+          const obsLineas = dividirTexto(item.observaciones, ANCHO_LINEA - 4);
+          obsLineas.forEach(l => lineas.push(`    ${l}`));
+        }
+      });
+    } else {
+      lineas.push('No hay items');
+    }
+
+    lineas.push('');
+    lineas.push(separador);
+
+    // Observaciones generales
+    if (formulario.observaciones_generales && formulario.observaciones_generales.trim() !== '') {
+      lineas.push('');
+      lineas.push('OBSERVACIONES GENERALES:');
+      const obsLines = dividirTexto(formulario.observaciones_generales, ANCHO_LINEA);
+      obsLines.forEach(l => lineas.push(l));
+    }
+
+    lineas.push('');
+    lineas.push('     ENVIADO A COCINA');
+    lineas.push(separador);
+    lineas.push(separador);
+
+    const comandaInfo = lineas.join('\n');
 
     // Mostrar en una ventana emergente
     const nuevaVentana = window.open('', '_blank', 'width=600,height=700');
