@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { Mesa, Comanda } from '@/types';
 import { apiService } from '@/services/api';
-import { Users, Check, X, User, Edit, Clock, AlertCircle, Repeat } from 'lucide-react';
+import { Users, Check, X, User, Edit, Clock, AlertCircle, Repeat, Merge } from 'lucide-react';
 
 interface SeleccionMesaProps {
   mesasSeleccionadas: Mesa[];
@@ -28,6 +28,13 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
   const [mesasSeleccionadasCambio, setMesasSeleccionadasCambio] = useState<Mesa[]>([]);
   const [cambiandoMesa, setCambiandoMesa] = useState(false);
   const [errorCambioMesa, setErrorCambioMesa] = useState<string | null>(null);
+
+  // Estados para combinar comandas
+  const [mostrarModalCombine, setMostrarModalCombine] = useState(false);
+  const [comandaDestinoCombine, setComandaDestinoCombine] = useState<Comanda | null>(null);
+  const [comandaOrigenCombine, setComandaOrigenCombine] = useState<Comanda | null>(null);
+  const [combinandoComandas, setCombinandoComandas] = useState(false);
+  const [errorCombine, setErrorCombine] = useState<string | null>(null);
   
   // Ref para preservar posición del scroll
   const scrollPosRef = useRef(0);
@@ -209,6 +216,84 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
       setErrorCambioMesa(error.response?.data?.error || 'Error al cambiar la mesa');
     } finally {
       setCambiandoMesa(false);
+    }
+  };
+
+  // Funciones para combinar comandas
+  const iniciarCombinarComanda = (comandaDestino: Comanda) => {
+    setComandaDestinoCombine(comandaDestino);
+    setComandaOrigenCombine(null);
+    setErrorCombine(null);
+    setMostrarModalCombine(true);
+  };
+
+  const cancelarCombinarComanda = () => {
+    setMostrarModalCombine(false);
+    setComandaDestinoCombine(null);
+    setComandaOrigenCombine(null);
+    setErrorCombine(null);
+  };
+
+  const confirmarCombinacion = async () => {
+    if (!comandaDestinoCombine || !comandaOrigenCombine) {
+      setErrorCombine('Debe seleccionar la comanda que desea fusionar');
+      return;
+    }
+
+    try {
+      setCombinandoComandas(true);
+      setErrorCombine(null);
+
+      await apiService.combinarComandas(comandaDestinoCombine.id, comandaOrigenCombine.id);
+      
+      // Recargar datos
+      await cargarMesas();
+      await cargarComandasActivas();
+      
+      // Cerrar modal
+      cancelarCombinarComanda();
+      
+      console.log('✅ Comandas combinadas exitosamente');
+    } catch (error: any) {
+      console.error('Error al combinar comandas:', error);
+      setErrorCombine(error.response?.data?.error || 'Error al combinar las comandas');
+    } finally {
+      setCombinandoComandas(false);
+    }
+  };
+
+  const getStatusBadgeStyles = (estado: string) => {
+    switch (estado) {
+      case 'pendiente':
+      case 'abierta':
+        return 'bg-yellow-100 text-yellow-800';
+      case 'preparando':
+      case 'en_preparacion':
+        return 'bg-blue-100 text-blue-800';
+      case 'lista':
+        return 'bg-green-100 text-green-800';
+      case 'entregada':
+        return 'bg-gray-100 text-gray-800';
+      case 'cancelada':
+        return 'bg-red-100 text-red-800';
+      default:
+        return 'bg-secondary-100 text-secondary-800';
+    }
+  };
+
+  const getStatusIcon = (estado: string) => {
+    switch (estado) {
+      case 'pendiente':
+      case 'abierta':
+        return <Clock size={12} />;
+      case 'preparando':
+      case 'en_preparacion':
+        return <AlertCircle size={12} />;
+      case 'lista':
+      case 'entregada':
+        return <Check size={12} />;
+      default:
+        return <Clock size={12} />;
     }
   };
 
@@ -419,11 +504,9 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                               Mesero: {comanda.mesero}
                             </p>
                           </div>
-                          <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${
-                            comanda.estado === 'preparando' ? 'bg-blue-100 text-blue-800' : 'bg-green-100 text-green-800'
-                          }`}>
-                            {comanda.estado === 'preparando' ? <AlertCircle size={12} /> : <Check size={12} />}
-                            <span className="capitalize">{comanda.estado}</span>
+                          <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${getStatusBadgeStyles(comanda.estado)}`}>
+                            {getStatusIcon(comanda.estado)}
+                            <span className="capitalize">{comanda.estado.replace('_', ' ')}</span>
                           </div>
                         </div>
                         <div className="text-sm text-secondary-600 mb-2">
@@ -433,19 +516,32 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                           <span className="text-lg font-bold text-primary-600">
                             ${comanda.total.toLocaleString()}
                           </span>
-                          <div className="flex space-x-2">
+                          <div className="flex flex-wrap justify-end gap-2">
                             {comanda.tipo_pedido !== 'domicilio' && (
-                              <button
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  iniciarCambioMesa(comanda);
-                                }}
-                                className="text-orange-600 hover:text-orange-800 text-sm flex items-center px-2 py-1 rounded hover:bg-orange-50"
-                                title="Cambiar mesa"
-                              >
-                                <Repeat size={14} className="mr-1" />
-                                Cambiar Mesa
-                              </button>
+                              <>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    iniciarCombinarComanda(comanda);
+                                  }}
+                                  className="text-purple-600 hover:text-purple-800 text-sm flex items-center px-2 py-1 rounded hover:bg-purple-50 transition-colors"
+                                  title="Combinar con otra comanda"
+                                >
+                                  <Merge size={14} className="mr-1" />
+                                  Combinar
+                                </button>
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    iniciarCambioMesa(comanda);
+                                  }}
+                                  className="text-orange-600 hover:text-orange-800 text-sm flex items-center px-2 py-1 rounded hover:bg-orange-50 transition-colors"
+                                  title="Cambiar mesa"
+                                >
+                                  <Repeat size={14} className="mr-1" />
+                                  Cambiar Mesa
+                                </button>
+                              </>
                             )}
                             <button
                               onClick={(e) => {
@@ -591,6 +687,126 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                     <>
                       <Check size={16} className="mr-2" />
                       Confirmar Cambio
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de Combinar Comandas */}
+      {mostrarModalCombine && comandaDestinoCombine && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+            <div className="sticky top-0 bg-white border-b border-secondary-200 p-6 z-10">
+              <div className="flex justify-between items-center">
+                <div>
+                  <h2 className="text-2xl font-bold text-secondary-800 flex items-center">
+                    <Merge className="mr-2 text-purple-600" size={24} />
+                    Combinar Comandas
+                  </h2>
+                  <p className="text-sm text-secondary-600 mt-1">
+                    Destino: {comandaDestinoCombine.tipo_pedido === 'domicilio' 
+                      ? `Domicilio - ${comandaDestinoCombine.datos_cliente?.nombre}`
+                      : `Mesas: ${comandaDestinoCombine.mesas.map(m => m.numero).join(', ')}`
+                    }
+                  </p>
+                </div>
+                <button
+                  onClick={cancelarCombinarComanda}
+                  className="text-secondary-500 hover:text-secondary-700"
+                  disabled={combinandoComandas}
+                >
+                  <X size={24} />
+                </button>
+              </div>
+            </div>
+
+            <div className="p-6">
+              <div className="mb-6 p-4 bg-purple-50 border border-purple-200 rounded-lg">
+                <p className="text-sm text-purple-800">
+                  Selecciona la comanda que deseas **fusionar hacia** la comanda de destino. 
+                  Todos los productos y mesas se unirán en una sola cuenta. Esta acción no se puede deshacer.
+                </p>
+              </div>
+
+              {errorCombine && (
+                <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg text-red-800 text-sm">
+                  {errorCombine}
+                </div>
+              )}
+
+              <h3 className="font-semibold text-secondary-700 mb-3">Comandas Disponibles</h3>
+              <div className="space-y-3">
+                {comandasActivas
+                  .filter(c => c.id !== comandaDestinoCombine.id)
+                  .map(comanda => (
+                    <button
+                      key={comanda.id}
+                      onClick={() => setComandaOrigenCombine(comanda)}
+                      className={`w-full text-left p-4 rounded-lg border-2 transition-all ${
+                        comandaOrigenCombine?.id === comanda.id
+                          ? 'border-purple-500 bg-purple-50'
+                          : 'border-secondary-200 hover:border-purple-300 hover:bg-secondary-25'
+                      }`}
+                    >
+                      <div className="flex justify-between items-center">
+                        <div>
+                          <p className="font-bold text-secondary-900">
+                            {comanda.tipo_pedido === 'domicilio' 
+                              ? `🏠 ${comanda.datos_cliente?.nombre || 'Domicilio'}`
+                              : `🪑 Mesas: ${comanda.mesas.map(m => m.numero).join(', ')}`
+                            }
+                          </p>
+                          <p className="text-xs text-secondary-500">
+                            Mesero: {comanda.mesero} | {comanda.items?.length || 0} items
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold text-purple-600">
+                            ${comanda.total.toLocaleString()}
+                          </p>
+                          {comandaOrigenCombine?.id === comanda.id && (
+                            <Check size={18} className="ml-auto text-purple-600" />
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))
+                }
+                {comandasActivas.length <= 1 && (
+                  <p className="text-center py-8 text-secondary-500 italic">
+                    No hay otras comandas activas para combinar.
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="sticky bottom-0 bg-white border-t border-secondary-200 p-6">
+              <div className="flex justify-end space-x-3">
+                <button
+                  onClick={cancelarCombinarComanda}
+                  disabled={combinandoComandas}
+                  className="px-6 py-2 text-secondary-700 border border-secondary-300 rounded-lg hover:bg-secondary-50 disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={confirmarCombinacion}
+                  disabled={!comandaOrigenCombine || combinandoComandas}
+                  className="px-6 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center font-bold"
+                >
+                  {combinandoComandas ? (
+                    <>
+                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2"></div>
+                      Fusionando...
+                    </>
+                  ) : (
+                    <>
+                      <Merge size={16} className="mr-2" />
+                      Confirmar y Fusionar
                     </>
                   )}
                 </button>

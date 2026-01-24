@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { Mesa, FormularioComanda, ItemComanda, PasoComanda, Comanda, DatosCliente } from '@/types';
-import SeleccionMesaYMesero from './SeleccionMesaYMesero';
+import SeleccionMesaYMesero from './SeleccionMesa';
 import SeleccionTipoPedido from './SeleccionTipoPedido';
 import FormularioDatosCliente from './FormularioDatosCliente';
 import SeleccionTipoServicio from './SeleccionTipoServicio';

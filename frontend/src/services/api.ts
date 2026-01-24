@@ -362,6 +362,13 @@ export const apiService = {
     return response.data;
   },
 
+  async combinarComandas(targetId: string, origenId: string): Promise<any> {
+    const response = await api.patch(`/comandas/${targetId}/combinar`, { 
+      origen_id: origenId 
+    });
+    return response.data;
+  },
+
   async getHistorialComandas(fecha?: string, page: number = 1, limit: number = 20): Promise<PaginatedResponse<ComandaHistorial>> {
     const params = new URLSearchParams();
     if (fecha) params.append('fecha', fecha);

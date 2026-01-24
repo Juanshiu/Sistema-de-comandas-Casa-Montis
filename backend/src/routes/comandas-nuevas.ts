@@ -2033,6 +2033,107 @@ router.patch('/:id/cambiar-mesa', (req: Request, res: Response) => {
   });
 });
 
+// Combinar dos comandas activas
+router.patch('/:id/combinar', (req: Request, res: Response) => {
+  const { id } = req.params; // Comanda destino
+  const { origen_id } = req.body; // Comanda origen (la que desaparecerá)
+
+  if (!origen_id) {
+    return res.status(400).json({ error: 'Debe proporcionar la comanda de origen' });
+  }
+
+  if (id === origen_id) {
+    return res.status(400).json({ error: 'No se puede combinar una comanda con ella misma' });
+  }
+
+  console.log('🔗 ===== COMBINAR COMANDAS =====');
+  console.log('🔗 Destino (permanece):', id);
+  console.log('🔗 Origen (se fusiona):', origen_id);
+
+  db.serialize(() => {
+    db.run('BEGIN TRANSACTION');
+
+    // 1. Verificar existencia de ambas comandas
+    db.all('SELECT * FROM comandas WHERE id IN (?, ?)', [id, origen_id], (err: any, rows: any[]) => {
+      if (err) {
+        db.run('ROLLBACK');
+        return res.status(500).json({ error: 'Error al verificar comandas' });
+      }
+
+      if (rows.length !== 2) {
+        db.run('ROLLBACK');
+        return res.status(404).json({ error: 'Una o ambas comandas no fueron encontradas' });
+      }
+
+      const comandaDestino = rows.find(r => r.id === id);
+      const comandaOrigen = rows.find(r => r.id === origen_id);
+
+      // 2. Transferir los items de la comanda origen a la destino
+      db.run('UPDATE comanda_items SET comanda_id = ? WHERE comanda_id = ?', [id, origen_id], (err: any) => {
+        if (err) {
+          console.error('Error al transferir items:', err);
+          db.run('ROLLBACK');
+          return res.status(500).json({ error: 'Error al transferir los items de la comanda' });
+        }
+
+        // 3. Transferir las mesas de la comanda origen a la destino 
+        db.run('UPDATE comanda_mesas SET comanda_id = ? WHERE comanda_id = ?', [id, origen_id], (err: any) => {
+          if (err) {
+            console.error('Error al transferir mesas:', err);
+            db.run('ROLLBACK');
+            return res.status(500).json({ error: 'Error al fusionar las mesas' });
+          }
+
+          // 4. Actualizar totales de la comanda destino
+          const nuevoSubtotal = (comandaDestino.subtotal || 0) + (comandaOrigen.subtotal || 0);
+          const nuevoTotal = (comandaDestino.total || 0) + (comandaOrigen.total || 0);
+
+          db.run(
+            'UPDATE comandas SET subtotal = ?, total = ?, fecha_actualizacion = CURRENT_TIMESTAMP WHERE id = ?',
+            [nuevoSubtotal, nuevoTotal, id],
+            (err: any) => {
+              if (err) {
+                console.error('Error al actualizar totales:', err);
+                db.run('ROLLBACK');
+                return res.status(500).json({ error: 'Error al actualizar el total de la comanda final' });
+              }
+
+              // 5. Eliminar la comanda origen
+              db.run('DELETE FROM comandas WHERE id = ?', [origen_id], (err: any) => {
+                if (err) {
+                  console.error('Error al eliminar comanda origen:', err);
+                  db.run('ROLLBACK');
+                  return res.status(500).json({ error: 'Error al finalizar la fusión' });
+                }
+
+                // 6. Transferir historial para trazabilidad
+                db.run('UPDATE comanda_historial SET comanda_id = ? WHERE comanda_id = ?', [id, origen_id], (err: any) => {
+                  if (err) {
+                    console.warn('⚠️ No se pudo transferir el historial completamente');
+                  }
+                  
+                  db.run('COMMIT', (err: any) => {
+                    if (err) {
+                      db.run('ROLLBACK');
+                      return res.status(500).json({ error: 'Error al confirmar la transacción' });
+                    }
+                    console.log('✅ Fusión completada satisfactoriamente');
+                    res.json({ 
+                      message: 'Comandas combinadas exitosamente',
+                      comanda_final_id: id,
+                      nuevo_total: nuevoTotal
+                    });
+                  });
+                });
+              });
+            }
+          );
+        });
+      });
+    });
+  });
+});
+
 // Eliminar comanda
 router.delete('/:id', (req: Request, res: Response) => {
   const { id } = req.params;

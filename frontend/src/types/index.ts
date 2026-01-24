@@ -215,7 +215,7 @@ export interface ComandaHistorial {
   cliente_nombre?: string;
 }
 
-export type EstadoComanda = 'abierta' | 'en_preparacion' | 'lista' | 'entregada' | 'pagada' | 'cancelada';
+export type EstadoComanda = 'pendiente' | 'preparando' | 'lista' | 'entregada' | 'pagada' | 'cancelada' | 'facturada' | 'abierta' | 'en_preparacion';
 
 export interface Factura {
   id: number;
