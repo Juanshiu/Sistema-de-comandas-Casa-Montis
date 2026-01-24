@@ -1,8 +1,52 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../database/init';
 import { v4 as uuidv4 } from 'uuid';
+import * as XLSX from 'xlsx';
 
 const router = Router();
+
+// Helpers para base de datos async
+const runAsync = (sql: string, params: any[] = []): Promise<void> => {
+  return new Promise((resolve, reject) => {
+    db.run(sql, params, (err) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve();
+    });
+  });
+};
+
+const getAsync = (sql: string, params: any[] = []): Promise<any> => {
+  return new Promise((resolve, reject) => {
+    db.get(sql, params, (err, row) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(row);
+    });
+  });
+};
+
+const allAsync = (sql: string, params: any[] = []): Promise<any[]> => {
+  return new Promise((resolve, reject) => {
+    db.all(sql, params, (err, rows) => {
+      if (err) {
+        reject(err);
+        return;
+      }
+      resolve(rows || []);
+    });
+  });
+};
+
+const normalizarNumero = (val: any): number | null => {
+  if (val === null || val === undefined || val === '') return null;
+  const num = Number(val);
+  return isNaN(num) ? null : num;
+};
 
 // ========== CATEGORÍAS DE PERSONALIZACIÓN ==========
 
@@ -412,6 +456,130 @@ router.patch('/categorias/:categoriaId/items/:itemId/disponibilidad', (req: Requ
       });
     });
   });
+});
+
+// ========== IMPORTAR / EXPORTAR PERSONALIZACIONES ==========
+
+router.get('/export', async (req: Request, res: Response) => {
+  try {
+    const categorias = await allAsync('SELECT * FROM categorias_personalizacion ORDER BY orden, nombre');
+    const items = await allAsync('SELECT * FROM items_personalizacion ORDER BY categoria_id, nombre');
+
+    const wb = XLSX.utils.book_new();
+    
+    const wsCategorias = XLSX.utils.json_to_sheet(categorias);
+    XLSX.utils.book_append_sheet(wb, wsCategorias, 'Categorias');
+    
+    const wsItems = XLSX.utils.json_to_sheet(items);
+    XLSX.utils.book_append_sheet(wb, wsItems, 'Items');
+
+    const buffer = XLSX.write(wb, { type: 'buffer', bookType: 'xlsx' });
+    
+    res.setHeader('Content-Disposition', 'attachment; filename=personalizaciones.xlsx');
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+    res.send(buffer);
+  } catch (error) {
+    console.error('Error al exportar personalizaciones:', error);
+    res.status(500).json({ error: 'Error al exportar personalizaciones' });
+  }
+});
+
+router.post('/import', async (req: Request, res: Response) => {
+  const { fileBase64 } = req.body;
+  if (!fileBase64) {
+    return res.status(400).json({ error: 'Archivo no proporcionado' });
+  }
+
+  try {
+    const buffer = Buffer.from(fileBase64, 'base64');
+    const wb = XLSX.read(buffer, { type: 'buffer' });
+    
+    const categoriasSheet = wb.Sheets['Categorias'];
+    const itemsSheet = wb.Sheets['Items'];
+
+    if (!categoriasSheet) {
+      return res.status(400).json({ error: 'Falta la hoja de "Categorias" en el archivo' });
+    }
+
+    const categoriasRows: any[] = XLSX.utils.sheet_to_json(categoriasSheet);
+    const itemsRows: any[] = itemsSheet ? XLSX.utils.sheet_to_json(itemsSheet) : [];
+
+    await runAsync('BEGIN TRANSACTION');
+
+    // Mapeo para mantener consistencia de IDs de categorías si cambian en la base de datos
+    // En una importación destructiva/reemplazo total, esto es más simple.
+    // Aquí haremos un "Upsert" basado en el nombre de la categoría.
+
+    for (const catRow of categoriasRows) {
+      if (!catRow.nombre) continue;
+
+      const existingCat = await getAsync('SELECT id FROM categorias_personalizacion WHERE nombre = ?', [catRow.nombre]);
+      let catId: number;
+
+      if (existingCat) {
+        catId = existingCat.id;
+        await runAsync(
+          'UPDATE categorias_personalizacion SET descripcion = ?, orden = ?, activo = ? WHERE id = ?',
+          [catRow.descripcion || '', catRow.orden || 0, catRow.activo === 0 ? 0 : 1, catId]
+        );
+      } else {
+        await runAsync(
+          'INSERT INTO categorias_personalizacion (nombre, descripcion, orden, activo) VALUES (?, ?, ?, ?)',
+          [catRow.nombre, catRow.descripcion || '', catRow.orden || 0, catRow.activo === 0 ? 0 : 1]
+        );
+        const newCat = await getAsync('SELECT id FROM categorias_personalizacion WHERE nombre = ?', [catRow.nombre]);
+        catId = newCat.id;
+      }
+
+      // Ahora procesar los items para esta categoría
+      const itemsDeEstaCat = itemsRows.filter(i => {
+        // Puede venir por categoria_id (original) o por un campo categoria_nombre si lo añadimos al excel
+        // Por simplicidad en este caso, usaremos el ID original pero verificando si el nombre coincide.
+        return i.categoria_id === catRow.id;
+      });
+
+      for (const itemRow of itemsDeEstaCat) {
+        if (!itemRow.nombre) continue;
+
+        const existingItem = await getAsync(
+          'SELECT id FROM items_personalizacion WHERE categoria_id = ? AND nombre = ?',
+          [catId, itemRow.nombre]
+        );
+
+        if (existingItem) {
+          await runAsync(
+            'UPDATE items_personalizacion SET descripcion = ?, precio_adicional = ?, activo = ?, disponible = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+            [
+              itemRow.descripcion || '',
+              normalizarNumero(itemRow.precio_adicional) || 0,
+              itemRow.activo === 0 ? 0 : 1,
+              itemRow.disponible === 0 ? 0 : 1,
+              existingItem.id
+            ]
+          );
+        } else {
+          await runAsync(
+            'INSERT INTO items_personalizacion (categoria_id, nombre, descripcion, precio_adicional, activo, disponible) VALUES (?, ?, ?, ?, ?, ?)',
+            [
+              catId,
+              itemRow.nombre,
+              itemRow.descripcion || '',
+              normalizarNumero(itemRow.precio_adicional) || 0,
+              itemRow.activo === 0 ? 0 : 1,
+              itemRow.disponible === 0 ? 0 : 1
+            ]
+          );
+        }
+      }
+    }
+
+    await runAsync('COMMIT');
+    res.json({ mensaje: 'Personalizaciones importadas correctamente' });
+  } catch (error) {
+    console.error('Error al importar personalizaciones:', error);
+    try { await runAsync('ROLLBACK'); } catch (e) {}
+    res.status(500).json({ error: 'Error al importar personalizaciones' });
+  }
 });
 
 export default router;
