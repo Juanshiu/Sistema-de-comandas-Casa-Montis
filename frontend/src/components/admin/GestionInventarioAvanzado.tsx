@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from 'react';
-import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw } from 'lucide-react';
+import { useEffect, useState, useCallback, Fragment } from 'react';
+import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin } from 'lucide-react';
 import { apiService } from '@/services/api';
-import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, CategoriaPersonalizacion, ItemPersonalizacion, InsumoHistorial, ConfiguracionSistema } from '@/types';
+import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, CategoriaPersonalizacion, ItemPersonalizacion, InsumoHistorial, ConfiguracionSistema, Proveedor } from '@/types';
 
 const unidades = ['g', 'kg', 'ml', 'unidad'];
 
@@ -17,12 +17,34 @@ interface InsumoForm {
 }
 
 export default function GestionInventarioAvanzado() {
-  const [tab, setTab] = useState<'insumos' | 'recetas' | 'ajustes' | 'historial' | 'importacion' | 'configuracion'>('insumos');
+  const [tab, setTab] = useState<'insumos' | 'recetas' | 'ajustes' | 'historial' | 'importacion' | 'configuracion' | 'proveedores'>('insumos');
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
   const [configSistema, setConfigSistema] = useState<ConfiguracionSistema | null>(null);
   const [criticoModo, setCriticoModo] = useState<'CRITICO' | 'BAJO' | 'NUNCA'>('CRITICO');
   const [configError, setConfigError] = useState<string | null>(null);
   const [guardandoConfig, setGuardandoConfig] = useState(false);
+
+  const [proveedores, setProveedores] = useState<Proveedor[]>([]);
+  const [proveedorForm, setProveedorForm] = useState<Partial<Proveedor>>({
+    nombre: '',
+    documento: '',
+    telefono: '',
+    correo: '',
+    direccion: '',
+    descripcion: '',
+    pais: '',
+    departamento: '',
+    ciudad: '',
+    banco_nombre: '',
+    banco_tipo_cuenta: 'Ahorros',
+    banco_titular: '',
+    banco_nit_titular: '',
+    banco_numero_cuenta: ''
+  });
+  const [proveedorEditandoId, setProveedorEditandoId] = useState<number | null>(null);
+  const [verBancosId, setVerBancosId] = useState<number | null>(null);
+  const [proveedorError, setProveedorError] = useState<string | null>(null);
+  const [cargandoProveedores, setCargandoProveedores] = useState(false);
 
   const [insumos, setInsumos] = useState<Insumo[]>([]);
   const [insumoForm, setInsumoForm] = useState<InsumoForm>({
@@ -49,6 +71,7 @@ export default function GestionInventarioAvanzado() {
   const [ajustesError, setAjustesError] = useState<string | null>(null);
 
   const [ajusteInsumoId, setAjusteInsumoId] = useState<number | null>(null);
+  const [ajusteProveedorId, setAjusteProveedorId] = useState<number | null>(null);
   const [ajusteCantidad, setAjusteCantidad] = useState<number>(0);
   const [ajusteMotivo, setAjusteMotivo] = useState<string>('');
   const [ajusteError, setAjusteError] = useState<string | null>(null);
@@ -70,6 +93,7 @@ export default function GestionInventarioAvanzado() {
     cargarProductos();
     cargarCategoriasPersonalizacion();
     cargarConfiguracion();
+    cargarProveedores();
   }, []);
 
   useEffect(() => {
@@ -96,18 +120,72 @@ export default function GestionInventarioAvanzado() {
     }
   }, [itemPersonalizacionId]);
 
-  useEffect(() => {
-    if (tab === 'historial') {
-      cargarHistorial();
-    }
-  }, [tab, historialInsumoId]);
-
   const cargarInsumos = async () => {
     try {
       const data = await apiService.getInsumos();
       setInsumos(data);
     } catch (error) {
       console.error('Error al cargar insumos:', error);
+    }
+  };
+
+  const cargarProveedores = async () => {
+    try {
+      setCargandoProveedores(true);
+      const data = await apiService.getProveedores();
+      setProveedores(data);
+    } catch (error) {
+      console.error('Error al cargar proveedores:', error);
+    } finally {
+      setCargandoProveedores(false);
+    }
+  };
+
+  const guardarProveedor = async () => {
+    if (!proveedorForm.nombre?.trim()) {
+      setProveedorError('El nombre es obligatorio');
+      return;
+    }
+
+    try {
+      setProveedorError(null);
+      if (proveedorEditandoId) {
+        await apiService.updateProveedor(proveedorEditandoId, proveedorForm);
+      } else {
+        await apiService.createProveedor(proveedorForm);
+      }
+      
+      await cargarProveedores();
+      cancelarEdicionProveedor();
+      mostrarExito('Proveedor guardado correctamente');
+    } catch (error: any) {
+      setProveedorError(error?.response?.data?.error || 'Error al guardar proveedor');
+    }
+  };
+
+  const iniciarEdicionProveedor = (p: Proveedor) => {
+    setProveedorEditandoId(p.id);
+    setProveedorForm({ ...p });
+  };
+
+  const cancelarEdicionProveedor = () => {
+    setProveedorEditandoId(null);
+    setProveedorForm({
+      nombre: '', documento: '', telefono: '', correo: '',
+      direccion: '', descripcion: '', pais: '', departamento: '', ciudad: '',
+      banco_nombre: '', banco_tipo_cuenta: 'Ahorros', banco_titular: '',
+      banco_nit_titular: '', banco_numero_cuenta: ''
+    });
+    setProveedorError(null);
+  };
+
+  const eliminarProveedor = async (id: number) => {
+    if (!confirm('¿Eliminar proveedor?')) return;
+    try {
+      await apiService.deleteProveedor(id);
+      await cargarProveedores();
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Error al eliminar proveedor');
     }
   };
 
@@ -168,7 +246,7 @@ export default function GestionInventarioAvanzado() {
     }
   };
 
-  const cargarHistorial = async () => {
+  const cargarHistorial = useCallback(async () => {
     try {
       const data = await apiService.getInsumoHistorial(historialInsumoId || undefined, 200);
       setHistorial(data || []);
@@ -177,7 +255,13 @@ export default function GestionInventarioAvanzado() {
       console.error('Error al cargar historial:', error);
       setHistorialError('Error al cargar historial');
     }
-  };
+  }, [historialInsumoId]);
+
+  useEffect(() => {
+    if (tab === 'historial') {
+      cargarHistorial();
+    }
+  }, [tab, historialInsumoId, cargarHistorial]);
 
   const guardarConfiguracion = async () => {
     try {
@@ -341,12 +425,14 @@ export default function GestionInventarioAvanzado() {
       setAjusteError(null);
       await apiService.ajustarInsumo(ajusteInsumoId, {
         cantidad: ajusteCantidad,
-        motivo: ajusteMotivo || undefined
+        motivo: ajusteMotivo || undefined,
+        proveedor_id: ajusteProveedorId || undefined
       });
       await cargarInsumos();
       await cargarHistorial();
       setAjusteCantidad(0);
       setAjusteMotivo('');
+      setAjusteProveedorId(null);
       mostrarExito('Ajuste aplicado correctamente');
     } catch (error: any) {
       setAjusteError(error?.response?.data?.error || 'Error al aplicar ajuste');
@@ -405,7 +491,7 @@ export default function GestionInventarioAvanzado() {
   const totalCostoAjustes = ajustesItems.reduce((sum, item) => sum + (obtenerCosto(item.insumo_id) * item.cantidad_ajuste), 0);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 overflow-auto">
       <div className="">
         <div className="flex items-center justify-between">
           {/* Header */}
@@ -429,20 +515,35 @@ export default function GestionInventarioAvanzado() {
         )}
       </div>
 
-      <div className="bg-white rounded-lg shadow p-4 flex space-x-2">
-        {['insumos', 'recetas', 'ajustes', 'historial', 'importacion', 'configuracion'].map((section) => (
-          <button
-            key={section}
-            className={`px-4 py-2 rounded ${tab === section ? 'bg-primary-600 text-white' : 'bg-secondary-100 text-secondary-700'}`}
-            onClick={() => setTab(section as any)}
-          >
-            {section === 'insumos' ? 'Insumos' : section === 'recetas' ? 'Recetas' : section === 'ajustes' ? 'Ajustes manuales' : section === 'historial' ? 'Historial' : section === 'configuracion' ? 'Configuración' : 'Importar/Exportar'}
-          </button>
-        ))}
+      {/* Pestañas */}
+      <div className="border-b border-secondary-200">
+        <nav className="flex space-x-8 overflow-x-auto">
+          {['insumos', 'recetas', 'ajustes', 'historial', 'proveedores', 'importacion', 'configuracion'].map((section) => (
+            <button
+              key={section}
+              onClick={() => setTab(section as any)}
+              className={`
+                py-2 px-1 border-b-2 font-medium text-sm transition-colors whitespace-nowrap
+                ${tab === section
+                  ? 'border-primary-500 text-primary-600'
+                  : 'border-transparent text-secondary-500 hover:text-secondary-700 hover:border-secondary-300'
+                }
+              `}
+            >
+              {section === 'insumos' ? 'Insumos' : 
+               section === 'recetas' ? 'Recetas' : 
+               section === 'ajustes' ? 'Ajustes manuales' : 
+               section === 'historial' ? 'Historial' : 
+               section === 'proveedores' ? 'Proveedores' :
+               section === 'configuracion' ? 'Configuración' : 
+               'Importar/Exportar'}
+            </button>
+          ))}
+        </nav>
       </div>
 
       {tab === 'insumos' && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-6">
+        <div className="bg-white rounded-lg shadow  space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-secondary-700">Nombre *</label>
@@ -583,7 +684,7 @@ export default function GestionInventarioAvanzado() {
 
       {tab === 'recetas' && (
         <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <div className="bg-white rounded-lg shadow  space-y-4">
             <h3 className="text-lg font-semibold text-secondary-900">Recetas por producto</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
@@ -662,7 +763,7 @@ export default function GestionInventarioAvanzado() {
             </button>
           </div>
 
-          <div className="bg-white rounded-lg shadow p-6 space-y-4">
+          <div className="bg-white rounded-lg shadow  space-y-4">
             <h3 className="text-lg font-semibold text-secondary-900">Ajustes por personalización</h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
@@ -756,9 +857,9 @@ export default function GestionInventarioAvanzado() {
       )}
 
       {tab === 'ajustes' && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow  space-y-4">
           <h3 className="text-lg font-semibold text-secondary-900">Ajustes manuales de stock</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
             <div>
               <label className="block text-sm font-medium text-secondary-700">Insumo</label>
               <select
@@ -769,6 +870,19 @@ export default function GestionInventarioAvanzado() {
                 <option value="">Selecciona un insumo</option>
                 {insumos.map((insumo) => (
                   <option key={insumo.id} value={insumo.id}>{insumo.nombre}</option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-secondary-700">Proveedor (Opcional)</label>
+              <select
+                className="input-field"
+                value={ajusteProveedorId || ''}
+                onChange={(e) => setAjusteProveedorId(e.target.value ? Number(e.target.value) : null)}
+              >
+                <option value="">Ninguno</option>
+                {proveedores.map(p => (
+                  <option key={p.id} value={p.id}>{p.nombre}</option>
                 ))}
               </select>
             </div>
@@ -805,7 +919,7 @@ export default function GestionInventarioAvanzado() {
       )}
 
       {tab === 'configuracion' && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow  space-y-4">
           <div>
             <h3 className="text-lg font-semibold text-secondary-900">Regla de bloqueo por inventario</h3>
             <p className="text-sm text-secondary-600">Configura cuándo bloquear el cierre de comandas si algún insumo está en riesgo.</p>
@@ -838,7 +952,7 @@ export default function GestionInventarioAvanzado() {
       )}
 
       {tab === 'historial' && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow  space-y-4">
           <div className="flex flex-col md:flex-row gap-4 md:items-end">
             <div>
               <label className="block text-sm font-medium text-secondary-700">Filtrar por insumo</label>
@@ -868,6 +982,7 @@ export default function GestionInventarioAvanzado() {
                 <tr>
                   <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Fecha</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Insumo</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Proveedor</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Cantidad</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Evento</th>
                   <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Motivo</th>
@@ -878,6 +993,9 @@ export default function GestionInventarioAvanzado() {
                   <tr key={item.id}>
                     <td className="px-4 py-2 text-sm text-secondary-700">{item.fecha_hora}</td>
                     <td className="px-4 py-2 text-sm text-secondary-900">{item.insumo_nombre || item.insumo_id}</td>
+                    <td className="px-4 py-2 text-sm text-secondary-600 font-medium">
+                      {item.proveedor_nombre || '-'}
+                    </td>
                     <td className={`px-4 py-2 text-sm ${item.cantidad < 0 ? 'text-red-600' : 'text-green-600'}`}>
                       {item.cantidad} {item.unidad_medida}
                     </td>
@@ -887,7 +1005,252 @@ export default function GestionInventarioAvanzado() {
                 ))}
                 {historial.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="px-4 py-4 text-sm text-secondary-500 text-center">Sin movimientos</td>
+                    <td colSpan={6} className="px-4 py-4 text-sm text-secondary-500 text-center">Sin movimientos</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'proveedores' && (
+        <div className="space-y-6">
+          <div className="bg-white rounded-lg shadow p-4 space-y-6">
+            <h3 className="text-lg font-semibold text-secondary-900 border-b pb-2">
+              {proveedorEditandoId ? 'Editar Proveedor' : 'Nuevo Proveedor'}
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">Nombre completo *</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.nombre || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, nombre: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">CC o NIT</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.documento || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, documento: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">Teléfono</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.telefono || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, telefono: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">Correo</label>
+                <input
+                  type="email"
+                  className="input-field"
+                  value={proveedorForm.correo || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, correo: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">Dirección</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.direccion || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, direccion: e.target.value }))}
+                />
+              </div>
+              
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">País</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.pais || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, pais: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">Departamento</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.departamento || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, departamento: e.target.value }))}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-secondary-700">Ciudad</label>
+                <input
+                  className="input-field"
+                  value={proveedorForm.ciudad || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, ciudad: e.target.value }))}
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-sm font-medium text-secondary-700">Descripción (¿Qué artículos trae?)</label>
+                <input
+                  className="input-field"
+                  placeholder="Ej: Carnes, Verduras, Desechables..."
+                  value={proveedorForm.descripcion || ''}
+                  onChange={(e) => setProveedorForm(prev => ({ ...prev, descripcion: e.target.value }))}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-4 pt-4 border-t">
+              <h4 className="text-md font-medium text-secondary-800">Datos Bancarios (Opcional)</h4>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Nombre Banco</label>
+                  <input
+                    className="input-field"
+                    value={proveedorForm.banco_nombre || ''}
+                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_nombre: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Tipo de Cuenta</label>
+                  <select
+                    className="input-field"
+                    value={proveedorForm.banco_tipo_cuenta || ''}
+                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_tipo_cuenta: e.target.value }))}
+                  >
+                    <option value="Ahorros">Ahorros</option>
+                    <option value="Corriente">Corriente</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Titular de Cuenta</label>
+                  <input
+                    className="input-field"
+                    value={proveedorForm.banco_titular || ''}
+                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_titular: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">NIT Titular</label>
+                  <input
+                    className="input-field"
+                    value={proveedorForm.banco_nit_titular || ''}
+                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_nit_titular: e.target.value }))}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-secondary-700">Número de Cuenta</label>
+                  <input
+                    className="input-field"
+                    value={proveedorForm.banco_numero_cuenta || ''}
+                    onChange={(e) => setProveedorForm(prev => ({ ...prev, banco_numero_cuenta: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {proveedorError && (
+              <div className="bg-red-50 border border-red-200 p-3 rounded">
+                <p className="text-sm text-red-700">{proveedorError}</p>
+              </div>
+            )}
+
+            <div className="flex space-x-2">
+              <button className="btn-primary flex items-center" onClick={guardarProveedor}>
+                <Save size={16} className="mr-2" />
+                {proveedorEditandoId ? 'Actualizar' : 'Guardar Proveedor'}
+              </button>
+              {proveedorEditandoId && (
+                <button className="btn-secondary" onClick={cancelarEdicionProveedor}>Cancelar</button>
+              )}
+            </div>
+          </div>
+
+          <div className="bg-white rounded-lg shadow overflow-x-auto">
+            <table className="min-w-full divide-y divide-secondary-200">
+              <thead className="bg-secondary-50">
+                <tr>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 uppercase">Nombre</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 uppercase">Documento</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 uppercase">Contacto</th>
+                  <th className="px-4 py-3 text-left text-xs font-medium text-secondary-500 uppercase">Ubicación</th>
+                  <th className="px-4 py-3 text-right text-xs font-medium text-secondary-500 uppercase">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-secondary-100">
+                {proveedores.map(p => (
+                  <Fragment key={p.id}>
+                    <tr>
+                      <td className="px-4 py-3 text-sm font-medium text-secondary-900">
+                        <div>{p.nombre}</div>
+                        {p.descripcion && <div className="text-xs text-primary-600 font-normal italic">{p.descripcion}</div>}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-secondary-600">{p.documento || '-'}</td>
+                      <td className="px-4 py-3 text-sm text-secondary-600">
+                        <div>{p.telefono || '-'}</div>
+                        <div className="text-xs text-secondary-400">{p.correo || ''}</div>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-secondary-600">
+                        <div className="flex items-start">
+                          <MapPin size={14} className="mr-1 mt-0.5 text-secondary-400" />
+                          <div>
+                            {p.direccion && <div className="text-secondary-800">{p.direccion}</div>}
+                            <div className="text-xs text-secondary-500">{p.ciudad}, {p.departamento}</div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-3 text-right text-sm font-medium">
+                        <div className="flex justify-end space-x-2">
+                          <button 
+                            className={`p-1 rounded ${verBancosId === p.id ? 'bg-primary-100 text-primary-600' : 'text-secondary-400 hover:text-primary-600'}`}
+                            onClick={() => setVerBancosId(verBancosId === p.id ? null : p.id)}
+                            title="Ver datos bancarios"
+                          >
+                            <CreditCard size={18} />
+                          </button>
+                          <button className="text-primary-600 hover:text-primary-900 p-1" onClick={() => iniciarEdicionProveedor(p)}>
+                            <Save size={18} />
+                          </button>
+                          <button className="text-red-600 hover:text-red-900 p-1" onClick={() => eliminarProveedor(p.id)}>
+                            <Trash2 size={18} />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                    {verBancosId === p.id && (
+                      <tr className="bg-primary-50">
+                        <td colSpan={5} className="px-4 py-3">
+                          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-y-2 gap-x-4 text-sm">
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-primary-700 uppercase">Banco</span>
+                              <span className="text-secondary-800 font-medium">{p.banco_nombre || 'No especificado'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-primary-700 uppercase">Tipo de Cuenta</span>
+                              <span className="text-secondary-800">{p.banco_tipo_cuenta || '-'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-primary-700 uppercase">Número de Cuenta</span>
+                              <span className="text-secondary-800 font-mono font-bold tracking-wider">{p.banco_numero_cuenta || '—'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-primary-700 uppercase">Titular</span>
+                              <span className="text-secondary-800">{p.banco_titular || '-'}</span>
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-xs font-semibold text-primary-700 uppercase">NIT/CC Titular</span>
+                              <span className="text-secondary-800">{p.banco_nit_titular || '-'}</span>
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
+                ))}
+                {proveedores.length === 0 && (
+                  <tr>
+                    <td colSpan={5} className="px-4 py-8 text-center text-sm text-secondary-500">
+                      No hay proveedores registrados
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -897,7 +1260,7 @@ export default function GestionInventarioAvanzado() {
       )}
 
       {tab === 'importacion' && (
-        <div className="bg-white rounded-lg shadow p-6 space-y-4">
+        <div className="bg-white rounded-lg shadow  space-y-4">
           <h3 className="text-lg font-semibold text-secondary-900">Importar / Exportar</h3>
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div className="border rounded-lg p-4 space-y-3">

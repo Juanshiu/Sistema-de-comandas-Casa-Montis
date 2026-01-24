@@ -69,10 +69,11 @@ const registrarHistorialInsumo = async (data: {
   tipo_evento: string;
   motivo?: string | null;
   usuario_id?: number | null;
+  proveedor_id?: number | null;
 }) => {
   await runAsync(
-    `INSERT INTO insumo_historial (insumo_id, cantidad, unidad_medida, producto_id, comanda_id, tipo_evento, motivo, usuario_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
+    `INSERT INTO insumo_historial (insumo_id, cantidad, unidad_medida, producto_id, comanda_id, tipo_evento, motivo, usuario_id, proveedor_id)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
     , [
       data.insumo_id,
       data.cantidad,
@@ -81,7 +82,8 @@ const registrarHistorialInsumo = async (data: {
       data.comanda_id ?? null,
       data.tipo_evento,
       data.motivo ?? null,
-      data.usuario_id ?? null
+      data.usuario_id ?? null,
+      data.proveedor_id ?? null
     ]
   );
 };
@@ -240,7 +242,7 @@ router.delete('/insumos/:id', async (req: Request, res: Response) => {
 // Ajuste manual de stock
 router.post('/insumos/:id/ajuste', async (req: Request, res: Response) => {
   const { id } = req.params;
-  const { cantidad, motivo, usuario_id } = req.body;
+  const { cantidad, motivo, usuario_id, proveedor_id } = req.body;
 
   const cantidadNum = Number(cantidad);
   if (Number.isNaN(cantidadNum) || cantidadNum === 0) {
@@ -270,7 +272,8 @@ router.post('/insumos/:id/ajuste', async (req: Request, res: Response) => {
       unidad_medida: insumo.unidad_medida,
       tipo_evento: 'AJUSTE',
       motivo: motivo ? String(motivo) : 'Ajuste manual',
-      usuario_id: usuario_id ? Number(usuario_id) : null
+      usuario_id: usuario_id ? Number(usuario_id) : null,
+      proveedor_id: proveedor_id ? Number(proveedor_id) : null
     });
 
     const actualizado = await getAsync('SELECT * FROM insumos WHERE id = ?', [id]);
@@ -299,10 +302,11 @@ router.get('/insumos/historial', async (req: Request, res: Response) => {
     }
 
     const rows = await allAsync(
-      `SELECT h.*, i.nombre as insumo_nombre, p.nombre as producto_nombre
+      `SELECT h.*, i.nombre as insumo_nombre, p.nombre as producto_nombre, prov.nombre as proveedor_nombre
        FROM insumo_historial h
        JOIN insumos i ON h.insumo_id = i.id
        LEFT JOIN productos p ON h.producto_id = p.id
+       LEFT JOIN proveedores prov ON h.proveedor_id = prov.id
        ${where}
        ORDER BY h.fecha_hora DESC
        LIMIT ?`,
