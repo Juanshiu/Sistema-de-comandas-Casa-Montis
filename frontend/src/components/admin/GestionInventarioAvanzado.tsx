@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useState, useCallback, Fragment } from 'react';
-import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin, X, AlertCircle } from 'lucide-react';
+import { Save, Plus, Trash2, Download, UploadCloud, RefreshCw, Eye, EyeOff, CreditCard, MapPin, X, AlertCircle, Search, Filter, Tag } from 'lucide-react';
 import { apiService } from '@/services/api';
-import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, CategoriaPersonalizacion, ItemPersonalizacion, InsumoHistorial, ConfiguracionSistema, Proveedor } from '@/types';
+import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, CategoriaPersonalizacion, ItemPersonalizacion, InsumoHistorial, ConfiguracionSistema, Proveedor, InsumoCategoria } from '@/types';
 
 const unidades = ['g', 'kg', 'ml', 'unidad'];
 
@@ -14,11 +14,24 @@ interface InsumoForm {
   stock_minimo: number;
   stock_critico: number;
   costo_unitario: number | null;
+  categoria_id: number | null;
 }
 
 export default function GestionInventarioAvanzado() {
-  const [tab, setTab] = useState<'insumos' | 'recetas' | 'ajustes' | 'historial' | 'importacion' | 'configuracion' | 'proveedores'>('insumos');
+  const [tab, setTab] = useState<'insumos' | 'recetas' | 'ajustes' | 'historial' | 'importacion' | 'configuracion' | 'proveedores' | 'categorias'>('insumos');
   const [mensajeExito, setMensajeExito] = useState<string | null>(null);
+  
+  // Categorías de Insumos
+  const [insumoCategorias, setInsumoCategorias] = useState<InsumoCategoria[]>([]);
+  const [categoriaForm, setCategoriaForm] = useState<Partial<InsumoCategoria>>({ nombre: '', descripcion: '' });
+  const [categoriaEditandoId, setCategoriaEditandoId] = useState<number | null>(null);
+  const [mostrarModalCategoria, setMostrarModalCategoria] = useState(false);
+  const [categoriaError, setCategoriaError] = useState<string | null>(null);
+
+  // Filtros y Búsqueda
+  const [filtroNombre, setFiltroNombre] = useState('');
+  const [filtroCategoria, setFiltroCategoria] = useState<string>('todos');
+
   const [configSistema, setConfigSistema] = useState<ConfiguracionSistema | null>(null);
   const [criticoModo, setCriticoModo] = useState<'CRITICO' | 'BAJO' | 'NUNCA'>('CRITICO');
   const [configError, setConfigError] = useState<string | null>(null);
@@ -54,7 +67,8 @@ export default function GestionInventarioAvanzado() {
     stock_actual: 0,
     stock_minimo: 0,
     stock_critico: 0,
-    costo_unitario: null
+    costo_unitario: null,
+    categoria_id: null
   });
   const [insumoEditandoId, setInsumoEditandoId] = useState<number | null>(null);
   const [insumoError, setInsumoError] = useState<string | null>(null);
@@ -82,6 +96,26 @@ export default function GestionInventarioAvanzado() {
   const [historial, setHistorial] = useState<InsumoHistorial[]>([]);
   const [historialError, setHistorialError] = useState<string | null>(null);
   const [historialInsumoId, setHistorialInsumoId] = useState<number | null>(null);
+  const [fechaInicio, setFechaInicio] = useState<string>('');
+  const [fechaFin, setFechaFin] = useState<string>('');
+  const [limpiandoHistorial, setLimpiandoHistorial] = useState(false);
+
+  const limpiarHistorial = async (dias: number) => {
+    if (!confirm(`¿Estás seguro de eliminar el historial de más de ${dias} días? Esta acción no se puede deshacer.`)) return;
+    
+    try {
+      setLimpiandoHistorial(true);
+      const res = await apiService.limpiarHistorialInsumos(dias);
+      mostrarExito(res.message);
+      if (tab === 'historial') {
+        renderHistorial();
+      }
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Error al limpiar historial');
+    } finally {
+      setLimpiandoHistorial(false);
+    }
+  };
 
   const [importando, setImportando] = useState(false);
 
@@ -96,7 +130,63 @@ export default function GestionInventarioAvanzado() {
     cargarCategoriasPersonalizacion();
     cargarConfiguracion();
     cargarProveedores();
+    cargarInsumoCategorias();
   }, []);
+
+  const cargarInsumoCategorias = async () => {
+    try {
+      const data = await apiService.getInsumoCategorias();
+      setInsumoCategorias(data);
+    } catch (error) {
+      console.error('Error al cargar categorias de insumos:', error);
+    }
+  };
+
+  const guardarCategoria = async () => {
+    if (!categoriaForm.nombre?.trim()) {
+      setCategoriaError('El nombre es obligatorio');
+      return;
+    }
+
+    try {
+      setCategoriaError(null);
+      if (categoriaEditandoId) {
+        await apiService.updateInsumoCategoria(categoriaEditandoId, categoriaForm);
+      } else {
+        await apiService.createInsumoCategoria(categoriaForm);
+      }
+      
+      await cargarInsumoCategorias();
+      cancelarEdicionCategoria();
+      mostrarExito('Categoría guardada correctamente');
+    } catch (error: any) {
+      setCategoriaError(error?.response?.data?.error || 'Error al guardar categoría');
+    }
+  };
+
+  const iniciarEdicionCategoria = (c: InsumoCategoria) => {
+    setCategoriaEditandoId(c.id);
+    setCategoriaForm({ ...c });
+    setMostrarModalCategoria(true);
+  };
+
+  const cancelarEdicionCategoria = () => {
+    setCategoriaEditandoId(null);
+    setCategoriaForm({ nombre: '', descripcion: '' });
+    setCategoriaError(null);
+    setMostrarModalCategoria(false);
+  };
+
+  const eliminarCategoria = async (id: number) => {
+    if (!confirm('¿Eliminar esta categoría? Esto no eliminará los insumos asociados.')) return;
+    try {
+      await apiService.deleteInsumoCategoria(id);
+      await cargarInsumoCategorias();
+      await cargarInsumos(); // Recargar insumos para actualizar referencias de nombres
+    } catch (error: any) {
+      alert(error?.response?.data?.error || 'Error al eliminar categoría');
+    }
+  };
 
   useEffect(() => {
     if (productoSeleccionadoId) {
@@ -252,14 +342,19 @@ export default function GestionInventarioAvanzado() {
 
   const cargarHistorial = useCallback(async () => {
     try {
-      const data = await apiService.getInsumoHistorial(historialInsumoId || undefined, 200);
+      const data = await apiService.getInsumoHistorial(
+        historialInsumoId || undefined, 
+        200,
+        fechaInicio || undefined,
+        fechaFin || undefined
+      );
       setHistorial(data || []);
       setHistorialError(null);
     } catch (error) {
       console.error('Error al cargar historial:', error);
       setHistorialError('Error al cargar historial');
     }
-  }, [historialInsumoId]);
+  }, [historialInsumoId, fechaInicio, fechaFin]);
 
   useEffect(() => {
     if (tab === 'historial') {
@@ -332,7 +427,8 @@ export default function GestionInventarioAvanzado() {
       stock_actual: insumo.stock_actual,
       stock_minimo: insumo.stock_minimo,
       stock_critico: insumo.stock_critico,
-      costo_unitario: insumo.costo_unitario ?? null
+      costo_unitario: insumo.costo_unitario ?? null,
+      categoria_id: insumo.categoria_id ?? null
     });
     setMostrarModalInsumo(true);
   };
@@ -345,7 +441,8 @@ export default function GestionInventarioAvanzado() {
       stock_actual: 0,
       stock_minimo: 0,
       stock_critico: 0,
-      costo_unitario: null
+      costo_unitario: null,
+      categoria_id: null
     });
     setMostrarModalInsumo(false);
     setInsumoError(null);
@@ -470,7 +567,15 @@ export default function GestionInventarioAvanzado() {
     });
   };
 
-  const manejarImportacion = async (file: File | null, tipo: 'insumos' | 'recetas' | 'productos') => {
+  const insumosFiltrados = insumos.filter(insumo => {
+    const cumpleNombre = insumo.nombre.toLowerCase().includes(filtroNombre.toLowerCase());
+    const cumpleCategoria = filtroCategoria === 'todos' || 
+                           (filtroCategoria === 'sin_categoria' && !insumo.categoria_id) ||
+                           (insumo.categoria_id?.toString() === filtroCategoria);
+    return cumpleNombre && cumpleCategoria;
+  });
+
+  const manejarImportacion = async (file: File | null, tipo: 'insumos' | 'recetas' | 'productos' | 'personalizaciones') => {
     if (!file) return;
     setImportando(true);
     try {
@@ -479,12 +584,15 @@ export default function GestionInventarioAvanzado() {
         await apiService.importarInsumos(base64);
       } else if (tipo === 'recetas') {
         await apiService.importarRecetas(base64);
+      } else if (tipo === 'personalizaciones') {
+        await apiService.importarPersonalizaciones(base64);
       } else {
         await apiService.importarProductosExcel(base64);
       }
       mostrarExito('Importación completada');
       await cargarInsumos();
       await cargarProductos();
+      await cargarCategoriasPersonalizacion();
     } catch (error: any) {
       alert(error?.response?.data?.error || 'Error en importación');
     } finally {
@@ -525,7 +633,7 @@ export default function GestionInventarioAvanzado() {
       {/* Pestañas */}
       <div className="border-b border-secondary-200">
         <nav className="flex space-x-8 overflow-x-auto">
-          {['insumos', 'recetas', 'ajustes', 'historial', 'proveedores', 'importacion', 'configuracion'].map((section) => (
+          {['insumos', 'recetas', 'ajustes', 'historial', 'proveedores', 'categorias', 'importacion', 'configuracion'].map((section) => (
             <button
               key={section}
               onClick={() => setTab(section as any)}
@@ -542,6 +650,7 @@ export default function GestionInventarioAvanzado() {
                section === 'ajustes' ? 'Ajustes manuales' : 
                section === 'historial' ? 'Historial' : 
                section === 'proveedores' ? 'Proveedores' :
+               section === 'categorias' ? 'Categorías' :
                section === 'configuracion' ? 'Configuración' : 
                'Importar/Exportar'}
             </button>
@@ -551,18 +660,47 @@ export default function GestionInventarioAvanzado() {
 
       {tab === 'insumos' && (
         <div className="space-y-6">
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
             <h3 className="text-xl font-bold text-secondary-900">Inventario de Insumos</h3>
-            <button 
-              className="btn-primary flex items-center"
-              onClick={() => {
-                cancelarEdicionInsumo();
-                setMostrarModalInsumo(true);
-              }}
-            >
-              <Plus size={18} className="mr-2" />
-              Nuevo Insumo
-            </button>
+            
+            <div className="flex flex-wrap items-center gap-3 w-full md:w-auto">
+              <div className="relative flex-1 md:w-64">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-secondary-400" size={18} />
+                <input
+                  type="text"
+                  placeholder="Buscar insumo..."
+                  className="input-field w-full pl-10"
+                  value={filtroNombre}
+                  onChange={(e) => setFiltroNombre(e.target.value)}
+                />
+              </div>
+              
+              <div className="flex items-center gap-2">
+                <Filter size={18} className="text-secondary-500" />
+                <select
+                  className="input-field py-2"
+                  value={filtroCategoria}
+                  onChange={(e) => setFiltroCategoria(e.target.value)}
+                >
+                  <option value="todos">Todas las categorías</option>
+                  <option value="sin_categoria">Sin categoría</option>
+                  {insumoCategorias.map(cat => (
+                    <option key={cat.id} value={cat.id.toString()}>{cat.nombre}</option>
+                  ))}
+                </select>
+              </div>
+
+              <button 
+                className="btn-primary flex items-center whitespace-nowrap"
+                onClick={() => {
+                  cancelarEdicionInsumo();
+                  setMostrarModalInsumo(true);
+                }}
+              >
+                <Plus size={18} className="mr-2" />
+                Nuevo Insumo
+              </button>
+            </div>
           </div>
 
           {mostrarModalInsumo && (
@@ -587,6 +725,19 @@ export default function GestionInventarioAvanzado() {
                         value={insumoForm.nombre}
                         onChange={(e) => setInsumoForm(prev => ({ ...prev, nombre: e.target.value }))}
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-secondary-700 mb-1">Categoría</label>
+                      <select
+                        className="input-field w-full"
+                        value={insumoForm.categoria_id || ''}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, categoria_id: e.target.value ? Number(e.target.value) : null }))}
+                      >
+                        <option value="">Sin categoría</option>
+                        {insumoCategorias.map(cat => (
+                          <option key={cat.id} value={cat.id}>{cat.nombre}</option>
+                        ))}
+                      </select>
                     </div>
                     <div>
                       <label className="block text-sm font-semibold text-secondary-700 mb-1">Unidad de medida *</label>
@@ -675,28 +826,39 @@ export default function GestionInventarioAvanzado() {
             <table className="min-w-full divide-y divide-secondary-200">
               <thead className="bg-secondary-50">
                 <tr>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Nombre</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Unidad</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Stock</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Costo unitario</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Estado</th>
-                  <th className="px-4 py-2 text-left text-xs font-medium text-secondary-500 uppercase">Acciones</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Nombre</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Categoría</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Unidad</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Stock</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Costo unitario</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Estado</th>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Acciones</th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-secondary-100">
-                {insumos.map((insumo) => (
+                {insumosFiltrados.map((insumo) => (
                   <tr key={insumo.id}>
-                    <td className="px-4 py-2 text-sm text-secondary-900">{insumo.nombre}</td>
+                    <td className="px-4 py-2 text-sm text-secondary-900 font-medium">{insumo.nombre}</td>
+                    <td className="px-4 py-2 text-sm">
+                      {insumo.categoria_nombre ? (
+                        <span className="flex items-center gap-1 text-secondary-600">
+                          <Tag size={12} className="text-secondary-400" />
+                          {insumo.categoria_nombre}
+                        </span>
+                      ) : (
+                        <span className="text-secondary-400 italic text-xs">Sin categoría</span>
+                      )}
+                    </td>
                     <td className="px-4 py-2 text-sm text-secondary-700">{insumo.unidad_medida}</td>
-                    <td className="px-4 py-2 text-sm text-secondary-700">{insumo.stock_actual}</td>
+                    <td className="px-4 py-2 text-sm text-secondary-700 font-mono">{insumo.stock_actual}</td>
                     <td className="px-4 py-2 text-sm text-secondary-700">
                       {insumo.costo_unitario !== null && insumo.costo_unitario !== undefined ? `$${Number(insumo.costo_unitario).toLocaleString()}` : '—'}
                     </td>
                     <td className="px-4 py-2">
-                      <span className={`text-xs px-2 py-1 rounded ${
-                        insumo.estado === 'CRITICO' ? 'bg-red-100 text-red-700' :
-                        insumo.estado === 'BAJO' ? 'bg-yellow-100 text-yellow-700' :
-                        'bg-green-100 text-green-700'
+                      <span className={`text-[10px] uppercase tracking-wider font-bold px-2 py-1 rounded-full ${
+                        insumo.estado === 'CRITICO' ? 'bg-red-100 text-red-700 border border-red-200' :
+                        insumo.estado === 'BAJO' ? 'bg-yellow-100 text-yellow-700 border border-yellow-200' :
+                        'bg-green-100 text-green-700 border border-green-200'
                       }`}>
                         {insumo.estado}
                       </span>
@@ -704,13 +866,13 @@ export default function GestionInventarioAvanzado() {
                     <td className="px-4 py-2">
                       <div className="flex items-center gap-2">
                         <button
-                          className="px-3 py-1 rounded border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 transition"
+                          className="px-3 py-1 text-xs rounded border border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100 transition shadow-sm"
                           onClick={() => iniciarEdicionInsumo(insumo)}
                         >
                           Editar
                         </button>
                         <button
-                          className="px-3 py-1 rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition"
+                          className="px-3 py-1 text-xs rounded border border-red-200 bg-red-50 text-red-700 hover:bg-red-100 transition shadow-sm"
                           onClick={() => eliminarInsumo(insumo.id)}
                         >
                           Eliminar
@@ -719,9 +881,14 @@ export default function GestionInventarioAvanzado() {
                     </td>
                   </tr>
                 ))}
-                {insumos.length === 0 && (
+                {insumosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="px-4 py-4 text-sm text-secondary-500 text-center">No hay insumos</td>
+                    <td colSpan={7} className="px-4 py-8 text-sm text-secondary-500 text-center">
+                      <div className="flex flex-col items-center gap-2">
+                        <Search size={32} className="text-secondary-200" />
+                        <p>{(filtroNombre || filtroCategoria !== 'todos') ? 'No se encontraron insumos con esos filtros' : 'No hay insumos registrados'}</p>
+                      </div>
+                    </td>
                   </tr>
                 )}
               </tbody>
@@ -732,175 +899,309 @@ export default function GestionInventarioAvanzado() {
       )}
 
       {tab === 'recetas' && (
-        <div className="space-y-6">
-          <div className="bg-white rounded-lg shadow  space-y-4">
-            <h3 className="text-lg font-semibold text-secondary-900">Recetas por producto</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Producto</label>
-                <select
-                  className="input-field"
-                  value={productoSeleccionadoId ?? ''}
-                  onChange={(e) => setProductoSeleccionadoId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">Selecciona un producto</option>
-                  {productos.map(producto => (
-                    <option key={producto.id} value={producto.id}>{producto.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button className="btn-secondary flex items-center" onClick={agregarFilaReceta}>
-                  <Plus size={16} className="mr-2" />
-                  Agregar insumo
-                </button>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+          {/* Recetas por producto */}
+          <div className="bg-white rounded-xl shadow-sm border border-secondary-200 flex flex-col">
+            <div className="p-6 border-b border-secondary-100 bg-secondary-50/50 rounded-t-xl">
+              <h3 className="text-xl font-bold text-secondary-900 flex items-center gap-2">
+                <RefreshCw size={22} className="text-secondary-500" />
+                Recetas por Producto
+              </h3>
+              <p className="text-sm text-secondary-500 mt-1">Configura los insumos que se descuentan al vender un plato.</p>
             </div>
 
-            {recetaError && (
-              <div className="bg-red-50 border border-red-200 p-3 rounded">
-                <p className="text-sm text-red-700">{recetaError}</p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {recetaItems.map((item, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div className="p-6 space-y-6 flex-grow">
+              <div className="flex flex-col md:flex-row gap-4">
+                <div className="flex-grow">
+                  <label className="block text-xs font-bold text-secondary-500 uppercase tracking-wider mb-2">Seleccionar Producto</label>
                   <select
-                    className="input-field"
-                    value={item.insumo_id}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setRecetaItems(prev => prev.map((r, i) => i === index ? { ...r, insumo_id: value } : r));
-                    }}
+                    className="input-field w-full h-11"
+                    value={productoSeleccionadoId ?? ''}
+                    onChange={(e) => setProductoSeleccionadoId(e.target.value ? Number(e.target.value) : null)}
                   >
-                    {insumos.map(insumo => (
-                      <option key={insumo.id} value={insumo.id}>{insumo.nombre}</option>
+                    <option value="">Selecciona un producto...</option>
+                    {productos.map(producto => (
+                      <option key={producto.id} value={producto.id}>{producto.nombre}</option>
                     ))}
                   </select>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={item.cantidad_usada}
-                    min="0"
-                    step="0.01"
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setRecetaItems(prev => prev.map((r, i) => i === index ? { ...r, cantidad_usada: value } : r));
-                    }}
-                  />
-                  <div className="input-field flex items-center text-sm text-secondary-700">
-                    $ {(obtenerCosto(item.insumo_id) * item.cantidad_usada).toFixed(2)}
-                  </div>
-                  <button
-                    className="btn-secondary flex items-center justify-center"
-                    onClick={() => setRecetaItems(prev => prev.filter((_, i) => i !== index))}
-                  >
-                    <Trash2 size={16} />
-                  </button>
                 </div>
-              ))}
+                {productoSeleccionadoId && (
+                  <div className="flex items-end">
+                    <button 
+                      className="btn-secondary h-11 px-4 flex items-center gap-2 bg-white hover:bg-secondary-50 transition-colors border-secondary-300" 
+                      onClick={agregarFilaReceta}
+                    >
+                      <Plus size={18} className="text-primary-600" />
+                      <span>Agregar Insumo</span>
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {recetaError && (
+                <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center gap-3 text-red-700 animate-pulse">
+                  <AlertCircle size={20} />
+                  <p className="text-sm font-medium">{recetaError}</p>
+                </div>
+              )}
+
+              <div className="border rounded-xl overflow-hidden bg-secondary-50/30">
+                <table className="min-w-full divide-y divide-secondary-200">
+                  <thead className="bg-secondary-100/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-secondary-600 uppercase">Insumo</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-secondary-600 uppercase w-28">Cant.</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-secondary-600 uppercase">Costo</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-secondary-600 uppercase w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-secondary-100">
+                    {recetaItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-10 text-center text-secondary-400">
+                          <div className="flex flex-col items-center gap-2">
+                            <Tag size={32} className="opacity-20" />
+                            <p className="text-sm italic">No hay insumos definidos para este producto.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      recetaItems.map((item, index) => (
+                        <tr key={index} className="hover:bg-primary-50/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <select
+                              className="w-full bg-transparent border-none focus:ring-0 text-secondary-800 text-sm font-medium p-0"
+                              value={item.insumo_id}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setRecetaItems(prev => prev.map((r, i) => i === index ? { ...r, insumo_id: value } : r));
+                              }}
+                            >
+                              {insumos.map(insumo => (
+                                <option key={insumo.id} value={insumo.id}>{insumo.nombre}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                className="w-full bg-transparent border-b border-transparent focus:border-primary-500 focus:ring-0 text-sm font-mono p-0"
+                                value={item.cantidad_usada}
+                                min="0"
+                                step="0.01"
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  setRecetaItems(prev => prev.map((r, i) => i === index ? { ...r, cantidad_usada: value } : r));
+                                }}
+                              />
+                              <span className="text-[10px] font-bold text-secondary-400 uppercase">
+                                {insumos.find(ins => ins.id === item.insumo_id)?.unidad_medida || '—'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm font-mono text-secondary-600">
+                            ${(obtenerCosto(item.insumo_id) * item.cantidad_usada).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              className="p-1.5 text-secondary-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                              onClick={() => setRecetaItems(prev => prev.filter((_, i) => i !== index))}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {recetaItems.length > 0 && (
+                    <tfoot className="bg-secondary-50/50">
+                      <tr>
+                        <td colSpan={2} className="px-4 py-4 text-sm font-bold text-secondary-900 text-right uppercase tracking-wider">
+                          Costo Sugerido del Plato:
+                        </td>
+                        <td className="px-4 py-4 text-right text-lg font-bold text-primary-600 font-mono">
+                          ${totalCostoReceta.toLocaleString()}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
 
-            <div className="text-sm text-secondary-600">
-              Costo estimado total: <span className="font-semibold text-secondary-900">$ {totalCostoReceta.toFixed(2)}</span>
-            </div>
-
-            <button className="btn-primary flex items-center" onClick={guardarReceta}>
-              <Save size={16} className="mr-2" />
-              Guardar receta
-            </button>
+            {productoSeleccionadoId && (
+              <div className="p-6 bg-secondary-50 rounded-b-xl border-t">
+                <button 
+                  className="btn-primary w-full py-3 flex items-center justify-center gap-2 shadow-lg shadow-primary-500/20" 
+                  onClick={guardarReceta}
+                >
+                  <Save size={20} />
+                  <span className="font-bold">Guardar Cambios en Receta</span>
+                </button>
+              </div>
+            )}
           </div>
 
-          <div className="bg-white rounded-lg shadow  space-y-4">
-            <h3 className="text-lg font-semibold text-secondary-900">Ajustes por personalización</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Categoría</label>
-                <select
-                  className="input-field"
-                  value={categoriaPersonalizacionId ?? ''}
-                  onChange={(e) => setCategoriaPersonalizacionId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">Selecciona categoría</option>
-                  {categoriasPersonalizacion.map(cat => (
-                    <option key={cat.id} value={cat.id}>{cat.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-secondary-700">Item</label>
-                <select
-                  className="input-field"
-                  value={itemPersonalizacionId ?? ''}
-                  onChange={(e) => setItemPersonalizacionId(e.target.value ? Number(e.target.value) : null)}
-                >
-                  <option value="">Selecciona item</option>
-                  {itemsPersonalizacion.map(item => (
-                    <option key={item.id} value={item.id}>{item.nombre}</option>
-                  ))}
-                </select>
-              </div>
-              <div className="flex items-end">
-                <button className="btn-secondary flex items-center" onClick={agregarFilaAjuste}>
-                  <Plus size={16} className="mr-2" />
-                  Agregar ajuste
-                </button>
-              </div>
+          {/* Ajustes por personalización */}
+          <div className="bg-white rounded-xl shadow-sm border border-secondary-200 flex flex-col">
+            <div className="p-6 border-b border-secondary-100 bg-secondary-50/50 rounded-t-xl">
+              <h3 className="text-xl font-bold text-secondary-900 flex items-center gap-2">
+                <Plus size={22} className="text-purple-500" />
+                Insumos por Adición / Opción
+              </h3>
+              <p className="text-sm text-secondary-500 mt-1">Define qué ingredientes gasta una personalización extra.</p>
             </div>
 
-            {ajustesError && (
-              <div className="bg-red-50 border border-red-200 p-3 rounded">
-                <p className="text-sm text-red-700">{ajustesError}</p>
-              </div>
-            )}
-
-            <div className="space-y-2">
-              {ajustesItems.map((item, index) => (
-                <div key={index} className="grid grid-cols-1 md:grid-cols-4 gap-2">
+            <div className="p-6 space-y-6 flex-grow">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-secondary-500 uppercase tracking-wider mb-2">Categoría</label>
                   <select
-                    className="input-field"
-                    value={item.insumo_id}
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setAjustesItems(prev => prev.map((r, i) => i === index ? { ...r, insumo_id: value } : r));
-                    }}
+                    className="input-field w-full h-11"
+                    value={categoriaPersonalizacionId ?? ''}
+                    onChange={(e) => setCategoriaPersonalizacionId(e.target.value ? Number(e.target.value) : null)}
                   >
-                    {insumos.map(insumo => (
-                      <option key={insumo.id} value={insumo.id}>{insumo.nombre}</option>
+                    <option value="">Selecciona categoría...</option>
+                    {categoriasPersonalizacion.map(cat => (
+                      <option key={cat.id} value={cat.id}>{cat.nombre}</option>
                     ))}
                   </select>
-                  <input
-                    type="number"
-                    className="input-field"
-                    value={item.cantidad_ajuste}
-                    step="0.01"
-                    onChange={(e) => {
-                      const value = Number(e.target.value);
-                      setAjustesItems(prev => prev.map((r, i) => i === index ? { ...r, cantidad_ajuste: value } : r));
-                    }}
-                  />
-                  <div className="input-field flex items-center text-sm text-secondary-700">
-                    $ {(obtenerCosto(item.insumo_id) * item.cantidad_ajuste).toFixed(2)}
-                  </div>
-                  <button
-                    className="btn-secondary flex items-center justify-center"
-                    onClick={() => setAjustesItems(prev => prev.filter((_, i) => i !== index))}
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-secondary-500 uppercase tracking-wider mb-2">Item o Adición</label>
+                  <select
+                    className="input-field w-full h-11"
+                    disabled={!categoriaPersonalizacionId}
+                    value={itemPersonalizacionId ?? ''}
+                    onChange={(e) => setItemPersonalizacionId(e.target.value ? Number(e.target.value) : null)}
                   >
-                    <Trash2 size={16} />
+                    <option value="">Selecciona item...</option>
+                    {itemsPersonalizacion.map(item => (
+                      <option key={item.id} value={item.id}>{item.nombre}</option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {itemPersonalizacionId && (
+                <div className="flex justify-start">
+                  <button 
+                    className="btn-secondary h-11 px-6 flex items-center gap-2 bg-white hover:bg-secondary-50 border-secondary-300" 
+                    onClick={agregarFilaAjuste}
+                  >
+                    <Plus size={18} className="text-purple-600" />
+                    <span>Agregar Ingrediente</span>
                   </button>
                 </div>
-              ))}
+              )}
+
+              {ajustesError && (
+                <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center gap-3 text-red-700">
+                  <AlertCircle size={20} />
+                  <p className="text-sm font-medium">{ajustesError}</p>
+                </div>
+              )}
+
+              <div className="border rounded-xl overflow-hidden bg-secondary-50/30">
+                <table className="min-w-full divide-y divide-secondary-200">
+                  <thead className="bg-secondary-100/50">
+                    <tr>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-secondary-600 uppercase">Insumo</th>
+                      <th className="px-4 py-3 text-left text-xs font-bold text-secondary-600 uppercase w-28">Cant.</th>
+                      <th className="px-4 py-3 text-right text-xs font-bold text-secondary-600 uppercase">Costo</th>
+                      <th className="px-4 py-3 text-center text-xs font-bold text-secondary-600 uppercase w-16"></th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-secondary-100">
+                    {ajustesItems.length === 0 ? (
+                      <tr>
+                        <td colSpan={4} className="px-4 py-10 text-center text-secondary-400">
+                          <div className="flex flex-col items-center gap-2">
+                            <RefreshCw size={32} className="opacity-20" />
+                            <p className="text-sm italic">Sin insumos configurados para esta opción.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      ajustesItems.map((item, index) => (
+                        <tr key={index} className="hover:bg-purple-50/30 transition-colors">
+                          <td className="px-4 py-3">
+                            <select
+                              className="w-full bg-transparent border-none focus:ring-0 text-secondary-800 text-sm font-medium p-0"
+                              value={item.insumo_id}
+                              onChange={(e) => {
+                                const value = Number(e.target.value);
+                                setAjustesItems(prev => prev.map((r, i) => i === index ? { ...r, insumo_id: value } : r));
+                              }}
+                            >
+                              {insumos.map(insumo => (
+                                <option key={insumo.id} value={insumo.id}>{insumo.nombre}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-1">
+                              <input
+                                type="number"
+                                className="w-full bg-transparent border-b border-transparent focus:border-purple-500 focus:ring-0 text-sm font-mono p-0"
+                                value={item.cantidad_ajuste}
+                                step="0.01"
+                                onChange={(e) => {
+                                  const value = Number(e.target.value);
+                                  setAjustesItems(prev => prev.map((r, i) => i === index ? { ...r, cantidad_ajuste: value } : r));
+                                }}
+                              />
+                              <span className="text-[10px] font-bold text-secondary-400 uppercase">
+                                {insumos.find(ins => ins.id === item.insumo_id)?.unidad_medida || '—'}
+                              </span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right text-sm font-mono text-secondary-600">
+                            ${(obtenerCosto(item.insumo_id) * item.cantidad_ajuste).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-3 text-center">
+                            <button
+                              className="p-1.5 text-secondary-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all"
+                              onClick={() => setAjustesItems(prev => prev.filter((_, i) => i !== index))}
+                            >
+                              <Trash2 size={16} />
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                  {ajustesItems.length > 0 && (
+                    <tfoot className="bg-secondary-50/50">
+                      <tr>
+                        <td colSpan={2} className="px-4 py-4 text-sm font-bold text-secondary-900 text-right uppercase tracking-wider">
+                          Costo Extra Total:
+                        </td>
+                        <td className="px-4 py-4 text-right text-lg font-bold text-purple-600 font-mono">
+                          ${totalCostoAjustes.toLocaleString()}
+                        </td>
+                        <td></td>
+                      </tr>
+                    </tfoot>
+                  )}
+                </table>
+              </div>
             </div>
 
-            <div className="text-sm text-secondary-600">
-              Costo estimado total: <span className="font-semibold text-secondary-900">$ {totalCostoAjustes.toFixed(2)}</span>
-            </div>
-
-            <button className="btn-primary flex items-center" onClick={guardarAjustes}>
-              <Save size={16} className="mr-2" />
-              Guardar ajustes
-            </button>
+            {itemPersonalizacionId && (
+              <div className="p-6 bg-secondary-50 rounded-b-xl border-t mt-auto">
+                <button 
+                  className="btn-primary w-full py-3 flex items-center justify-center gap-2 shadow-lg shadow-purple-500/20 bg-purple-600 hover:bg-purple-700 border-none" 
+                  onClick={guardarAjustes}
+                >
+                  <Save size={20} />
+                  <span className="font-bold">Guardar Costos de Adición</span>
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -997,26 +1298,99 @@ export default function GestionInventarioAvanzado() {
               <p className="text-sm text-red-700">{configError}</p>
             </div>
           )}
+
+          <div className="pt-6 border-t border-secondary-100">
+            <h3 className="text-lg font-semibold text-secondary-900 mb-2">Mantenimiento del Sistema</h3>
+            <p className="text-sm text-secondary-600 mb-4">Limpia el historial de movimientos de insumos para mantener el sistema ligero. Se recomienda dejar al menos 30-90 días de historial.</p>
+            
+            <div className="flex flex-wrap gap-3">
+              <button 
+                onClick={() => limpiarHistorial(30)}
+                disabled={limpiandoHistorial}
+                className="px-4 py-2 bg-secondary-100 hover:bg-secondary-200 text-secondary-700 rounded-lg text-sm font-medium transition-colors border border-secondary-200"
+              >
+                Limpiar historial &gt; 30 días
+              </button>
+              <button 
+                onClick={() => limpiarHistorial(90)}
+                disabled={limpiandoHistorial}
+                className="px-4 py-2 bg-secondary-100 hover:bg-secondary-200 text-secondary-700 rounded-lg text-sm font-medium transition-colors border border-secondary-200"
+              >
+                Limpiar historial &gt; 90 días
+              </button>
+              <button 
+                onClick={() => {
+                  const dias = prompt('¿A partir de cuántos días quieres limpiar?', '180');
+                  if (dias && !isNaN(Number(dias))) {
+                    limpiarHistorial(Number(dias));
+                  }
+                }}
+                disabled={limpiandoHistorial}
+                className="px-4 py-2 bg-red-50 hover:bg-red-100 text-red-600 rounded-lg text-sm font-medium transition-colors border border-red-200"
+              >
+                Limpieza personalizada
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
       {tab === 'historial' && (
-        <div className="bg-white rounded-lg shadow  space-y-4">
-          <div className="flex flex-col md:flex-row gap-4 md:items-end">
-            <div>
-              <label className="block text-sm font-medium text-secondary-700">Filtrar por insumo</label>
+        <div className="bg-white rounded-lg shadow space-y-4 p-4">
+          <div className="flex flex-col md:flex-row gap-4 items-end bg-secondary-50 p-4 rounded-xl border border-secondary-200">
+            <div className="flex-grow max-w-xs">
+              <label className="block text-xs font-bold text-secondary-500 uppercase tracking-wider mb-2">Filtrar por Insumo</label>
               <select
-                className="input-field"
+                className="input-field w-full h-11"
                 value={historialInsumoId ?? ''}
                 onChange={(e) => setHistorialInsumoId(e.target.value ? Number(e.target.value) : null)}
               >
-                <option value="">Todos</option>
+                <option value="">Todos los insumos</option>
                 {insumos.map((insumo) => (
                   <option key={insumo.id} value={insumo.id}>{insumo.nombre}</option>
                 ))}
               </select>
             </div>
-            <button className="btn-secondary" onClick={cargarHistorial}>Actualizar</button>
+            
+            <div className="w-full md:w-44">
+              <label className="block text-xs font-bold text-secondary-500 uppercase tracking-wider mb-2">Desde</label>
+              <input 
+                type="date" 
+                className="input-field w-full h-11"
+                value={fechaInicio}
+                onChange={(e) => setFechaInicio(e.target.value)}
+              />
+            </div>
+
+            <div className="w-full md:w-44">
+              <label className="block text-xs font-bold text-secondary-500 uppercase tracking-wider mb-2">Hasta</label>
+              <input 
+                type="date" 
+                className="input-field w-full h-11"
+                value={fechaFin}
+                onChange={(e) => setFechaFin(e.target.value)}
+              />
+            </div>
+
+            <div className="flex gap-2">
+              <button 
+                className="btn-secondary h-11 px-4 flex items-center gap-2 bg-white" 
+                onClick={() => {
+                  setFechaInicio('');
+                  setFechaFin('');
+                  setHistorialInsumoId(null);
+                }}
+              >
+                Limpiar
+              </button>
+              <button 
+                className="btn-primary h-11 px-6 flex items-center gap-2" 
+                onClick={cargarHistorial}
+              >
+                <RefreshCw size={18} />
+                <span>Actualizar</span>
+              </button>
+            </div>
           </div>
 
           {historialError && (
@@ -1341,33 +1715,132 @@ export default function GestionInventarioAvanzado() {
         </div>
       )}
 
-      {tab === 'importacion' && (
-        <div className="bg-white rounded-lg shadow  space-y-4">
-          <h3 className="text-lg font-semibold text-secondary-900">Importar / Exportar</h3>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="border rounded-lg p-4 space-y-3">
-              <p className="font-medium text-secondary-800">Productos</p>
-              <button
-                className="btn-secondary flex items-center"
-                onClick={async () => {
-                  const blob = await apiService.exportarProductosExcel();
-                  descargarArchivo(blob, 'productos.xlsx');
-                }}
-              >
-                <Download size={16} className="mr-2" />
-                Exportar
-              </button>
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'productos')}
-                disabled={importando}
-              />
+      {tab === 'categorias' && (
+        <div className="space-y-6">
+          <div className="flex justify-between items-center">
+            <h3 className="text-xl font-bold text-secondary-900">Categorías de Insumos</h3>
+            <button 
+              className="btn-primary flex items-center"
+              onClick={() => {
+                cancelarEdicionCategoria();
+                setMostrarModalCategoria(true);
+              }}
+            >
+              <Plus size={18} className="mr-2" />
+              Nueva Categoría
+            </button>
+          </div>
+
+          {mostrarModalCategoria && (
+            <div className="fixed inset-0 bg-black/50 z-[60] flex items-center justify-center p-4">
+              <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden">
+                <div className="bg-white border-b px-6 py-4 flex justify-between items-center">
+                  <h3 className="text-xl font-bold text-secondary-900">
+                    {categoriaEditandoId ? 'Editar Categoría' : 'Nueva Categoría'}
+                  </h3>
+                  <button onClick={cancelarEdicionCategoria} className="text-secondary-400 hover:text-secondary-600 transition-colors">
+                    <X size={24} />
+                  </button>
+                </div>
+                
+                <div className="p-6 space-y-4">
+                  <div>
+                    <label className="block text-sm font-semibold text-secondary-700 mb-1">Nombre de la Categoría *</label>
+                    <input
+                      className="input-field w-full"
+                      placeholder="Ej: Verduras, Carnes, Abarrotes..."
+                      value={categoriaForm.nombre}
+                      onChange={(e) => setCategoriaForm(prev => ({ ...prev, nombre: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-secondary-700 mb-1">Descripción (Opcional)</label>
+                    <textarea
+                      className="input-field w-full"
+                      rows={3}
+                      value={categoriaForm.descripcion || ''}
+                      onChange={(e) => setCategoriaForm(prev => ({ ...prev, descripcion: e.target.value }))}
+                    />
+                  </div>
+
+                  {categoriaError && (
+                    <div className="bg-red-50 border border-red-200 p-4 rounded-lg flex items-center text-red-700">
+                      <AlertCircle size={20} className="mr-2 flex-shrink-0" />
+                      <p className="text-sm">{categoriaError}</p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="bg-secondary-50 px-6 py-4 flex justify-end space-x-3">
+                  <button className="btn-secondary px-6" onClick={cancelarEdicionCategoria}>
+                    Cancelar
+                  </button>
+                  <button className="btn-primary flex items-center px-8" onClick={guardarCategoria}>
+                    <Save size={18} className="mr-2" />
+                    {categoriaEditandoId ? 'Actualizar' : 'Crear'}
+                  </button>
+                </div>
+              </div>
             </div>
-            <div className="border rounded-lg p-4 space-y-3">
-              <p className="font-medium text-secondary-800">Insumos</p>
+          )}
+
+          <div className="bg-white rounded-lg shadow overflow-hidden">
+            <table className="min-w-full divide-y divide-secondary-200">
+              <thead className="bg-secondary-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase">Nombre</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase">Descripción</th>
+                  <th className="px-6 py-3 text-left text-xs font-semibold text-secondary-600 uppercase">Acciones</th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-secondary-100">
+                {insumoCategorias.map((cat) => (
+                  <tr key={cat.id}>
+                    <td className="px-6 py-4 text-sm text-secondary-900 font-medium">{cat.nombre}</td>
+                    <td className="px-6 py-4 text-sm text-secondary-600">{cat.descripcion || '—'}</td>
+                    <td className="px-6 py-4 text-sm">
+                      <div className="flex items-center gap-3">
+                        <button
+                          className="text-primary-600 hover:text-primary-800"
+                          onClick={() => iniciarEdicionCategoria(cat)}
+                          title="Editar"
+                        >
+                          <Save size={18} />
+                        </button>
+                        <button
+                          className="text-red-500 hover:text-red-700"
+                          onClick={() => eliminarCategoria(cat.id)}
+                          title="Eliminar"
+                        >
+                          <Trash2 size={18} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+                {insumoCategorias.length === 0 && (
+                  <tr>
+                    <td colSpan={3} className="px-6 py-8 text-sm text-secondary-500 text-center">No hay categorías</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {tab === 'importacion' && (
+        <div className="bg-white rounded-lg shadow space-y-4 p-4">
+          <h3 className="text-lg font-semibold text-secondary-900">Importar / Exportar Datos</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            {/* Insumos */}
+            <div className="border rounded-lg p-4 space-y-3 flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <Tag size={18} className="text-primary-500" />
+                <p className="font-bold text-secondary-800">Insumos</p>
+              </div>
               <button
-                className="btn-secondary flex items-center"
+                className="btn-secondary w-full flex items-center justify-center py-2"
                 onClick={async () => {
                   const blob = await apiService.exportarInsumos();
                   descargarArchivo(blob, 'insumos.xlsx');
@@ -1376,17 +1849,33 @@ export default function GestionInventarioAvanzado() {
                 <Download size={16} className="mr-2" />
                 Exportar
               </button>
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'insumos')}
-                disabled={importando}
-              />
+              <div className="relative">
+                <input
+                  id="import-insumos"
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'insumos')}
+                  disabled={importando}
+                />
+                <label 
+                  htmlFor="import-insumos"
+                  className={`btn-primary w-full flex items-center justify-center py-2 cursor-pointer ${importando ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <UploadCloud size={16} className="mr-2" />
+                  Importar
+                </label>
+              </div>
             </div>
-            <div className="border rounded-lg p-4 space-y-3">
-              <p className="font-medium text-secondary-800">Recetas</p>
+
+            {/* Recetas */}
+            <div className="border rounded-lg p-4 space-y-3 flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <RefreshCw size={18} className="text-orange-500" />
+                <p className="font-bold text-secondary-800">Recetas / Costos Per.</p>
+              </div>
               <button
-                className="btn-secondary flex items-center"
+                className="btn-secondary w-full flex items-center justify-center py-2"
                 onClick={async () => {
                   const blob = await apiService.exportarRecetas();
                   descargarArchivo(blob, 'recetas.xlsx');
@@ -1395,17 +1884,100 @@ export default function GestionInventarioAvanzado() {
                 <Download size={16} className="mr-2" />
                 Exportar
               </button>
-              <input
-                type="file"
-                accept=".xlsx"
-                onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'recetas')}
-                disabled={importando}
-              />
+              <div className="relative">
+                <input
+                  id="import-recetas"
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'recetas')}
+                  disabled={importando}
+                />
+                <label 
+                  htmlFor="import-recetas"
+                  className={`btn-primary w-full flex items-center justify-center py-2 cursor-pointer ${importando ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <UploadCloud size={16} className="mr-2" />
+                  Importar
+                </label>
+              </div>
+            </div>
+
+            {/* Productos */}
+            <div className="border rounded-lg p-4 space-y-3 flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <Save size={18} className="text-green-500" />
+                <p className="font-bold text-secondary-800">Productos</p>
+              </div>
+              <button
+                className="btn-secondary w-full flex items-center justify-center py-2"
+                onClick={async () => {
+                  const blob = await apiService.exportarProductosExcel();
+                  descargarArchivo(blob, 'productos.xlsx');
+                }}
+              >
+                <Download size={16} className="mr-2" />
+                Exportar
+              </button>
+              <div className="relative">
+                <input
+                  id="import-productos"
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'productos')}
+                  disabled={importando}
+                />
+                <label 
+                  htmlFor="import-productos"
+                  className={`btn-primary w-full flex items-center justify-center py-2 cursor-pointer ${importando ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <UploadCloud size={16} className="mr-2" />
+                  Importar
+                </label>
+              </div>
+            </div>
+
+            {/* Personalizaciones */}
+            <div className="border rounded-lg p-4 space-y-3 flex flex-col">
+              <div className="flex items-center gap-2 mb-2">
+                <Plus size={18} className="text-purple-500" />
+                <p className="font-bold text-secondary-800">Personalizaciones</p>
+              </div>
+              <button
+                className="btn-secondary w-full flex items-center justify-center py-2"
+                onClick={async () => {
+                  const blob = await apiService.exportarPersonalizaciones();
+                  descargarArchivo(blob, 'personalizaciones.xlsx');
+                }}
+              >
+                <Download size={16} className="mr-2" />
+                Exportar
+              </button>
+              <div className="relative">
+                <input
+                  id="import-personalizaciones"
+                  type="file"
+                  accept=".xlsx"
+                  className="hidden"
+                  onChange={(e) => manejarImportacion(e.target.files?.[0] || null, 'personalizaciones')}
+                  disabled={importando}
+                />
+                <label 
+                  htmlFor="import-personalizaciones"
+                  className={`btn-primary w-full flex items-center justify-center py-2 cursor-pointer ${importando ? 'opacity-50 pointer-events-none' : ''}`}
+                >
+                  <UploadCloud size={16} className="mr-2" />
+                  Importar
+                </label>
+              </div>
             </div>
           </div>
-          <div className="flex items-center text-sm text-secondary-600">
-            <UploadCloud size={16} className="mr-2" />
-            Plantillas nuevas separadas por entidad. Mantén el formato de columnas exportadas.
+          <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-start gap-3">
+            <UploadCloud size={20} className="mt-0.5 flex-shrink-0" />
+            <div>
+              <p><strong>Recomendación:</strong> Exporta primero el archivo actual para tener la plantilla con el formato correcto y los IDs existentes. Esto evitará duplicados al re-importar.</p>
+            </div>
           </div>
         </div>
       )}
