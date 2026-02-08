@@ -718,8 +718,21 @@ Sistema-de-comandas-Casa-Montis/
 
 **Software Opcional:**
 - 🖨️ **Impresora Térmica ESC/POS** (58mm o 80mm)
-- 🐍 **Python 3.9+** (para plugin de impresión)
+- 🐍 **Python 3.9+** (para plugin de impresión local)
 - 📄 **pgAdmin 4** (para administrar PostgreSQL visualmente)
+
+---
+
+### 📚 Guías de Instalación
+
+**Desarrollo Local:**
+- [Instalación Rápida con Scripts](#🚀-instalación-rápida-con-script-automático-windows) - Usa `setup_completo.bat`
+- [Instalación Manual Paso a Paso](#⚙️-instalación-manual-paso-a-paso) - Control completo del proceso
+
+**Producción (Nube):**
+- 📖 **[DEPLOY.md](./DEPLOY.md)** - Guía completa y detallada para Render.com
+- ✅ **[CHECKLIST-DEPLOY.md](./CHECKLIST-DEPLOY.md)** - Verificación pre-deploy
+- ⚡ **[DEPLOY-QUICKSTART.md](./DEPLOY-QUICKSTART.md)** - Versión rápida (30 min)
 
 ---
 
@@ -739,6 +752,12 @@ cd Sistema-de-comandas-Casa-Montis
 cd backend
 copy .env.example .env
 # Editar backend\.env con tus credenciales de PostgreSQL
+cd ..
+
+cd admin-panel
+copy .env.example .env.local
+# Editar admin-panel\.env.local con URL del backend
+# (En desarrollo local usar: NEXT_PUBLIC_API_URL=http://localhost:3001)
 cd ..
 
 # 4. Ejecutar setup completo
@@ -874,8 +893,26 @@ cd admin-panel
 # Instalar dependencias
 npm install
 
+# Configurar URL del backend
+cp .env.example .env.local
+# Editar .env.local con la URL de tu backend
+# NEXT_PUBLIC_API_URL=http://localhost:3001 (desarrollo)
+# NEXT_PUBLIC_API_URL=https://tu-backend.com (producción)
+
 # Iniciar en modo desarrollo (puerto 3002)
 npm run dev
+```
+
+**Configuración en `admin-panel/.env.local`:**
+
+```env
+# URL del Backend API
+# Desarrollo: http://localhost:3001
+# Producción: https://tu-backend-en-la-nube.com
+NEXT_PUBLIC_API_URL=http://localhost:3001
+
+# Entorno
+NODE_ENV=development
 ```
 
 #### 5️⃣ **Plugin de Impresión (Python + Flask)**
@@ -912,6 +949,79 @@ El EXE compilado estará en `build/CasaMontis-PrintPlugin/CasaMontis-PrintPlugin
 - 🖨️ **Endpoint**: `POST http://localhost:8001/imprimir`
 - 📝 **Body**: JSON con `{ "printer": "nombre_impresora", "text": "contenido_a_imprimir" }`
 - 📋 **Listar impresoras**: `GET http://localhost:8001/printers`
+
+---
+
+### ☁️ Despliegue en Producción (Nube)
+
+**📖 Guía Completa de Deploy:** Ver [`DEPLOY.md`](./DEPLOY.md) para instrucciones detalladas de despliegue en Render.com
+
+**✅ Checklist Pre-Deploy:** Ver [`CHECKLIST-DEPLOY.md`](./CHECKLIST-DEPLOY.md) para verificar que todo está listo
+
+#### Configuración Rápida para Render.com
+
+**1. Preparar Variables de Entorno:**
+```env
+NODE_ENV=production
+PORT=3001
+DATABASE_URL=postgresql://usuario:password@host.db.com:5432/nombre_db
+JWT_SECRET=clave_super_segura_generada_con_openssl_64_caracteres_minimo
+```
+
+3. **Build y deploy:**
+```bash
+npm run build
+npm start
+```
+
+**Frontend y Admin Panel (Next.js):**
+
+1. **Frontend:** Configurar `NEXT_PUBLIC_API_URL` con URL del backend en la nube
+```env
+# frontend/.env.production
+NEXT_PUBLIC_API_URL=https://tu-backend-en-produccion.com
+NEXT_PUBLIC_PRINT_PLUGIN_URL=http://localhost:8001  # Solo para PC local con impresora
+```
+
+2. **Admin Panel:** Configurar URL del backend
+```env
+# admin-panel/.env.local (o variables en plataforma de hosting)
+NEXT_PUBLIC_API_URL=https://tu-backend-en-produccion.com
+NODE_ENV=production
+```
+
+3. **Deploy:**
+   - Vercel (recomendado para Next.js): Deploy automático desde GitHub
+   - Netlify, Railway, Render también funcionan
+   - Configurar variables de entorno en dashboard de la plataforma
+
+**Plugin de Impresión (Local):**
+- El plugin debe seguir ejecutándose localmente en las PCs con impresoras térmicas
+- No se puede hostear en la nube (requiere acceso USB a impresoras físicas)
+- Compilar a EXE con `COMPILAR_A_EXE.bat` para distribución
+
+#### Plataformas Recomendadas
+
+| Componente | Plataforma Recomendada | Costo Estimado |
+|------------|------------------------|----------------|
+| **Backend API** | Railway, Render | $5-10/mes |
+| **PostgreSQL** | Railway (incluido), Render | $0-7/mes |
+| **Frontend** | Vercel, Netlify | Gratis |
+| **Admin Panel** | Vercel, Netlify | Gratis |
+| **Plugin Impresión** | Local (PC con impresora) | $0 |
+
+#### Checklist de Producción
+
+- [ ] PostgreSQL en la nube configurado
+- [ ] `DATABASE_URL` actualizado en backend
+- [ ] `JWT_SECRET` generado de forma segura (min 32 caracteres)
+- [ ] Backend desplegado y funcionando
+- [ ] Frontend desplegado con `NEXT_PUBLIC_API_URL` correcto
+- [ ] Admin Panel desplegado con URL del backend
+- [ ] Migraciones ejecutadas en BD de producción
+- [ ] CORS configurado correctamente en backend
+- [ ] HTTPS habilitado (automático en Vercel/Netlify)
+- [ ] Plugin de impresión instalado en PCs locales
 
 ---
 
