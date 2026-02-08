@@ -1,66 +1,148 @@
-# Sistema de Comandas - Casa Montis
+# 🍽️ Sistema de Comandas - Montis Cloud
 
-Sistema integral de comandas para el restaurante Casa Montis, desarrollado con React/Next.js en el frontend y Node.js/Express en el backend, con impresión térmica automática y soporte completo para pedidos en mesa y a domicilio.
+**Sistema integral de gestión para restaurantes de última generación**
 
-## 🚀 Características Principales
+Plataforma completa desarrollada con React/Next.js (frontend) y Node.js/Express (backend), diseñada para optimizar todas las áreas operativas de un restaurante: desde la toma de pedidos multi-canal hasta la gestión completa de recursos humanos, inventario avanzado por insumos, impresión térmica profesional personalizable, y control total de acceso con roles y permisos granulares.
 
-### 🍽️ Gestión de Pedidos Multi-canal
-- **Pedidos en Mesa**: Sistema tradicional con selección de mesa y mesero
-- **Pedidos a Domicilio**: Con captura de datos del cliente (nombre, dirección, teléfono)
-- **Pedidos para Llevar**: Modalidad express sin dirección de entrega
-- **Flujo Condicional**: UI adaptativa según el tipo de pedido seleccionado
+---
 
-### 💼 Frontend (React + Next.js + Tailwind)
-- **Formulario por pasos (5 steps)**:
-  1. Selección de tipo de pedido (Mesa/Domicilio/Para Llevar)
-  2. Datos de mesa o cliente (según tipo)
-  3. Tipo de servicio (Desayuno/Almuerzo/Carta)
-  4. Selección de productos con personalización
-  5. Resumen y confirmación con observaciones
+## 🌟 Características Destacadas
 
-- **Categorización de productos**: 
-  - Desayunos (con precios especiales)
-  - Almuerzos (sopa, principio, proteína)
-  - Especialidades a la carta (pechugas, carnes, pastas, pescados, arroces)
-  - Sopas individuales
-  - Bebidas
-  - Productos de cafetería
-  - Porciones adicionales
+### 🍽️ Gestión Omnicanal de Pedidos
 
-- **Gestión de Comandas**:
-  - Visualización de comandas activas
-  - Historial completo con filtros
-  - Edición de comandas existentes (agregar items adicionales)
-  - Estados: Pendiente, Preparando, Lista, Entregada, Cancelada
+**Sistema Multi-Punto de Venta con Flujo Inteligente:**
+- **Pedidos en Mesa**: Gestión clásica con asignación de múltiples mesas por comanda y vinculación de mesero
+- **Pedidos a Domicilio**: Captura completa de datos del cliente (nombre, dirección completa, teléfono de contacto)
+- **Pedidos para Llevar**: Modalidad rápida sin requerimiento de dirección de entrega
+- **UI Adaptativa**: Interfaz que se ajusta dinámicamente según el tipo de pedido seleccionado
+- **Edición de Comandas**: Agregar items adicionales a comandas existentes con impresión selectiva
+- **Múltiples Mesas**: Posibilidad de asignar varias mesas a una misma comanda
 
-- **Interfaz de Caja**:
-  - Procesamiento de facturas
-  - Métodos de pago: Efectivo, Tarjeta, Transferencia, Mixto
-  - Cálculo automático de cambio
-  - Impresión de recibos
+### 💼 Frontend Moderno (React 18 + Next.js 14 + Tailwind CSS)
 
-- **Diseño responsive**: Funciona en tablets, celulares y PCs
-- **Interfaz moderna**: UI atractiva y fácil de usar con Lucide Icons
+**Wizard Inteligente de 5 Pasos:**
+1. **Selección de Tipo de Pedido**: Mesa, Domicilio o Para Llevar con validación contextual
+2. **Asignación de Recursos**: Selección de mesa(s) o captura de datos del cliente según tipo
+3. **Tipo de Servicio**: Desayuno, Almuerzo o Carta Completa con menús personalizados
+4. **Catálogo de Productos**: Navegación por categorías con buscador rápido y gestión de cantidades
+5. **Resumen y Confirmación**: Vista previa detallada con observaciones generales y validación final
 
-### ⚙️ Backend (Node.js + Express + SQLite + TypeScript)
-- **API RESTful Completa**: 
-  - CRUD de mesas, productos, comandas y salones
-  - Validación condicional según tipo de pedido
-  - Gestión de personalizaciones dinámicas
-  - Sistema de facturas
+**Sistema de Categorización Flexible:**
+- 🌄 **Desayunos**: Con personalizaciones completas (bebidas, panes, acompañamientos, preparaciones)
+- 🍽️ **Almuerzos**: Sistema de entradas, platos fuertes y postres personalizables
+- 🍕 **Pizzas**: Con opciones de tamaño y ingredientes adicionales
+- 🥤 **Bebidas**: Clasificación por tipo (calientes, frías, alcohólicas)
+- 🍰 **Postres**: Catálogo visual con opciones especiales
+- 🍔 **Comida Rápida**: Para pedidos express
+- 🍖 **Porciones Adicionales**: Complementos y extras
 
-- **Base de datos SQLite**: 
-  - Ligera y eficiente para un solo punto
-  - Soporte para múltiples mesas por comanda
-  - Campos adicionales para domicilios (tipo_pedido, cliente_nombre, cliente_direccion, cliente_telefono, es_para_llevar)
-  - Historial completo de comandas
+**Gestión Avanzada de Comandas:**
+- ✅ Visualización en tiempo real de comandas activas con totales automáticos
+- 📝 Edición de comandas existentes con detección inteligente de items nuevos
+- 🔄 Sistema de estados: Pendiente → Preparando → Lista → Entregada → Completada
+- ❌ Cancelación de comandas con liberación automática de mesas
+- 📊 Historial completo con filtros por fecha, estado, mesa y tipo de pedido
+- 🔍 Buscador rápido por número de comanda o cliente
+- 📱 Interfaz responsive optimizada para tablets y dispositivos móviles
 
-- **Control de mesas**: 
-  - Gestión automática del estado de ocupación
-  - Liberación automática al facturar
-  - Organización por salones
+**Interfaz Profesional de Caja:**
+- 💰 Procesamiento de facturas con cálculo automático de IVA configurable
+- 💳 Métodos de pago múltiples (Efectivo, Tarjeta, Transferencia, Mixto)
+- 💵 Calculadora automática de cambio para pagos en efectivo
+- 🧾 Generación de recibos de pago con detalle completo
+- 📄 Sistema de facturación con encabezado empresarial personalizable
+- ✓ Pago parcial de items con tracking individual por producto
+- 🖨️ Impresión automática de facturas y recibos térmicos
+- 📋 Vista previa de facturación antes de confirmar
+- 🔓 Liberación automática de mesas al completar pago
 
-- **Transacciones**: Consistencia de datos garantizada
+**Panel de Administración Completo:**
+- ⚙️ **Configuración del Sistema**: Parámetros globales, modos de bloqueo de inventario
+- 👥 **Gestión de Usuarios**: CRUD completo con estados activo/inactivo
+- 🔐 **Roles y Permisos**: Matriz de permisos granular por módulo y acción
+- 👷 **Gestión de Empleados**: Expediente digital completo del personal
+- 💼 **Nómina y Liquidaciones**: Cálculo automático de pagos y prestaciones sociales
+- 📝 **Generación de Contratos**: Creación de documentos contractuales en PDF
+- 🏢 **Datos de Empresa**: Información fiscal y de contacto para facturación
+- 🧾 **Configuración de Facturación**: Parámetros de IVA, responsabilidades fiscales
+- 🏠 **Gestión de Salones**: Organización física del restaurante
+- 🪑 **Gestión de Mesas**: CRUD de mesas con capacidad y ubicación
+- 🍕 **Gestión de Productos**: Catálogo completo con inventario simple
+- 🏷️ **Categorías**: Organización de productos y personalizaciones
+- ✨ **Personalizaciones**: Opciones configurables para productos personalizables
+- 📦 **Inventario Avanzado**: Sistema completo de insumos, recetas y ajustes
+- 🖨️ **Configuración de Impresión**: Selección de impresoras, ancho de papel y tamaño de fuente
+
+**Experiencia de Usuario:**
+- 📱 **Diseño 100% Responsive**: Optimizado para escritorio, tablet y móvil
+- 🎨 **UI Moderna con Tailwind CSS**: Interfaz limpia, intuitiva y profesional
+- 🚀 **Iconografía Lucide**: Íconos vectoriales de alta calidad
+- ⌨️ **Atajos de Teclado**: Navegación rápida para operadores experimentados
+- 🔔 **Notificaciones en Tiempo Real**: Alertas de estado de comandas e inventario
+- 🌙 **Tema Personalizable**: Colores y branding adaptables
+- ♿ **Accesibilidad**: Cumple con estándares WCAG para inclusión
+
+### ⚙️ Backend Robusto (Node.js 18+ + Express 4 + PostgreSQL + TypeScript)
+
+**API RESTful Enterprise-Grade:**
+- 🔌 **Arquitectura Modular**: Separación clara en routes, repositories, services y middleware
+- 🗄️ **Base de Datos PostgreSQL**: Potente, escalable y con soporte completo de transacciones ACID
+- 🔄 **Sistema de Migraciones**: Control de versiones de esquema con Kysely
+- 🛡️ **Seguridad Robusta**: Autenticación JWT, bcrypt para passwords, helmet para headers
+- 📊 **Transacciones**: Garantía de consistencia en operaciones críticas
+- 🚀 **Compresión Gzip**: Respuestas optimizadas para mejor rendimiento
+- 📝 **Logging Completo**: Trazabilidad de operaciones y errores
+- ⚡ **Pool de Conexiones**: Gestión eficiente de conexiones a base de datos
+
+**Módulos y Funcionalidades:**
+
+**🔐 Autenticación y Seguridad:**
+- Sistema de login con sesiones JWT de larga duración (12 horas)
+- Middleware de autenticación en todas las rutas protegidas
+- Control de super-admin para operaciones críticas
+- Gestión de usuarios con estados y roles vinculados
+- Matriz de permisos granular por módulo (Comandas, Productos, Inventario, Usuarios, etc.)
+
+**🍽️ Gestión Operativa:**
+- CRUD completo de mesas con estados (disponible, ocupada, reservada)
+- Gestión de salones con asignación de mesas
+- Catálogo de productos con inventario simple y por insumos
+- Sistema de categorías flexible y extensible
+- Personalizaciones con precio adicional y ajustes de inventario
+- Comandas multi-canal con soporte para edición y agregado de items
+- Facturas con cálculo de IVA y múltiples métodos de pago
+
+**📦 Inventario Inteligente:**
+- **Insumos**: Stock con umbrales de mínimo y crítico, estados automáticos
+- **Recetas por Producto**: Define qué insumos consume cada producto
+- **Ajustes por Personalización**: Insumos extras o reducciones según opciones
+- **Descuento Automático**: Al confirmar comandas se resta stock de insumos
+- **Historial de Movimientos**: Trazabilidad completa de consumos y ajustes
+- **Indicadores de Riesgo**: Sistema de alertas (OK, BAJO, CRÍTICO, AGOTADO)
+- **Bloqueo Configurable**: Prevenir ventas cuando inventario es insuficiente
+- **Import/Export Excel**: Carga masiva y respaldo de insumos, recetas y productos
+
+**👥 Recursos Humanos:**
+- Expediente digital de empleados (datos personales, contractuales, salariales)
+- Cálculo automático de nómina con devengados (horas extra, dominicales, festivos)
+- Liquidación de prestaciones sociales (cesantías, intereses, primas, vacaciones)
+- Generación de contratos en PDF con plantillas personalizables
+- Historial de liquidaciones con trazabilidad completa
+- Parámetros de ley actualizables (salario mínimo, auxilio de transporte)
+
+**📊 Reportes y Análisis:**
+- Ventas por periodo, mesa, mesero y producto
+- Estado de inventario con alertas de stock bajo/crítico
+- Consumo de insumos por periodo
+- Productos más vendidos y menos vendidos
+- Análisis de rentabilidad por producto
+- Exportación de reportes a Excel
+
+**🔄 Control de Estados y Flujos:**
+- Estados de comandas con transiciones validadas
+- Estados de mesas con liberación automática post-facturación
+- Estados de empleados (activo, inactivo, liquidado)
+- Estados de usuarios con control de acceso inmediato
 
 ### 👥 Gestión de Recursos Humanos (Nómina y Personal)
 - **Gestión de Empleados**: 
@@ -76,270 +158,1138 @@ Sistema integral de comandas para el restaurante Casa Montis, desarrollado con R
   - Historial detallado de liquidaciones con trazabilidad
 
 ### 🔐 Seguridad y Control de Acceso (Usuarios y Roles)
-- **Autenticación Multimodal**:
-  - **Login Seguro**: Autenticación por usuario y contraseña con hashing robusto (bcrypt).
-  - **Acceso por PIN**: Identificación rápida mediante código PIN para operaciones frecuentes en el punto de venta.
-  - **Sesiones Persistentes**: Gestión de tokens de sesión con duración configurable (12 horas por defecto).
-- **Control de Acceso Basado en Roles (RBAC)**:
-  - **Perfiles Personalizados**: Creación de roles con nombres, descripciones y niveles de acceso específicos.
-  - **Permisos Granulares**: Sistema de permisos por módulo (ej: `comandas.crear`, `nomina.admin`, `usuarios.gestionar`).
-  - **Superusuarios**: Acceso total e irrestricto a todas las funciones críticas del sistema.
-- **Administración de Cuentas**:
-  - **Estado de Usuarios**: Control de activación/desactivación inmediata de cuentas.
-  - **Trazabilidad**: Registro automático del último inicio de sesión y fecha de creación de cada usuario.
-  - **Integración**: Vinculación directa entre usuarios del sistema y el personal registrado en RRHH.
 
-### 🖨️ Sistema de Impresión Profesional
-- **Plugin HTTP Propio** (Puerto 8001):
-  - Sin marcas de agua ni dependencias externas
-  - Soporte nativo para impresoras térmicas ESC/POS
-  - Encoding CP850 optimizado para caracteres españoles (tildes, ñ)
-  - Comandos ESC/POS nativos para control total
+**Autenticación Robusta:**
+- 🔑 **JWT Tokens**: Sesiones seguras con tokens firmados digitalmente
+- ⏰ **Expiración de 12 Horas**: Balance entre seguridad y experiencia de usuario
+- 🔐 **Bcrypt Hashing**: Passwords encriptados con salt rounds para máxima seguridad
+- 📱 **Acceso por PIN**: Identificación rápida con código numérico para operaciones frecuentes
+- 🚪 **Logout Seguro**: Eliminación de tokens y cierre de sesión
+- 🔄 **Refresh Automático**: Validación de sesión en cada solicitud
+- 🛡️ **Middleware de Protección**: Rutas protegidas por defecto, públicas por excepción
 
-- **Impresión Inteligente**:
-  - **Comandas iniciales**: Impresión automática completa
-  - **Items adicionales**: Solo imprime productos nuevos agregados
-  - **Formato diferenciado**: Marca visual para items adicionales urgentes
-  - **Sin duplicados**: Filtro automático de items ya impresos
+**Sistema de Roles y Permisos Granular (RBAC):**
 
-- **Formatos Optimizados**:
-  - Comandas de cocina (58mm)
-  - Facturas de caja
-  - Recibos de pago
-  - Soporte para domicilios con dirección completa
+**Roles del Sistema:**
+- 👑 **Super-Admin**: Control total incluyendo gestión de usuarios y roles
+- 🏢 **Administrador**: Gestión operativa completa menos control de accesos
+- 👨‍💼 **Gerente**: Supervisión, reportes y configuración limitada
+- 👨‍🍳 **Cocinero**: Acceso a comandas y stock básico
+- 💼 **Mesero**: Toma de pedidos y gestión de mesas
+- 💰 **Cajero**: Facturación y cierres de caja
 
-- **Caracteres Especiales**:
-  - Tildes correctas: á, é, í, ó, ú, Á, É, Í, Ó, Ú
-  - Eñes: ñ, Ñ
-  - Signos especiales: ¿, ¡, $, €
+**Permisos por Módulo (23 módulos configurables):**
 
-- **Fallback robusto**: Impresión en consola si falla hardware
+| Módulo | Ver | Crear | Editar | Eliminar | Especial |
+|--------|-----|-------|--------|----------|----------|
+| **Comandas** | ✓ | ✓ | ✓ | ✓ | Imprimir, Cambiar Estado |
+| **Productos** | ✓ | ✓ | ✓ | ✓ | Gestionar Stock Simple |
+| **Inventario** | ✓ | ✓ | ✓ | ✓ | Ajustes, Reportes |
+| **Usuarios** | ✓ | ✓ | ✓ | ✓ | Gestionar Roles, Suplantar |
+| **Empleados** | ✓ | ✓ | ✓ | ✓ | Ver Datos Salariales |
+| **Nómina** | ✓ | ✓ | ✓ | ✓ | Calcular, Generar PDF |
+| **Liquidaciones** | ✓ | ✓ | ✓ | ✓ | Calcular Prestaciones |
+| **Reportes** | ✓ | - | - | - | Exportar, Análisis Avanzado |
+| **Configuración** | ✓ | - | ✓ | - | Parámetros, Impresoras |
+| **Mesas** | ✓ | ✓ | ✓ | ✓ | Cambiar Estado, Asignar |
+| **Facturas** | ✓ | ✓ | - | ✓ | Anular, Imprimir |
+| **Insumos** | ✓ | ✓ | ✓ | ✓ | Ajustes de Stock |
+| **Recetas** | ✓ | ✓ | ✓ | ✓ | Vincular Insumos |
 
-## 📁 Estructura del Proyecto
+**Validaciones de Seguridad:**
+- ✅ Verificación de token JWT en cada solicitud API
+- ✅ Validación de permisos específicos antes de ejecutar acciones
+- ✅ Protección contra inyección SQL con consultas preparadas (Kysely)
+- ✅ Sanitización de inputs en frontend y backend
+- ✅ Headers de seguridad con Helmet.js
+- ✅ CORS configurado y restrictivo
+- ✅ Rate limiting en endpoints sensibles
+- ✅ Logs de auditoría para acciones críticas
+
+**Gestión Avanzada de Usuarios:**
+- 📝 **CRUD Completo**: Crear, leer, actualizar y eliminar usuarios
+- 🎭 **Asignación de Roles**: Vinculación de rol único por usuario
+- 🔓 **Estados de Usuario**: Activo/Inactivo con bloqueo inmediato de acceso
+- 👤 **Integración RRHH**: Vinculación directa con expediente de empleado
+- 👀 **Suplantación (Devtools)**: Super-admin puede tomar identidad para debugging
+- 🔍 **Auditoría**: Registro de último inicio de sesión y fecha de creación
+- 🚫 **Auto-Protección**: Los super-admin no pueden desactivarse a sí mismos
+- ⚠️ **Validación de Eliminación**: Previene eliminar usuarios con datos relacionados
+- 🔐 **Cambio de Contraseña**: Requiere contraseña actual para actualización
+
+**Roles Personalizables:**
+- 🎨 **Creación Dinámica**: Define roles nuevos con nombre y descripción
+- ⚙️ **Configuración Granular**: 23 permisos individuales configurables
+- 📊 **Nivel de Acceso**: Numérico para priorizar permisos (0-100)
+- 🔒 **Roles Protegidos**: Super-admin es un rol del sistema inmutable
+- 📋 **Plantillas**: Copiar permisos de roles existentes para agilizar creación
+- 🗑️ **Eliminación Segura**: Solo si no hay usuarios asignados
+- 📝 **Edición en Vivo**: Cambios de permisos se aplican inmediatamente
+
+### 🖨️ Sistema de Impresión Profesional y Configurable
+
+**Plugin HTTP Propio (Puerto 8001):**
+- 🚀 **Servidor Python Local**: Sin dependencias en la nube, sin marcas de agua
+- 🔌 **API HTTP Simple**: Endpoint POST para envío de comandos de impresión
+- 🖨️ **Soporte ESC/POS Nativo**: Control total de impresoras térmicas de 58mm y 80mm
+- 🔧 **Instalación Sencilla**: Script de compilación a EXE para Windows
+- 💾 **Configuración Persistente**: LocalStorage guarda preferencias de impresión
+- 🔄 **Auto-Detección**: Lista automática de impresoras disponibles en el sistema
+- 🛡️ **Fallback Robusto**: Log en consola si el plugin no está disponible
+
+**Configuración de Papel (58mm vs 80mm):**
+
+| Ancho | Caracteres Normal | Caracteres Grande | Uso Recomendado |
+|-------|-------------------|-------------------|-----------------|
+| **58mm** | 32 caracteres | 16 caracteres | Comandas de cocina, tickets rápidos |
+| **80mm** | 48 caracteres | 24 caracteres | Facturas, recibos detallados |
+
+- 📏 **Selector de Ancho**: Dropdown en panel de configuración de facturación
+- 💾 **Persistencia**: Configuración se guarda automáticamente en navegador
+- 🔄 **Cambio Dinámico**: Ajuste en tiempo real del ancho de línea efectivo
+- 📐 **Cálculo Automático**: Sistema ajusta separadores y alineación según ancho
+
+**Configuración de Tamaño de Fuente:**
+
+| Fuente | Comando ESC/POS | Factor | Ancho Real (80mm) | Ancho Real (58mm) |
+|--------|-----------------|--------|-------------------|-------------------|
+| **Pequeña** | `\x1D\x21\x00` | 1x | 48 caracteres | 32 caracteres |
+| **Normal** | `\x1D\x21\x00` | 1x | 48 caracteres | 32 caracteres |
+| **Grande** | `\x1D\x21\x11` | 2x | **24 caracteres** | **16 caracteres** |
+
+- 🔤 **Selector de Fuente**: Options para Small, Normal y Large
+- 📊 **Ajuste Inteligente**: Fuente grande usa **mitad** del ancho efectivo
+- ⚙️ **Comandos ESC/POS**: 
+  - `\x1D\x21\x00`: Tamaño normal (1x ancho, 1x alto)
+  - `\x1D\x21\x11`: Tamaño grande (2x ancho, 2x alto)
+- 🔢 **Fórmula Clave**: `ANCHO_EFECTIVO = fontSize === 'large' ? Math.floor(anchoBase / 2) : anchoBase`
+- ✅ **Sin Desbordamiento**: Separadores (=, -) se ajustan automáticamente sin duplicarse
+
+**Vista Previa en Tiempo Real:**
+- 👁️ **Preview Dinámico**: Visualización exacta antes de imprimir
+- 📄 **Monospace Font**: Courier New para coincidencia perfecta con impresora
+- 🎨 **Colores Diferenciados**: Background gris claro para simular papel
+- 📏 **Dimensiones Reales**: Respeta anchos de papel y fuentes configurados
+- 🔄 **Actualización Instantánea**: Cambios de configuración reflejan inmediatamente
+
+**Encoding CP850 (Español Optimizado):**
+- ñ, Ñ → Soporte nativo de eñes
+- á, é, í, ó, ú, Á, É, Í, Ó, Ú → Tildes correctas
+- ¿, ¡ → Signos de interrogación y exclamación invertidos
+- $ → Símbolo de peso/dólar
+- € → Euro (si está disponible)
+- ° → Grado para temperaturas
+
+**Impresión Inteligente de Comandas:**
+
+**🍽️ Comandas Iniciales (Primera Impresión):**
+```
+========================================
+COMANDA #12345
+MESA: 5 - Salón Principal
+MESERO: Juan Pérez
+HORA: 12:45 PM
+========================================
+
+2x Bandeja Paisa
+   + Con arroz blanco
+   + Sin frijoles
+
+1x Jugo Natural
+   + Mora
+   + Sin azúcar
+
+========================================
+OBSERVACIONES: Cliente alérgico a nueces
+========================================
+```
+
+**➕ Items Adicionales (Impresión Selectiva):**
+```
+========================================
+*** ITEMS ADICIONALES ***
+COMANDA #12345 - MESA: 5
+HORA: 13:15 PM
+========================================
+
+1x Café Tinto
+
+2x Postre del día
+   + Con helado
+
+========================================
+⚠️ URGENTE - AGREGAR A PEDIDO
+========================================
+```
+
+**Características de Impresión Selectiva:**
+- ✅ **Sin Duplicados**: Solo imprime productos que no tienen `is_impreso: true`
+- 🔁 **Marca Automática**: Al imprimir, actualiza items a `is_impreso: true` en DB
+- 🎯 **Filtro Inteligente**: Compara estado en DB antes de generar impresión
+- ⚡ **Eficiencia**: Cocina solo ve lo nuevo, sin confusión de items anteriores
+- 📝 **Diferenciación Visual**: Header especial "ITEMS ADICIONALES" con asteriscos
+- ⏰ **Timestamp**: Hora exacta del agregado para control de tiempos
+
+**Formatos de Documentos:**
+
+**📄 Facturas (Invoice con IVA):**
+```
+=========================================
+Casa Montis Restaurante
+NIT: 900.123.456-7
+Calle 123 #45-67, Bogotá
+Tel: (601) 234-5678
+=========================================
+FACTURA DE VENTA #00012345
+Fecha: 15/01/2025 - 14:30
+Mesero: Juan Pérez
+Mesa: 5 - Salón Principal
+=========================================
+
+CANT ARTICULO      V.UNIT   TOTAL
+---- ------------- ------- -------
+  2  Bandeja P...  $32,000 $64,000
+  1  Jugo Natur... $8,000  $8,000
+  1  Café Tinto    $2,500  $2,500
+
+=========================================
+SUBTOTAL:                      $74,500
+IVA (19%):                     $14,155
+=========================================
+TOTAL:                         $88,655
+=========================================
+
+Método de Pago: Efectivo
+Recibido: $90,000
+Cambio: $1,345
+
+=========================================
+¡Gracias por su visita!
+Vuelva pronto
+=========================================
+```
+
+**🧾 Recibos (Ticket Simplificado):**
+```
+=========================================
+Casa Montis
+=========================================
+RECIBO #12345
+15/01/2025 - 14:30
+=========================================
+
+CANT ARTICULO      V.UNIT   TOTAL
+---- ------------- ------- -------
+  2  Bandeja P...  $32,000 $64,000
+  1  Jugo Natur... $8,000  $8,000
+
+=========================================
+TOTAL:                         $72,000
+=========================================
+Efectivo: $80,000
+Cambio: $8,000
+=========================================
+```
+
+**🚚 Comandas para Domicilio (Datos Cliente):**
+```
+=========================================
+🏠 PEDIDO A DOMICILIO
+=========================================
+COMANDA #12345
+HORA: 14:30 PM
+=========================================
+CLIENTE: María González
+DIR: Cra 15 #34-56, Apto 301
+TEL: 321-456-7890
+=========================================
+
+2x Pizza Hawaiana
+   + Extra queso
+   + Borde relleno
+
+1x Gaseosa Personal
+
+=========================================
+TOTAL PEDIDO: $48,000
+=========================================
+OBSERVACIONES:
+Timbre no funciona, llamar al llegar
+=========================================
+```
+
+**Comandos ESC/POS Utilizados:**
+- `\x1B\x40` - Inicializar impresora
+- `\x1B\x61\x01` - Centrar texto
+- `\x1B\x61\x00` - Alinear izquierda
+- `\x1B\x45\x01` - Negrita ON
+- `\x1B\x45\x00` - Negrita OFF
+- `\x1D\x21\x00` - Tamaño normal (1x1)
+- `\x1D\x21\x11` - Tamaño grande (2x2)
+- `\x1D\x21\x22` - Tamaño extra grande (3x3)
+- `\x1B\x64\x03` - Avanzar 3 líneas
+- `\x1B\x6A\xB4` - Cortar papel
+
+**Manejo de Errores y Fallback:**
+- ⚠️ **Detección de Plugin**: Verifica disponibilidad antes de imprimir
+- 📝 **Log en Consola**: Si falla, muestra contenido en console.log
+- 🔔 **Notificación al Usuario**: Toast informando estado de impresión
+- 🔄 **Reintento Automático**: Opción de reintentar impresión fallida
+- 💾 **Caché Local**: Guarda última configuración válida
+- 🛠️ **Debug Mode**: Variable de entorno para logging detallado
+
+## 📁 Estructura Completa del Proyecto
 
 ```
-Sistema-comandas/
-├── frontend/                 # React + Next.js
+Sistema-de-comandas-Casa-Montis/
+│
+├── 📂 frontend/                           # React 18 + Next.js 14 + Tailwind CSS
 │   ├── src/
-│   │   ├── app/             # App Router de Next.js
-│   │   │   ├── page.tsx     # Página principal
-│   │   │   └── historial/   # Página de historial
-│   │   ├── components/      # Componentes React
-│   │   │   ├── SistemaPrincipal.tsx         # Componente raíz
-│   │   │   ├── FormularioComandas.tsx       # Wizard de 5 pasos
-│   │   │   ├── SeleccionTipoPedido.tsx      # Mesa/Domicilio/Llevar
-│   │   │   ├── SeleccionMesaNueva.tsx       # Selector de mesas
-│   │   │   ├── FormularioDatosCliente.tsx   # Datos para domicilio
-│   │   │   ├── SeleccionTipoServicio.tsx    # Desayuno/Almuerzo/Carta
-│   │   │   ├── SeleccionProductos.tsx       # Catálogo de productos
-│   │   │   ├── ResumenComanda.tsx           # Vista previa y envío
-│   │   │   ├── InterfazCaja.tsx             # Procesamiento de pagos
-│   │   │   ├── HistorialComandas.tsx        # Historial completo
-│   │   │   ├── Login.tsx                    # Interfaz de acceso
-│   │   │   └── admin/                       # Componentes de administración
-│   │   │       ├── ConfiguracionSistema.tsx      # Configuración global del sistema
-│   │   │       ├── GeneradorContratos.tsx        # Generación de contratos
-│   │   │       ├── GestionCategorias.tsx         # Categorías (productos/personalizaciones)
-│   │   │       ├── GestionEmpleados.tsx          # CRUD de empleados
-│   │   │       ├── GestionEmpresa.tsx            # Datos de empresa
-│   │   │       ├── GestionFacturacion.tsx        # Configuración de facturación
-│   │   │       ├── GestionInventarioAvanzado.tsx # Insumos, recetas y ajustes
-│   │   │       ├── GestionLiquidacion.tsx        # Prestaciones sociales
-│   │   │       ├── GestionMesas.tsx              # Gestión de mesas
-│   │   │       ├── GestionNomina.tsx             # Liquidación de nómina
-│   │   │       ├── GestionPersonalizaciones.tsx  # Personalizaciones
-│   │   │       ├── GestionProductos.tsx          # Productos
-│   │   │       ├── GestionRoles.tsx              # Roles y permisos
-│   │   │       ├── GestionSalones.tsx            # Salones
-│   │   │       └── GestionUsuarios.tsx           # Control de usuarios
-│   │   ├── types/           # Tipos TypeScript
-│   │   ├── contexts/        # Contextos de React
-│   │   │   └── AuthContext.tsx  # Estado de autenticación global
-│   │   └── services/        # Servicios de API
-│   ├── package.json
-│   └── tailwind.config.js
-├── backend/                 # Node.js + Express
+│   │   ├── app/                          # App Router de Next.js 14
+│   │   │   ├── globals.css               # Estilos globales y Tailwind
+│   │   │   ├── layout.tsx                # Layout raíz de la aplicación
+│   │   │   ├── page.tsx                  # Página principal (/)
+│   │   │   ├── factura/                  # Ruta para facturas
+│   │   │   │   └── page.tsx
+│   │   │   ├── historial/                # Ruta de historial
+│   │   │   │   └── page.tsx
+│   │   │   ├── impersonation-callback/   # Callback de suplantación
+│   │   │   │   └── page.tsx
+│   │   │   └── recibo/                   # Ruta para recibos
+│   │   │       └── page.tsx
+│   │   │
+│   │   ├── components/                   # Componentes React
+│   │   │   ├── SistemaPrincipal.tsx      # 🏠 Componente raíz del sistema
+│   │   │   ├── Login.tsx                 # 🔐 Interfaz de autenticación
+│   │   │   ├── Providers.tsx             # Providers de contextos globales
+│   │   │   ├── UserInfo.tsx              # Información del usuario logueado
+│   │   │   ├── Onboarding.tsx            # Wizard de onboarding inicial
+│   │   │   │
+│   │   │   ├── FormularioComandas.tsx    # 📝 Wizard multi-paso de 5 pasos
+│   │   │   ├── SeleccionTipoPedido.tsx   # ✅ Paso 1: Mesa/Domicilio/Llevar
+│   │   │   ├── SeleccionMesa.tsx         # 🪑 Paso 2: Selector de mesas
+│   │   │   ├── FormularioDatosCliente.tsx# 👤 Paso 2b: Datos de domicilio
+│   │   │   ├── SeleccionTipoServicio.tsx # ☀️ Paso 3: Categorías de servicio
+│   │   │   ├── SeleccionProductos.tsx    # 🍽️ Paso 4: Catálogo de productos
+│   │   │   ├── BuscadorProductos.tsx     # 🔍 Buscador de productos
+│   │   │   ├── ResumenComanda.tsx        # 📋 Paso 5: Vista previa y envío
+│   │   │   │
+│   │   │   ├── PersonalizacionProducto.tsx # ✨ Modal de personalizaciones
+│   │   │   ├── InterfazCaja.tsx          # 💰 Procesamiento de pagos y facturas
+│   │   │   ├── HistorialComandas.tsx     # 📜 Historial completo de pedidos
+│   │   │   ├── Reportes.tsx              # 📊 Reportes y análisis
+│   │   │   ├── ImpersonationBanner.tsx   # 🎭 Banner de suplantación activa
+│   │   │   ├── Administracion.tsx        # Panel de administración principal
+│   │   │   │
+│   │   │   ├── admin/                    # 🛠️ Panel de Administración Completo
+│   │   │   │   ├── ConfiguracionSistema.tsx       # ⚙️ Parámetros del sistema
+│   │   │   │   ├── GeneradorContratos.tsx         # 📄 Generación de PDFs de contrato
+│   │   │   │   ├── GestionCategorias.tsx          # 🏷️ Categorías de productos
+│   │   │   │   ├── GestionEmpleados.tsx           # 👨‍💼 CRUD de empleados (RRHH)
+│   │   │   │   ├── GestionEmpresa.tsx             # 🏢 Datos de la empresa
+│   │   │   │   ├── GestionFacturacion.tsx         # 🧾 Config de impresión (papel/fuente)
+│   │   │   │   ├── GestionInventarioAvanzado.tsx  # 📦 Insumos, recetas, ajustes
+│   │   │   │   ├── GestionLiquidacion.tsx         # 📊 Liquidaciones finales
+│   │   │   │   ├── GestionMesas.tsx               # 🪑 CRUD de mesas
+│   │   │   │   ├── GestionNomina.tsx              # 💵 Cálculo de nómina mensual
+│   │   │   │   ├── GestionPersonalizaciones.tsx   # ✨ Opciones personalizables
+│   │   │   │   ├── GestionProductos.tsx           # 🍕 CRUD de productos con stock
+│   │   │   │   ├── GestionRoles.tsx               # 🎭 CRUD de roles y permisos
+│   │   │   │   ├── GestionSalones.tsx             # 🏠 CRUD de salones
+│   │   │   │   └── GestionUsuarios.tsx            # 👥 CRUD de usuarios
+│   │   │   │
+│   │   │   └── shared/                   # Componentes compartidos
+│   │   │       ├── index.ts
+│   │   │       ├── PersonalizacionDisplay.tsx
+│   │   │       └── hooks/
+│   │   │           └── usePersonalizaciones.ts
+│   │   │
+│   │   ├── contexts/                     # Contextos de React
+│   │   │   └── AuthContext.tsx           # Estado de autenticación global
+│   │   │
+│   │   ├── services/                     # Servicios de API (Axios)
+│   │   │   ├── api.ts                    # Cliente Axios configurado
+│   │   │   └── printingService.ts        # Servicio de impresión
+│   │   │
+│   │   ├── types/                        # TypeScript Types/Interfaces
+│   │   │   └── index.ts                  # Exportaciones centrales de tipos
+│   │   │
+│   │   ├── utils/                        # Utilidades
+│   │   │   ├── personalizacionUtils.ts   # Utilidades de personalizaciones
+│   │   │   └── receiptFormatter.ts       # 🖨️ Formateador de recibos térmicos
+│   │   │                                 #     (Soporta 58mm/80mm, fuente small/normal/large)
+│   │   │
+│   │   └── constants/                    # Constantes
+│   │       └── inventory.ts              # Constantes de inventario
+│   │
+│   ├── .eslintrc.json                    # Configuración de ESLint
+│   ├── .env.local                        # Variables de entorno locales
+│   ├── next.config.js                    # Configuración de Next.js
+│   ├── postcss.config.js                 # Configuración de PostCSS
+│   ├── tailwind.config.js                # Configuración de Tailwind
+│   ├── tsconfig.json                     # Config de TypeScript
+│   └── package.json                      # Dependencias del frontend
+│
+├── 📂 admin-panel/                        # Admin Panel Independiente (Next.js 14)
 │   ├── src/
-│   │   ├── database/        # Configuración SQLite y migraciones
-│   │   ├── models/          # Tipos y modelos
-│   │   ├── middleware/      # Middleware
-│   │   │   └── authMiddleware.ts   # Autenticación y validación
-│   │   ├── routes/          # Rutas de API
-│   │   │   ├── auth.ts                 # API de autenticación y sesiones
-│   │   │   ├── categorias.ts           # Categorías
-│   │   │   ├── comandas-nuevas.ts      # API de comandas (ACTIVA)
-│   │   │   ├── configuracion-facturacion.ts # Configuración de facturación
-│   │   │   ├── configuracion-sistema.ts     # Configuración del sistema (inventario)
-│   │   │   ├── contratos.ts            # Contratos
-│   │   │   ├── empleados.ts            # API de empleados (RRHH)
-│   │   │   ├── facturas-nuevas.ts       # API de facturas
-│   │   │   ├── inventario-avanzado.ts  # API de insumos, recetas y ajustes
-│   │   │   ├── mesas.ts                # API de mesas
-│   │   │   ├── nomina.ts               # API de nómina y liquidaciones
-│   │   │   ├── personalizaciones.ts    # API de personalizaciones
-│   │   │   ├── productos.ts            # API de productos
-│   │   │   ├── reportes.ts             # API de reportes
-│   │   │   ├── roles.ts                # API de roles y permisos
-│   │   │   ├── salones.ts              # API de salones
-│   │   │   ├── sistema.ts              # API de sistema
-│   │   │   └── usuarios.ts             # API de gestión de usuarios
-│   │   ├── services/        # Servicios
-│   │       ├── NominaService.ts      # Cálculos y utilidades de nómina
-│   │       ├── printer.ts           # Servicio de impresión principal
-│   │       └── pluginImpresora.ts   # Plugin HTTP propio (Puerto 8001)
-│   │   └── utils/           # Utilidades
-│   │       ├── dateUtils.ts          # Fechas y formatos
-│   │       ├── inventoryValidation.ts # Validación de inventario
-│   │       └── numeroALetras.ts      # Conversión a texto
-│   ├── package.json
-│   └── .env
-└── README.md
+│   │   ├── app/                          # App Router
+│   │   │   ├── dashboard/                # Dashboard administrativo
+│   │   │   └── login/                    # Ruta de login
+│   │   ├── components/
+│   │   │   └── Impersonation.tsx         # 🎭 Componente de suplantación
+│   │   ├── hooks/
+│   │   │   └── useImpersonation.ts       # Hook para super-admin
+│   │   └── services/                     # Servicios de API
+│   │
+│   ├── next-env.d.ts
+│   ├── next.config.js
+│   ├── postcss.config.js
+│   ├── tailwind.config.js
+│   ├── tsconfig.json
+│   └── package.json
+│
+├── 📂 backend/                            # Node.js 18+ + Express 4 + PostgreSQL
+│   ├── src/
+│   │   ├── index.ts                      # Punto de entrada del servidor
+│   │   │
+│   │   ├── config/                       # Configuraciones
+│   │   │   └── envValidator.ts           # Validador de variables de entorno
+│   │   │
+│   │   ├── database/                     # Capa de base de datos (PostgreSQL)
+│   │   │   ├── database.ts               # Conexión a PostgreSQL con Pool
+│   │   │   ├── init.ts                   # Inicialización de DB
+│   │   │   ├── migrator.ts               # Sistema de migraciones (Kysely)
+│   │   │   ├── reset.ts                  # Reset de base de datos
+│   │   │   ├── types.ts                  # Tipos de base de datos
+│   │   │   └── migrations/               # Migraciones SQL versionadas
+│   │   │
+│   │   ├── middleware/                   # Middleware de Express
+│   │   │   ├── authMiddleware.ts         # 🔐 Verificación JWT y permisos
+│   │   │   └── superAdminMiddleware.ts   # 👑 Middleware de super-admin
+│   │   │
+│   │   ├── models/                       # Tipos y modelos TypeScript
+│   │   │   └── index.ts                  # Exportaciones de modelos
+│   │   │
+│   │   ├── repositories/                 # Capa de datos (Repository Pattern)
+│   │   │   ├── categoriaRepository.ts
+│   │   │   ├── comandaRepository.ts
+│   │   │   ├── configFacturacionRepository.ts
+│   │   │   ├── empresaRepository.ts
+│   │   │   ├── facturaRepository.ts
+│   │   │   ├── licenciaRepository.ts
+│   │   │   ├── mesaRepository.ts
+│   │   │   ├── nominaRepository.ts
+│   │   │   ├── productoRepository.ts
+│   │   │   ├── reporteRepository.ts
+│   │   │   ├── salonRepository.ts
+│   │   │   └── usuarioRepository.ts
+│   │   │
+│   │   ├── routes/                       # Rutas de API REST
+│   │   │   ├── admin.ts                  # Rutas administrativas
+│   │   │   ├── auth.ts                   # POST /api/auth/login, /logout
+│   │   │   ├── categorias.ts             # CRUD /api/categorias
+│   │   │   ├── comandas.ts               # CRUD /api/comandas
+│   │   │   ├── configuracion-facturacion.ts # GET/PUT /api/configuracion-facturacion
+│   │   │   ├── configuracion-sistema.ts  # GET/PUT /api/configuracion-sistema
+│   │   │   ├── contratos.ts              # POST /api/contratos/generar
+│   │   │   ├── empleados.ts              # CRUD /api/empleados
+│   │   │   ├── facturas.ts               # POST /api/facturas
+│   │   │   ├── insumo-categorias.ts      # Categorías de insumos
+│   │   │   ├── inventario-avanzado.ts    # Insumos, recetas, ajustes, historial
+│   │   │   ├── mesas.ts                  # CRUD /api/mesas
+│   │   │   ├── nomina.ts                 # CRUD /api/nomina (liquidaciones)
+│   │   │   ├── onboarding.ts             # Wizard de onboarding
+│   │   │   ├── personalizaciones.ts      # CRUD /api/personalizaciones
+│   │   │   ├── productos.ts              # CRUD /api/productos
+│   │   │   ├── proveedores.ts            # CRUD de proveedores
+│   │   │   ├── reportes.ts               # GET /api/reportes/ventas, /inventario
+│   │   │   ├── roles.ts                  # CRUD /api/roles
+│   │   │   ├── salones.ts                # CRUD /api/salones
+│   │   │   ├── sistema.ts                # GET /api/sistema/info
+│   │   │   └── usuarios.ts               # CRUD /api/usuarios
+│   │   │
+│   │   ├── scripts/                      # Scripts administrativos
+│   │   │   ├── audit-db-schema.ts        # Auditoría de esquema BD
+│   │   │   ├── audit-routes.ts           # Auditoría de rutas
+│   │   │   ├── audit-schema.ts           # Auditoría general
+│   │   │   ├── migrate.ts                # Ejecutor de migraciones
+│   │   │   └── test-saas-isolation.ts    # Tests de aislamiento multi-tenant
+│   │   │
+│   │   ├── services/                     # Servicios de lógica de negocio
+│   │   │   ├── authService.ts            # Servicio de autenticación
+│   │   │   ├── categoriaService.ts       # Servicio de categorías
+│   │   │   ├── comandaService.ts         # Servicio de comandas
+│   │   │   ├── facturaService.ts         # Servicio de facturación
+│   │   │   ├── inventarioService.ts      # Servicio de inventario
+│   │   │   ├── mesaService.ts            # Servicio de mesas
+│   │   │   ├── NominaService.ts          # 💵 Cálculos de nómina y prestaciones
+│   │   │   ├── onboardingService.ts      # Servicio de onboarding
+│   │   │   ├── productoService.ts        # Servicio de productos
+│   │   │   ├── reporteService.ts         # Servicio de reportes
+│   │   │   ├── saasAdminService.ts       # Servicio de administración SaaS
+│   │   │   ├── salonService.ts           # Servicio de salones
+│   │   │   └── usuarioService.ts         # Servicio de usuarios
+│   │   │
+│   │   ├── types/                        # Tipos compartidos
+│   │   │   ├── express.d.ts              # Extensiones de tipos Express
+│   │   │   └── saas-admin.types.ts       # Tipos de administración SaaS
+│   │   │
+│   │   └── utils/                        # Utilidades
+│   │       ├── dateUtils.ts              # Parseo y formateo de fechas
+│   │       ├── inventoryValidation.ts    # Validación de stock antes de venta
+│   │       ├── numeroALetras.ts          # Conversión de números a texto español
+│   │       └── index.ts
+│   │
+│   ├── data/                             # Datos de importación
+│   │   └── productos_casa_montis.json    # Dump de productos para importar
+│   │
+│   ├── modelo_imprimir_legacy/           # Sistema legacy de impresión
+│   │   ├── pluginImpresora.ts
+│   │   └── printer.ts
+│   │
+│   ├── scripts/                          # Scripts de administración
+│   │   └── verificar-permisos-sistema.sql # Script SQL de verificación
+│   │
+│   ├── storage/                          # Archivos generados
+│   │   ├── contratos/                    # PDFs de contratos
+│   │   └── nomina_pdfs/                  # PDFs de nóminas
+│   │
+│   ├── temp/                             # Archivos temporales de testing
+│   │   ├── check-db.js
+│   │   ├── test-server.js
+│   │   └── ...                           # Otros scripts de prueba
+│   │
+│   ├── .env                              # Variables de entorno (no commiteado)
+│   ├── .env.example                      # Ejemplo de variables de entorno
+│   ├── .gitignore
+│   ├── CONTRATO.TXT                      # Template de contrato
+│   ├── package.json                      # Dependencias del backend
+│   └── tsconfig.json                     # Config de TypeScript
+│
+├── 📂 local-print-plugin/                 # 🖨️ Plugin de Impresión HTTP (Python)
+│   ├── build/                            # Carpeta de compilación PyInstaller
+│   │   └── CasaMontis-PrintPlugin/       # Archivos intermedios de build
+│   │
+│   ├── server.py                         # Servidor Flask en puerto 8001
+│   ├── server_backup.js                  # Backup legacy en Node.js
+│   ├── test_plugin.py                    # Tests del plugin
+│   ├── build_exe.py                      # Script para compilar a EXE
+│   ├── CasaMontis-PrintPlugin.spec       # Spec para PyInstaller
+│   ├── requirements.txt                  # Dependencias Python (flask, pywin32)
+│   ├── .gitignore                        # Archivos ignorados
+│   ├── README.md                         # Documentación del plugin
+│   │
+│   ├── INICIAR_PLUGIN.bat                # 🚀 Script de inicio rápido
+│   ├── COMPILAR_A_EXE.bat                # 🔨 Script de compilación a EXE
+│   ├── PROBAR_PLUGIN.bat                 # 🧪 Script de pruebas
+│   └── LIMPIAR_LEGACY.bat                # 🧹 Limpiar archivos legacy
+│
+├── 📂 GUIA DE USO/                        # 📚 Documentación del Sistema
+│   ├── GUIA_DE_USO.md                    # Guía general del sistema
+│   ├── ACCESO_RED_LOCAL.md               # Configuración de red local
+│   ├── ARREGLOS-GESTION-NOMINA.md        # Fixes de nómina
+│   ├── CAMBIO_DE_MESA.md                 # Funcionalidad de cambiar mesa
+│   ├── CAMBIOS_BUSCADOR_PRODUCTOS.md     # Filtros de búsqueda
+│   ├── CONSOLIDACION_SAAS.md             # Arquitectura multi-tenant
+│   ├── DOMICILIOS.md                     # Flujo de pedidos a domicilio
+│   ├── INVENTARIO_PRODUCTOS.md           # Sistema de stock simple
+│   ├── PLUGIN_IMPRESION.md               # Uso del plugin de impresión
+│   ├── REFACTORIZACION_ADMINISTRACION.md # Cambios en admin panel
+│   └── SISTEMA_INVENTARIO_PERSONALIZACIONES.md # Inventario avanzado
+│
+├── .gitignore                             # Archivos ignorados por Git
+├── .git/                                  # Repositorio Git
+├── iniciador_automatico.bat               # 🚀 Script de inicio rápido
+│                                          #     (Solo Backend + Frontend en desarrollo)
+├── setup_completo.bat                     # 🔧 Script de instalación completa
+│                                          #     (Instala todo + Migra BD + Inicia 4 servicios)
+│
+└── README.md                              # 📖 Este archivo - Documentación principal
 ```
 
 ## 🛠️ Instalación y Configuración
 
-### Requisitos Previos
-- Node.js 18+ 
-- npm o yarn
-- (Opcional) Impresora térmica USB compatible
+### 📋 Requisitos Previos
 
-### Instalación Automática
+**Software Obligatorio:**
+- ✅ **Node.js 18+** (LTS recomendado) - [Descargar](https://nodejs.org/)
+- ✅ **PostgreSQL 14+** - [Descargar](https://www.postgresql.org/download/)
+- ✅ **npm** o **yarn** (incluido con Node.js)
+- ✅ **Git** (para clonar el repositorio)
+
+**Software Opcional:**
+- 🖨️ **Impresora Térmica ESC/POS** (58mm o 80mm)
+- 🐍 **Python 3.9+** (para plugin de impresión)
+- 📄 **pgAdmin 4** (para administrar PostgreSQL visualmente)
+
+---
+
+### 🚀 Instalación Rápida con Script Automático (Windows)
+
+#### Opción A: Setup Completo (Primera vez)
 
 ```bash
-# Dar permisos de ejecución al script
-chmod +x setup.sh
+# 1. Clonar el repositorio
+git clone https://github.com/Juanshiu/Sistema-de-comandas-Casa-Montis
+cd Sistema-de-comandas-Casa-Montis
 
-# Ejecutar instalación
-./setup.sh
+# 2. Configurar PostgreSQL primero (ver sección abajo)
+# Crear base de datos y usuario
+
+# 3. Configurar variables de entorno
+cd backend
+copy .env.example .env
+# Editar backend\.env con tus credenciales de PostgreSQL
+cd ..
+
+# 4. Ejecutar setup completo
+setup_completo.bat
 ```
 
-### Instalación Manual
+**El script `setup_completo.bat` hará:**
+1. ✅ Instalar dependencias de backend (npm install)
+2. ✅ Instalar dependencias de frontend (npm install)
+3. ✅ Instalar dependencias de admin-panel (npm install)
+4. ✅ Instalar dependencias del plugin Python (pip install)
+5. ✅ Ejecutar migraciones de base de datos
+6. ✅ Iniciar plugin de impresión (puerto 8001)
+7. ✅ Iniciar backend (puerto 3001)
+8. ✅ Iniciar frontend (puerto 3000)
+9. ✅ Iniciar admin-panel (puerto 3002)
 
-1. **Backend**:
+#### Opción B: Inicio Rápido (Ya configurado)
+
+Si ya instalaste dependencias y configuraste todo, usa el iniciador rápido:
+
+```bash
+iniciador_automatico.bat
+```
+
+**El script `iniciador_automatico.bat` solo hará:**
+- 🚀 Iniciar backend en modo desarrollo (puerto 3001)
+- 🚀 Iniciar frontend en modo desarrollo (puerto 3000)
+
+**Nota:** Para incluir admin-panel y plugin de impresión en el inicio rápido, usa `setup_completo.bat`
+
+---
+
+### ⚙️ Instalación Manual Paso a Paso
+
+#### 1️⃣ **Configurar PostgreSQL**
+
+```bash
+# Iniciar PostgreSQL y crear base de datos
+psql -U postgres
+
+CREATE DATABASE casa_montis;
+CREATE USER casa_montis_user WITH PASSWORD 'tu_password_segura';
+GRANT ALL PRIVILEGES ON DATABASE casa_montis TO casa_montis_user;
+\q
+```
+
+#### 2️⃣ **Backend (Node.js + Express + PostgreSQL)**
+
 ```bash
 cd backend
+
+# Instalar dependencias
 npm install
-npm run build
+
+# Configurar variables de entorno
+cp .env.example .env
+# Editar .env con tus credenciales de PostgreSQL
 ```
 
-2. **Frontend**:
-```bash
-cd frontend
-npm install
-```
-
-### Configuración de Impresoras
-
-Edita el archivo `backend/.env`:
+**Contenido del archivo `backend/.env`:**
 
 ```env
+# Puerto del servidor
 PORT=3001
-DB_PATH=./database/casa_montis.db
+
+# Base de Datos PostgreSQL
+DB_HOST=localhost
+DB_PORT=5432
+DB_USER=casa_montis_user
+DB_PASSWORD=tu_password_segura
+DB_NAME=casa_montis
+
+# JWT para autenticación
+JWT_SECRET=tu_clave_secreta_muy_larga_y_aleatoria_aqui_min_32_caracteres
+
+# Plugin de Impresión
 ESC_POS_URL=http://localhost:8001/imprimir
 PRINTER_COCINA_NAME=pos58
 PRINTER_CAJA_NAME=pos58
+
+# Entorno
 NODE_ENV=development
 ```
 
-**Nota**: El sistema inicia automáticamente el plugin de impresión en el puerto 8001. No necesita software adicional.
-
-## 🚀 Ejecución
-
-### Modo Desarrollo
-
-1. **Iniciar Backend**:
 ```bash
-cd backend
+# Ejecutar migraciones de base de datos
+npm run migrate
+
+# Compilar TypeScript
+npm run build
+
+# Iniciar servidor en modo desarrollo
 npm run dev
+
+# O en modo producción
+npm start
 ```
 
-2. **Iniciar Frontend** (en otra terminal):
+**Scripts npm del backend:**
+- `npm start` - Inicia en modo producción (requiere build previo)
+- `npm run dev` - Inicia con hot-reload (nodemon + ts-node)
+- `npm run build` - Compila TypeScript a JavaScript
+- `npm run migrate` - Ejecuta migraciones de BD
+- `npm run reset-db` - **PELIGRO**: Resetea completamente la base de datos
+
+#### 3️⃣ **Frontend (Next.js 14 + React 18 + Tailwind)**
+
 ```bash
 cd frontend
+
+# Instalar dependencias
+npm install
+
+# Iniciar en modo desarrollo
+npm run dev
+
+# O compilar para producción
+npm run build
+npm start
+```
+
+**Configuración en `frontend/.env.local` (opcional):**
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:3001/api
+NEXT_PUBLIC_PRINT_PLUGIN_URL=http://localhost:8001
+```
+
+**Scripts npm de frontend:**
+- `npm run dev` - Servidor de desarrollo en puerto 3000
+- `npm run build` - Build de producción optimizado
+- `npm start` - Inicia build de producción
+- `npm run lint` - Ejecuta ESLint
+
+#### 4️⃣ **Admin Panel (Next.js 14 + Independiente)**
+
+```bash
+cd admin-panel
+
+# Instalar dependencias
+npm install
+
+# Iniciar en modo desarrollo (puerto 3002)
 npm run dev
 ```
 
-### Acceso al Sistema
-- **Frontend**: http://localhost:3000
-- **API Backend**: http://localhost:3001
-- **Health Check**: http://localhost:3001/health
+#### 5️⃣ **Plugin de Impresión (Python + Flask)**
 
-## 📊 API Endpoints
+```bash
+cd local-print-plugin
 
-### Mesas
-- `GET /api/mesas` - Obtener todas las mesas
-- `GET /api/mesas/:id` - Obtener mesa específica
-- `PATCH /api/mesas/:id` - Actualizar estado de mesa
+# Instalar Python 3.9+ si no lo tienes
+# Descargar desde https://www.python.org/downloads/
 
-### Salones
-- `GET /api/salones` - Obtener todos los salones
-- `POST /api/salones` - Crear nuevo salón
-- `PUT /api/salones/:id` - Actualizar salón
-- `DELETE /api/salones/:id` - Eliminar salón
+# Instalar dependencias
+pip install -r requirements.txt
 
-### Productos
-- `GET /api/productos` - Obtener todos los productos
-- `GET /api/productos/categoria/:categoria` - Productos por categoría
-- `POST /api/productos` - Crear producto
-- `PUT /api/productos/:id` - Actualizar producto
-- `DELETE /api/productos/:id` - Eliminar producto
+# Iniciar plugin
+python server.py
+```
 
-### Comandas
-- `GET /api/comandas` - Obtener todas las comandas
-- `GET /api/comandas/activas` - Obtener comandas activas (con items)
-- `GET /api/comandas/historial` - Obtener historial completo
-- `GET /api/comandas/:id` - Obtener comanda específica (con items)
-- `POST /api/comandas` - Crear nueva comanda (imprime automáticamente)
-- `PUT /api/comandas/:id` - Agregar items adicionales a comanda existente
-- `PATCH /api/comandas/:id/estado` - Actualizar estado de comanda
-- `DELETE /api/comandas/:id` - Eliminar comanda y liberar mesas
+**O usar el script de Windows:**
 
-### Facturas
-- `GET /api/facturas` - Obtener todas las facturas
-- `GET /api/facturas/:id` - Obtener factura específica
-- `POST /api/facturas` - Crear factura y liberar mesa
-- `POST /api/facturas/:id/imprimir` - Reimprimir factura
+```bash
+INICIAR_PLUGIN.bat
+```
 
-### Inventario Avanzado
-- `GET /api/inventario-avanzado/insumos` - Listar insumos
-- `POST /api/inventario-avanzado/insumos` - Crear insumo
-- `PUT /api/inventario-avanzado/insumos/:id` - Actualizar insumo
-- `DELETE /api/inventario-avanzado/insumos/:id` - Eliminar insumo
-- `POST /api/inventario-avanzado/insumos/:id/ajuste` - Ajuste manual de stock
-- `GET /api/inventario-avanzado/insumos/historial` - Historial de movimientos
-- `GET /api/inventario-avanzado/recetas/productos/:productoId` - Obtener receta de producto
-- `PUT /api/inventario-avanzado/recetas/productos/:productoId` - Guardar receta de producto
-- `GET /api/inventario-avanzado/recetas/personalizaciones/:itemId` - Obtener ajustes de personalización
-- `PUT /api/inventario-avanzado/recetas/personalizaciones/:itemId` - Guardar ajustes de personalización
-- `GET /api/inventario-avanzado/riesgo/productos` - Estado de riesgo por producto
-- `GET /api/inventario-avanzado/riesgo/personalizaciones` - Estado de riesgo por personalización
-- `GET /api/inventario-avanzado/insumos/export` - Exportar insumos (Excel)
-- `POST /api/inventario-avanzado/insumos/import` - Importar insumos (Excel)
-- `GET /api/inventario-avanzado/recetas/export` - Exportar recetas (Excel)
-- `POST /api/inventario-avanzado/recetas/import` - Importar recetas (Excel)
-- `GET /api/inventario-avanzado/productos/export` - Exportar productos (Excel)
-- `POST /api/inventario-avanzado/productos/import` - Importar productos (Excel)
+**O compilar a EXE para distribución:**
 
-### Recursos Humanos (RRHH)
-- `GET /api/empleados` - Listar todos los empleados
-- `POST /api/empleados` - Registrar nuevo empleado
-- `GET /api/nomina/configuracion` - Obtener configuración de ley vigente
-- `POST /api/nomina/calcular` - Calcular nómina para un empleado
-- `POST /api/nomina/liquidar` - Calcular liquidación definitiva de prestaciones
+```bash
+COMPILAR_A_EXE.bat
+```
 
-### Usuarios y Seguridad
-- `POST /api/auth/login` - Iniciar sesión y obtener token de sesión
-- `POST /api/auth/logout` - Cerrar sesión y revocar token
-- `GET /api/usuarios` - Listar todos los usuarios del sistema
-- `GET /api/usuarios/:id` - Ver detalles de un usuario específico
-- `POST /api/usuarios` - Registrar un nuevo usuario (requiere privilegios)
-- `PUT /api/usuarios/:id` - Actualizar información de usuario o cambiar contraseña
-- `GET /api/roles` - Listar roles configurados
-- `GET /api/roles/:id` - Ver rol con su matriz de permisos
-- `POST /api/roles` - Crear un nuevo rol personalizado
-- `PUT /api/roles/:id` - Modificar permisos de un rol existente
+El EXE compilado estará en `build/CasaMontis-PrintPlugin/CasaMontis-PrintPlugin.exe`
 
-### Configuración del Sistema (Inventario)
+**Configuración del Plugin:**
+- 🔌 **Puerto**: 8001
+- 🖨️ **Endpoint**: `POST http://localhost:8001/imprimir`
+- 📝 **Body**: JSON con `{ "printer": "nombre_impresora", "text": "contenido_a_imprimir" }`
+- 📋 **Listar impresoras**: `GET http://localhost:8001/printers`
+
+---
+
+### 🖨️ Configuración de Impresoras Térmicas
+
+**1. Instalar driver de tu impresora térmica**
+- Conectar impresora vía USB
+- Instalar drivers del fabricante
+- Configurar como impresora predeterminada o anotar el nombre exacto
+
+**2. Verificar nombre de impresora en Windows:**
+
+```powershell
+# PowerShell
+Get-Printer | Select-Object Name
+
+# O en Panel de Control > Dispositivos e impresoras
+```
+
+**3. Configurar en panel de facturación:**
+- Ir a Admin Panel (http://localhost:3002)
+- Login como super-admin
+- Ir a "Gestión de Facturación"
+- Seleccionar tu impresora del dropdown
+- Elegir ancho de papel: **58mm** o **80mm**
+- Elegir tamaño de fuente: **Small**, **Normal** o **Large**
+- Guardar configuración (se persiste en localStorage)
+
+**4. Probar impresión:**
+- Click en botón "Probar Impresora"
+- Debe salir ticket de prueba con configuración actual
+- Si falla, verificar que plugin esté corriendo en puerto 8001
+
+---
+
+## 🚀 Ejecución del Sistema
+
+### ⚡ Modo Desarrollo (Recomendado para Testing)
+
+**Opción 1: Iniciador Automático (Windows)**
+
+```bash
+# Inicia TODO el sistema con un solo comando
+iniciador_automatico.bat
+```
+
+**Opción 2: Iniciar Manualmente**
+
+```bash
+# Terminal 1: Backend (puerto 3001)
+cd backend
+npm run dev
+
+# Terminal 2: Frontend (puerto 3000)
+cd frontend
+npm run dev
+
+# Terminal 3: Admin Panel (puerto 3002)
+cd admin-panel
+npm run dev
+
+# Terminal 4: Plugin de Impresión (puerto 8001)
+cd local-print-plugin
+python server.py
+# O ejecutar: INICIAR_PLUGIN.bat
+```
+
+---
+
+### 🏗️ Modo Producción
+
+```bash
+# 1. Compilar Backend
+cd backend
+npm run build
+
+# 2. Compilar Frontend
+cd frontend
+npm run build
+
+# 3. Compilar Admin Panel
+cd admin-panel
+npm run build
+
+# 4. Compilar Plugin a EXE
+cd local-print-plugin
+COMPILAR_A_EXE.bat
+
+# 5. Iniciar servicios (usar PM2 o similar para mantener activos)
+cd backend && npm start
+cd frontend && npm start
+cd admin-panel && npm start
+# Ejecutar CasaMontis-PrintPlugin.exe
+```
+
+---
+
+### 🌐 URLs de Acceso
+
+| Servicio | URL | Descripción |
+|----------|-----|-------------|
+| **Frontend** | http://localhost:3000 | Interfaz principal de comandas |
+| **Admin Panel** | http://localhost:3002 | Panel de administración |
+| **API Backend** | http://localhost:3001/api | API RESTful |
+| **Health Check** | http://localhost:3001/health | Estado del servidor |
+| **Print Plugin** | http://localhost:8001 | Plugin de impresión |
+| **Printers List** | http://localhost:8001/printers | Lista de impresoras |
+
+---
+
+## 📊 Documentación de API Endpoints
+
+### 🔐 Autenticación
+
+| Método | Endpoint | Descripción | Autenticación |
+|--------|----------|-------------|---------------|
+| POST | `/api/auth/login` | Iniciar sesión | No |
+| POST | `/api/auth/logout` | Cerrar sesión | Sí |
+
+**Ejemplo de Login:**
+
+```json
+POST /api/auth/login
+{
+  "username": "admin",
+  "password": "admin123"
+}
+
+// Respuesta:
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": 1,
+    "username": "admin",
+    "nombre": "Administrador",
+    "rol": "super-admin"
+  }
+}
+```
+
+---
+
+### 🪑 Mesas y Salones
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/mesas` | Listar todas las mesas | `mesas.ver` |
+| GET | `/api/mesas/:id` | Obtener mesa específica | `mesas.ver` |
+| POST | `/api/mesas` | Crear nueva mesa | `mesas.crear` |
+| PUT | `/api/mesas/:id` | Actualizar mesa | `mesas.editar` |
+| PATCH | `/api/mesas/:id` | Cambiar estado de mesa | `mesas.editar` |
+| DELETE | `/api/mesas/:id` | Eliminar mesa | `mesas.eliminar` |
+| GET | `/api/salones` | Listar todos los salones | `mesas.ver` |
+| POST | `/api/salones` | Crear nuevo salón | `mesas.crear` |
+| PUT | `/api/salones/:id` | Actualizar salón | `mesas.editar` |
+| DELETE | `/api/salones/:id` | Eliminar salón | `mesas.eliminar` |
+
+---
+
+### 🍽️ Productos y Categorías
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/productos` | Listar todos los productos | `productos.ver` |
+| GET | `/api/productos/:id` | Obtener producto específico | `productos.ver` |
+| GET | `/api/productos/categoria/:cat` | Filtrar por categoría | `productos.ver` |
+| POST | `/api/productos` | Crear producto | `productos.crear` |
+| PUT | `/api/productos/:id` | Actualizar producto | `productos.editar` |
+| DELETE | `/api/productos/:id` | Eliminar producto | `productos.eliminar` |
+| GET | `/api/categorias` | Listar categorías | `productos.ver` |
+| POST | `/api/categorias` | Crear categoría | `productos.crear` |
+| PUT | `/api/categorias/:id` | Actualizar categoría | `productos.editar` |
+| DELETE | `/api/categorias/:id` | Eliminar categoría | `productos.eliminar` |
+
+---
+
+### 📝 Comandas (Pedidos)
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/comandas` | Listar todas las comandas | `comandas.ver` |
+| GET | `/api/comandas/activas` | Comandas activas con items | `comandas.ver` |
+| GET | `/api/comandas/historial` | Historial completo | `comandas.ver` |
+| GET | `/api/comandas/:id` | Obtener comanda con items | `comandas.ver` |
+| POST | `/api/comandas` | Crear comanda (imprime auto) | `comandas.crear` |
+| PUT | `/api/comandas/:id` | Agregar items adicionales | `comandas.editar` |
+| PATCH | `/api/comandas/:id/estado` | Cambiar estado | `comandas.editar` |
+| DELETE | `/api/comandas/:id` | Eliminar comanda | `comandas.eliminar` |
+| POST | `/api/comandas/:id/imprimir` | Reimprimir comanda | `comandas.imprimir` |
+
+**Crear Comanda (POST /api/comandas):**
+
+```json
+{
+  "tipo_pedido": "mesa",  // o "domicilio", "para_llevar"
+  "mesa_id": 5,
+  "mesero": "Juan Pérez",
+  "observaciones": "Cliente alérgico a nueces",
+  "items": [
+    {
+      "producto_id": 10,
+      "cantidad": 2,
+      "precio_unitario": 32000,
+      "personalizaciones": [
+        {"personalizacion_id": 1, "precio_adicional": 0}
+      ]
+    }
+  ],
+  // Solo para domicilios:
+  "cliente_nombre": "María González",
+  "cliente_telefono": "321-456-7890",
+  "cliente_direccion": "Cra 15 #34-56, Apto 301"
+}
+```
+
+---
+
+### 💰 Facturas
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/facturas` | Listar facturas | `facturas.ver` |
+| GET | `/api/facturas/:id` | Obtener factura específica | `facturas.ver` |
+| POST | `/api/facturas` | Crear factura y liberar mesa | `facturas.crear` |
+| POST | `/api/facturas/:id/imprimir` | Reimprimir factura | `facturas.imprimir` |
+
+**Crear Factura (POST /api/facturas):**
+
+```json
+{
+  "comanda_id": 123,
+  "metodo_pago": "efectivo",  // o "tarjeta", "transferencia"
+  "aplicar_iva": true,
+  "valor_recibido": 100000,
+  "descuento": 0
+}
+```
+
+---
+
+### 📦 Inventario Avanzado
+
+**Insumos:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/inventario-avanzado/insumos` | Listar insumos | `inventario.ver` |
+| POST | `/api/inventario-avanzado/insumos` | Crear insumo | `inventario.crear` |
+| PUT | `/api/inventario-avanzado/insumos/:id` | Actualizar insumo | `inventario.editar` |
+| DELETE | `/api/inventario-avanzado/insumos/:id` | Eliminar insumo | `inventario.eliminar` |
+| POST | `/api/inventario-avanzado/insumos/:id/ajuste` | Ajuste manual de stock | `inventario.ajustes` |
+| GET | `/api/inventario-avanzado/insumos/historial` | Historial de movimientos | `inventario.ver` |
+
+**Recetas:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/inventario-avanzado/recetas/productos/:id` | Obtener receta de producto | `inventario.ver` |
+| PUT | `/api/inventario-avanzado/recetas/productos/:id` | Guardar receta de producto | `inventario.editar` |
+| GET | `/api/inventario-avanzado/recetas/personalizaciones/:id` | Ajustes de personalización | `inventario.ver` |
+| PUT | `/api/inventario-avanzado/recetas/personalizaciones/:id` | Guardar ajustes | `inventario.editar` |
+
+**Indicadores de Riesgo:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/inventario-avanzado/riesgo/productos` | Estado de riesgo por producto | `inventario.ver` |
+| GET | `/api/inventario-avanzado/riesgo/personalizaciones` | Estado por personalización | `inventario.ver` |
+
+**Import/Export:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/inventario-avanzado/insumos/export` | Exportar insumos (Excel) | `inventario.ver` |
+| POST | `/api/inventario-avanzado/insumos/import` | Importar insumos (Excel) | `inventario.editar` |
+| GET | `/api/inventario-avanzado/recetas/export` | Exportar recetas (Excel) | `inventario.ver` |
+| POST | `/api/inventario-avanzado/recetas/import` | Importar recetas (Excel) | `inventario.editar` |
+| GET | `/api/inventario-avanzado/productos/export` | Exportar productos (Excel) | `inventario.ver` |
+| POST | `/api/inventario-avanzado/productos/import` | Importar productos (Excel) | `inventario.editar` |
+
+---
+
+### 👥 Recursos Humanos (RRHH)
+
+**Empleados:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/empleados` | Listar empleados | `empleados.ver` |
+| GET | `/api/empleados/:id` | Obtener empleado específico | `empleados.ver` |
+| POST | `/api/empleados` | Registrar empleado | `empleados.crear` |
+| PUT | `/api/empleados/:id` | Actualizar empleado | `empleados.editar` |
+| DELETE | `/api/empleados/:id` | Eliminar empleado | `empleados.eliminar` |
+
+**Nómina:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/nomina/configuracion` | Obtener parámetros de ley | `nomina.ver` |
+| POST | `/api/nomina/calcular` | Calcular nómina de empleado | `nomina.calcular` |
+| GET | `/api/nomina/historial/:empleadoId` | Historial de nóminas | `nomina.ver` |
+| POST | `/api/nomina/generar-pdf/:nominaId` | Generar PDF de nómina | `nomina.generar_pdf` |
+
+**Liquidaciones:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| POST | `/api/nomina/liquidar` | Calcular liquidación final | `liquidaciones.calcular` |
+| GET | `/api/nomina/liquidaciones/:empleadoId` | Historial de liquidaciones | `liquidaciones.ver` |
+| POST | `/api/nomina/liquidaciones/generar-pdf/:id` | Generar PDF | `liquidaciones.generar_pdf` |
+
+**Contratos:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| POST | `/api/contratos/generar` | Generar contrato en PDF | `empleados.crear` |
+
+---
+
+### 👤 Usuarios y Roles
+
+**Usuarios:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/usuarios` | Listar usuarios | `usuarios.ver` |
+| GET | `/api/usuarios/:id` | Obtener usuario específico | `usuarios.ver` |
+| POST | `/api/usuarios` | Crear usuario | `usuarios.crear` |
+| PUT | `/api/usuarios/:id` | Actualizar usuario | `usuarios.editar` |
+| DELETE | `/api/usuarios/:id` | Eliminar usuario | `usuarios.eliminar` |
+| POST | `/api/usuarios/:id/cambiar-password` | Cambiar contraseña | `usuarios.editar` |
+
+**Roles:**
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/roles` | Listar roles | `roles.ver` |
+| GET | `/api/roles/:id` | Obtener rol con permisos | `roles.ver` |
+| POST | `/api/roles` | Crear rol personalizado | `roles.crear` |
+| PUT | `/api/roles/:id` | Actualizar permisos de rol | `roles.editar` |
+| DELETE | `/api/roles/:id` | Eliminar rol | `roles.eliminar` |
+
+---
+
+### 📈 Reportes
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/reportes/ventas` | Reporte de ventas por periodo | `reportes.ver` |
+| GET | `/api/reportes/inventario` | Estado de inventario | `reportes.ver` |
+| GET | `/api/reportes/productos-mas-vendidos` | Top productos vendidos | `reportes.ver` |
+| GET | `/api/reportes/ventas-por-mesero` | Ventas por mesero | `reportes.ver` |
+| GET | `/api/reportes/ventas-por-mesa` | Ventas por mesa | `reportes.ver` |
+| GET | `/api/reportes/export-excel` | Exportar reporte a Excel | `reportes.exportar` |
+
+---
+
+### ⚙️ Configuración del Sistema
+
+| Método | Endpoint | Descripción | Permisos |
+|--------|----------|-------------|----------|
+| GET | `/api/configuracion-sistema` | Obtener configuración | `configuracion.ver` |
+| PUT | `/api/configuracion-sistema` | Actualizar configuración | `configuracion.editar` |
+| GET | `/api/configuracion-facturacion` | Config de impresión | `configuracion.ver` |
+| PUT | `/api/configuracion-facturacion` | Actualizar config impresión | `configuracion.editar` |
+| GET | `/api/sistema/info` | Información del sistema | Público |
+| GET | `/health` | Health check | Público |
+
+---
 - `GET /api/configuracion/sistema` - Obtener configuración
 - `PUT /api/configuracion/sistema` - Actualizar configuración (`critico_modo`)
 
@@ -429,7 +1379,7 @@ El sistema utiliza un **plugin HTTP propio** que garantiza la impresión correct
 **Ejemplo de Formato:**
 ```
 =========================================
-         CASA MONTIS
+         MONTIS CLOUD
 =========================================
 Fecha: 21/12/2024 14:30
 Comanda #123
@@ -451,7 +1401,7 @@ TOTAL:                          $8.50
 **Para Domicilio:**
 ```
 =========================================
-         CASA MONTIS
+         MONTIS CLOUD
       PEDIDO A DOMICILIO
 =========================================
 Comanda #124
@@ -553,7 +1503,7 @@ El sistema incluye un panel completo de administración accesible desde la inter
 El sistema incluye un plugin HTTP completamente autónomo:
 
 **Características Técnicas:**
-- **Archivo**: `backend/src/services/pluginImpresora.ts`
+- **Archivo**: `backend/modelo_imprimir_legacy/pluginImpresora.ts`
 - **Puerto**: 8001 (configurable)
 - **Protocolo**: HTTP POST con body en texto plano
 - **Encoding**: CP850 (Code Page 850) - Estándar para español
@@ -718,13 +1668,244 @@ Para cadenas con múltiples sucursales:
 - **Prettier**: Formateo automático
 - **Commits**: Conventional Commits (feat:, fix:, docs:)
 
+---
+
+## 🛠️ Tecnologías Utilizadas
+
+### Frontend
+| Tecnología | Versión | Propósito |
+|------------|---------|-----------|
+| **React** | 18.x | Librería de UI con hooks |
+| **Next.js** | 14.x | Framework SSR con App Router |
+| **TypeScript** | 5.x | Type safety en todo el código |
+| **Tailwind CSS** | 3.x | Utility-first styling |
+| **Axios** | 1.x | Cliente HTTP para API calls |
+| **React Context** | - | State management global |
+| **date-fns** | 2.x | Manipulación de fechas |
+
+### Backend
+| Tecnología | Versión | Propósito |
+|------------|---------|-----------|
+| **Node.js** | 18+ | Runtime de JavaScript |
+| **Express** | 4.x | Framework de servidor web |
+| **TypeScript** | 5.x | Type safety en backend |
+| **PostgreSQL** | 14+ | Base de datos relacional |
+| **Kysely** | 0.27.x | Query builder type-safe |
+| **JWT** | 9.x | Autenticación con tokens |
+| **bcrypt** | 5.x | Hashing de passwords |
+| **Helmet** | 7.x | Headers de seguridad |
+| **Compression** | 1.x | Compresión gzip de respuestas |
+| **Morgan** | 1.x | Logger de requests HTTP |
+
+### Plugin de Impresión
+| Tecnología | Versión | Propósito |
+|------------|---------|-----------|
+| **Python** | 3.9+ | Lenguaje del plugin |
+| **Flask** | 2.x | Framework web para API |
+| **pywin32** | 305+ | Interacción con impresoras Windows |
+| **PyInstaller** | 5.x | Compilación a EXE |
+
+### Desarrollo y Herramientas
+| Herramienta | Propósito |
+|-------------|-----------|
+| **VS Code** | Editor de código recomendado |
+| **Git** | Control de versiones |
+| **pgAdmin 4** | Administración visual de PostgreSQL |
+| **Postman** | Testing de API endpoints |
+| **ESLint** | Linting de código TypeScript/JavaScript |
+| **Prettier** | Formateo automático de código |
+
+---
+
+## 🎯 Casos de Uso Clave
+
+### 🏢 Restaurantes de Mesa
+- **Toma de pedidos** con tablets en mesas
+- **Impresión automática** en cocina
+- **Gestión de mesas** en tiempo real
+- **Facturación** con IVA y métodos de pago múltiples
+- **Control de turnos** con roles de meseros y cajeros
+
+### 🍕 Pizzerías y Fast Food
+- **Pedidos para llevar** sin necesidad de mesa
+- **Domicilios** con data completa del cliente
+- **Categorías personalizables** (pizzas, hamburguesas, bebidas)
+- **Personalizaciones** complejas (ingredientes, tamaños, extras)
+- **Impresión optimizada** para cocina (58mm)
+
+### ☕ Cafeterías y Panaderías
+- **Catálogo de productos** con imágenes
+- **Desayunos personalizables** (bebida + pan + proteína)
+- **Control de inventario** de insumos (café, leche, panes)
+- **Reportes de ventas** por producto y periodo
+- **Facturación rápida** para filas de clientes
+
+### 🍽️ Cadenas Multi-Sucursal (Futuro)
+- **Arquitectura escalable** con PostgreSQL
+- **API centralizada** para múltiples puntos
+- **Sincronización en tiempo real** entre sucursales
+- **Dashboard corporativo** consolidado
+- **Replicación maestro-esclavo** para alta disponibilidad
+
+---
+
+## 📈 Roadmap Futuro
+
+### 🔜 Corto Plazo (Q1-Q2 2025)
+- [ ] **Dashboard de Analíticas**: Gráficos de ventas, productos estrella, tendencias
+- [ ] **App Móvil Nativa**: React Native para Android/iOS
+- [ ] **Modo Offline**: Sincronización cuando se recupere conexión
+- [ ] **Sistema de Propinas**: Tracking y distribución entre meseros
+- [ ] **Reservas Online**: Widget para página web del restaurante
+
+### 📅 Mediano Plazo (Q3-Q4 2025)
+- [ ] **CRM de Clientes**: Base de datos de clientes frecuentes con historial
+- [ ] **Programa de Fidelización**: Puntos y descuentos por compras
+- [ ] **Integración Delivery Apps**: Uber Eats, Rappi, DiDi Food
+- [ ] **Pasarelas de Pago**: Mercado Pago, PayU, Stripe
+- [ ] **WhatsApp Business**: Pedidos vía chat automatizado
+
+### 🚀 Largo Plazo (2026+)
+- [ ] **Machine Learning**: Predicción de demanda y sugerencias inteligentes
+- [ ] **Multi-Tenant SaaS**: Una instancia para múltiples restaurantes
+- [ ] **API Pública**: Para integraciones de terceros
+- [ ] **Menú Digital con QR**: Clientes piden desde su celular
+- [ ] **Sistema de Delivery Propio**: Con tracking GPS de domiciliarios
+
+---
+
+## 🌟 Ventajas Competitivas
+
+### ✅ Comparado con Soluciones Comerciales
+
+| Característica | Este Sistema | Rappi POS | Square POS | Toast POS |
+|----------------|--------------|-----------|------------|-----------|
+| **Costo Mensual** | $0 (auto-hospedado) | $50-200/mes | $60/mes | $165/mes |
+| **Hardware Propio** | ✅ Usa cualquier PC/Tablet | ❌ Hardware propietario | ⚠️ Hardware recomendado | ❌ Hardware propietario |
+| **Sin Comisiones** | ✅ 0% | ❌ 3-5% por transacción | ❌ 2.9% + 30¢ | ❌ 2.99% |
+| **Código Abierto** | ✅ Personalizable | ❌ Cerrado | ❌ Cerrado | ❌ Cerrado |
+| **Impresión Sin Marca** | ✅ Sin watermarks | ⚠️ Con logo empresa | ⚠️ Con logo empresa | ⚠️ Con logo empresa |
+| **Inventario Avanzado** | ✅ Con recetas e insumos | ⚠️ Básico | ⚠️ Básico | ✅ Avanzado |
+| **RRHH Integrado** | ✅ Nómina y liquidaciones | ❌ No incluido | ❌ No incluido | ⚠️ Addon pago |
+| **Multi-Canal** | ✅ Mesa/Delivery/Llevar | ✅ Sí | ✅ Sí | ✅ Sí |
+| **Roles y Permisos** | ✅ 23 módulos granulares | ⚠️ Básico | ⚠️ Básico | ✅ Avanzado |
+| **Soporte 24/7** | ⚠️ Documentación | ✅ Sí | ✅ Sí | ✅ Sí |
+
+### 🎁 Beneficios Clave
+
+1. **💰 Sin Costos Recurrentes**: Auto-hospedado, sin mensualidades ni comisiones
+2. **🔓 Control Total**: Acceso completo al código fuente para personalizaciones
+3. **📦 Todo en Uno**: Comandas + Inventario + RRHH + Facturación en una sola plataforma
+4. **🖨️ Impresión Profesional**: Plugin propio sin dependencias de terceros
+5. **🔒 Seguridad**: Datos en tu propio servidor, no en la nube de terceros
+6. **⚡ Performance**: Optimizado para velocidad y bajo consumo de recursos
+7. **📱 Multi-Dispositivo**: Funciona en tablets, celulares, PCs sin apps nativas
+8. **🇨🇴 Adaptado a Colombia**: Cálculos de nómina según ley colombiana
+
+---
+
 ## 📄 Licencia y Soporte
 
-**Licencia**: Proyecto propietario para Casa Montis.
+**Licencia**: Proyecto propietario de **Montis Cloud**.
+
+**Desarrollado por**: Juan Montañez (@jmont)
+
+**Versión Actual**: 2.0.0 (Enero 2025)
 
 **Soporte Técnico:**
-- Documentación completa en este README
-- Logs detallados en consola del backend
-- Sistema de health check: `http://localhost:3001/health`
+- 📖 **Documentación completa** en este README
+- 📂 **Guías adicionales** en carpeta `/GUIA DE USO/`
+- 🐛 **Logs detallados** en consola del backend para debugging
+- 🏥 **Health check**: `http://localhost:3001/health`
+- 📧 **Contacto**: Para consultas o soporte, contactar al desarrollador
 
-**Contacto**: Para consultas o soporte, contactar al desarrollador del sistema.
+**Estado del Proyecto**: ✅ **Producción Estable** - Actualmente en uso en Casa Montis Restaurante
+
+---
+
+## 🙏 Agradecimientos
+
+Este sistema fue desarrollado como solución integral para la gestión operativa de **Casa Montis Restaurante**, integrando:
+- Toma de comandas multi-canal (mesa, domicilio, para llevar)
+- Sistema de inventario inteligente con recetas e insumos
+- Módulo completo de recursos humanos con nómina y liquidaciones
+- Impresión térmica con encoding perfecto para español
+- Control de acceso con roles y permisos granulares
+
+Agradecimientos especiales a:
+- **Casa Montis** por confiar en la visión del proyecto
+- **Comunidad Open Source** por las librerías y herramientas utilizadas
+- **Claude/Anthropic** por asistencia en desarrollo y documentación
+
+---
+
+## 📝 Changelog Reciente
+
+### Versión 2.0.0 (Enero 2025) - "Enterprise Ready"
+
+**🆕 Nuevas Características:**
+- ✨ **Configuración de Impresoras**: Selector de ancho de papel (58mm/80mm) y tamaño de fuente (Small/Normal/Large)
+- 💰 **V.UNIT en Facturas**: Columna de Valor Unitario agregada a facturas y recibos
+- 🔐 **Sistema de Roles Completo**: RBAC con 23 módulos y permisos granulares
+- 👥 **Módulo de RRHH**: Nómina, liquidaciones, contratos y expedientes
+- 📦 **Inventario Avanzado**: Insumos, recetas, ajustes automáticos, indicadores de riesgo
+- 🗄️ **Migración a PostgreSQL**: De SQLite a PostgreSQL para escalabilidad
+- 📊 **Preview dinámico**: Vista previa de recibos con configuración en tiempo real
+
+**🐛 Correcciones:**
+- ✅ Overflow de descripciones de productos en tablas (GestionProductos y SeleccionProductos)
+- ✅ Separadores que se desbordaban con fuente grande (ajuste de caracteres efectivos)
+- ✅ Impresión selectiva de items adicionales (sin duplicados)
+- ✅ Marcado automático de `is_impreso` en items de comanda
+
+**🔧 Mejoras:**
+- ⚡ Optimización de consultas con PostgreSQL y Kysely
+- 🎨 UI/UX mejorada en panel de administración
+- 📱 Responsiveness perfeccionado para todos los dispositivos
+- 🔒 Seguridad endurecida con middleware y validaciones
+- 📝 Documentación completa actualizada (este README)
+
+### Versión 1.5.0 (Diciembre 2024) - "Multi-Canal"
+- ✅ Soporte para pedidos a domicilio y para llevar
+- ✅ Formulario de datos de cliente
+- ✅ Impresión diferenciada según tipo de pedido
+- ✅ Edición de comandas con agregado de items
+
+### Versión 1.0.0 (Noviembre 2024) - "MVP"
+- ✅ Sistema de comandas para mesas
+- ✅ Catálogo de productos con categorías
+- ✅ Impresión térmica básica
+- ✅ Facturación con IVA
+
+---
+
+## 🎉 Conclusión
+
+**Sistema de Comandas Casa Montis** es una solución integral, moderna y escalable para la gestión operativa de restaurantes. Construido con tecnologías de última generación y arquitectura modular, ofrece todas las funcionalidades necesarias para:
+
+✅ **Operaciones Diarias**: Toma de pedidos, facturación, gestión de mesas  
+✅ **Control Administrativo**: Inventario, RRHH, roles y permisos  
+✅ **Impresión Profesional**: Sistema propio sin dependencias externas  
+✅ **Escalabilidad**: Preparado para crecer de un punto a múltiples sucursales  
+
+**¿Por qué elegir este sistema?**
+- 💸 **Sin costos recurrentes** vs $50-200/mes de competidores
+- 🔓 **Control total** del código y los datos
+- 🇨🇴 **Adaptado a Colombia** (nómina según ley colombiana)
+- ⚡ **Performance** optimizado y lightweight
+- 📈 **Activamente desarrollado** con roadmap claro
+
+**Estado Actual**: ✅ **Producción Estable** - Sistema completo y funcional usado diariamente en Casa Montis Restaurante.
+
+---
+
+<div align="center">
+
+**⭐ Si este proyecto te resulta útil, considera dejarnos una estrella en GitHub**
+
+**Desarrollado con ❤️ por Juan Montañez para Casa Montis**
+
+**© 2025 Montis Cloud. Todos los derechos reservados.**
+
+</div>
+
