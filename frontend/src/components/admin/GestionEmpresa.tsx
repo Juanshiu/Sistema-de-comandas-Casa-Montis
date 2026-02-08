@@ -120,7 +120,7 @@ export default function GestionEmpresa() {
                   value={config.nombre_empresa}
                   onChange={(e) => setConfig({ ...config, nombre_empresa: e.target.value })}
                   className="w-full px-4 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  placeholder="Ej: CASA MONTIS RESTAURANTE"
+                  placeholder="Nombre de la empresa"
                 />
               </div>
 
@@ -131,7 +131,7 @@ export default function GestionEmpresa() {
                   value={config.representante_legal}
                   onChange={(e) => setConfig({ ...config, representante_legal: e.target.value })}
                   className="w-full px-4 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  placeholder="Ej: Diana Milena Segura Lavao"
+                  placeholder="Nombre del representante legal"
                 />
               </div>
 
@@ -270,7 +270,7 @@ export default function GestionEmpresa() {
                   value={config.actividad_economica}
                   onChange={(e) => setConfig({ ...config, actividad_economica: e.target.value })}
                   className="w-full px-4 py-2 bg-gray-50 border rounded-lg focus:ring-2 focus:ring-teal-500"
-                  placeholder="Ej: 5611"
+                  placeholder="Ej: 5610 - Restaurantes y servicios móviles de comida"
                 />
               </div>
             </div>
