@@ -15,7 +15,7 @@ async function probarConfiguracionFacturacion() {
     // 2. Actualizar configuración
     console.log('2️⃣ PUT /api/configuracion/facturacion');
     const updateData = {
-      nombre_empresa: 'CASA MONTIS RESTAURANTE - TEST',
+      nombre_empresa: 'MONTIS CLOUD RESTAURANTE - TEST',
       nit: '26420708-2',
       responsable_iva: true,
       porcentaje_iva: 19,

@@ -12,7 +12,7 @@ async function testPrinter() {
     
     const contenidoPrueba = `
 ================================
-        CASA MONTIS
+        MONTIS CLOUD
       PRUEBA DE IMPRESORA
 ================================
 Fecha: ${new Date().toLocaleString('es-CO')}
