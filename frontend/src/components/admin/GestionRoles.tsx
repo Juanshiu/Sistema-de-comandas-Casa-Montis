@@ -69,10 +69,11 @@ export default function GestionRoles() {
         const rolDetalle = await res.json();
         
         setRolEditar(rolDetalle);
+        const esAdminPrincipal = rolDetalle.nombre === 'Administrador' || rolDetalle.nombre === 'SuperAdmin';
         setFormData({
           nombre: rolDetalle.nombre,
           descripcion: rolDetalle.descripcion || '',
-          es_superusuario: Boolean(rolDetalle.es_superusuario),
+          es_superusuario: esAdminPrincipal ? true : Boolean(rolDetalle.es_superusuario),
           permisos: rolDetalle.permisos?.map((p: any) => p.permiso) || [],
           activo: Boolean(rolDetalle.activo)
         });
@@ -129,7 +130,7 @@ export default function GestionRoles() {
     }
   };
 
-  const handleDesactivar = async (id: number) => {
+  const handleDesactivar = async (id: string) => {
     if (!confirm('¿Estás seguro de desactivar este rol?')) return;
 
     try {
@@ -206,7 +207,7 @@ export default function GestionRoles() {
 
               <div className="mt-4 flex items-center text-sm text-secondary-500">
                 <Users className="w-4 h-4 mr-1" />
-                <span>{rol.cantidad_usuarios || 0} usuarios asignados</span>
+                <span>{Number(rol.cantidad_usuarios) || 0} usuarios asignados</span>
               </div>
 
               <div className="mt-4 pt-4 border-t border-secondary-100 flex justify-end space-x-3">
@@ -218,7 +219,7 @@ export default function GestionRoles() {
                   Editar
                 </button>
                 {/* No permitir eliminar rol Super Usuario o roles con usuarios */}
-                {!rol.es_superusuario && (rol.cantidad_usuarios === 0) && (
+                {!rol.es_superusuario && (Number(rol.cantidad_usuarios) === 0) && (
                   <button
                     onClick={() => handleDesactivar(rol.id)}
                     className="text-red-600 hover:text-red-800 flex items-center text-sm font-medium"
@@ -279,8 +280,9 @@ export default function GestionRoles() {
                     <input
                       type="checkbox"
                       id="es_superusuario"
-                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded"
+                      className="h-4 w-4 text-primary-600 focus:ring-primary-500 border-secondary-300 rounded disabled:opacity-50"
                       checked={formData.es_superusuario}
+                      disabled={rolEditar?.nombre === 'Administrador' || rolEditar?.nombre === 'SuperAdmin'}
                       onChange={(e) => setFormData({
                         ...formData, 
                         es_superusuario: e.target.checked,

@@ -3,7 +3,19 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../../contexts/AuthContext';
 import { Usuario, Rol } from '../../types';
-import { User, Plus, Edit, Trash2, X, Check, Search, Shield } from 'lucide-react';
+import { User, Plus, Edit, Trash2, X, Check, Search, Shield, AlertTriangle } from 'lucide-react';
+import { apiService } from '../../services/api';
+
+interface LimitesLicencia {
+  max_usuarios: number;
+  max_mesas: number;
+  plan: string;
+  estado: string;
+  usuarios_actuales: number;
+  mesas_actuales: number;
+  puede_crear_usuarios: boolean;
+  puede_crear_mesas: boolean;
+}
 
 export default function GestionUsuarios() {
   const { usuario: usuarioSesion, tienePermiso } = useAuth();
@@ -12,6 +24,7 @@ export default function GestionUsuarios() {
   const [cargando, setCargando] = useState(true);
   const [error, setError] = useState('');
   const [filtro, setFiltro] = useState('');
+  const [limitesLicencia, setLimitesLicencia] = useState<LimitesLicencia | null>(null);
   
   // Estado para el modal
   const [modalAbierto, setModalAbierto] = useState(false);
@@ -19,10 +32,10 @@ export default function GestionUsuarios() {
   
   // Estado del formulario
   const [formData, setFormData] = useState({
-    usuario: '',
+    email: '',
     password: '',
     nombre_completo: '',
-    rol_id: 0,
+    rol_id: '',
     pin: '',
     telefono: '',
     activo: true
@@ -32,6 +45,7 @@ export default function GestionUsuarios() {
 
   useEffect(() => {
     cargarDatos();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const cargarDatos = async () => {
@@ -52,6 +66,14 @@ export default function GestionUsuarios() {
       const dataRoles = await resRoles.json();
       setRoles(dataRoles);
 
+      // Cargar límites de licencia
+      try {
+        const limites = await apiService.getLimitesLicencia();
+        setLimitesLicencia(limites);
+      } catch (e) {
+        console.warn('No se pudieron cargar los límites de licencia');
+      }
+
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -63,10 +85,10 @@ export default function GestionUsuarios() {
     if (usuario) {
       setUsuarioEditar(usuario);
       setFormData({
-        usuario: usuario.usuario,
+        email: (usuario as any).email || '',
         password: '', // No mostrar password
-        nombre_completo: usuario.nombre_completo,
-        rol_id: usuario.rol_id,
+        nombre_completo: usuario.nombre_completo || '',
+        rol_id: usuario.rol_id || '',
         pin: usuario.pin || '',
         telefono: usuario.telefono || '',
         activo: usuario.activo
@@ -74,10 +96,10 @@ export default function GestionUsuarios() {
     } else {
       setUsuarioEditar(null);
       setFormData({
-        usuario: '',
+        email: '',
         password: '',
         nombre_completo: '',
-        rol_id: roles.length > 0 ? roles[0].id : 0,
+        rol_id: roles.length > 0 ? roles[0].id : '',
         pin: '',
         telefono: '',
         activo: true
@@ -125,7 +147,7 @@ export default function GestionUsuarios() {
     }
   };
 
-  const handleDesactivar = async (id: number) => {
+  const handleDesactivar = async (id: string) => {
     if (!confirm('¿Estás seguro de desactivar este usuario?')) return;
 
     try {
@@ -140,25 +162,63 @@ export default function GestionUsuarios() {
     }
   };
 
-  const usuariosFiltrados = usuarios.filter(u => 
-    u.nombre_completo.toLowerCase().includes(filtro.toLowerCase()) ||
-    u.usuario.toLowerCase().includes(filtro.toLowerCase())
-  );
+  const usuariosFiltrados = usuarios.filter(u => {
+    const nombreCompleto = u.nombre_completo || '';
+    const email = (u as any).email || '';
+    const filtroLower = filtro.toLowerCase();
+    return nombreCompleto.toLowerCase().includes(filtroLower) ||
+           email.toLowerCase().includes(filtroLower);
+  });
 
   if (cargando) return <div className="p-8 text-center">Cargando usuarios...</div>;
+
+  const puedeCrearUsuarios = limitesLicencia?.puede_crear_usuarios !== false;
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-secondary-800">Gestión de Usuarios</h2>
-        <button
-          onClick={() => handleOpenModal()}
-          className="flex items-center space-x-2 bg-primary-600 text-white px-4 py-2 rounded-lg hover:bg-primary-700 transition"
-        >
-          <Plus size={20} />
-          <span>Nuevo Usuario</span>
-        </button>
+        <div className="flex items-center gap-4">
+          {limitesLicencia && (
+            <div className="text-sm text-secondary-600">
+              <span className={`font-medium ${!puedeCrearUsuarios ? 'text-red-600' : ''}`}>
+                {limitesLicencia.usuarios_actuales}/{limitesLicencia.max_usuarios}
+              </span>
+              <span className="ml-1">usuarios</span>
+              <span className="ml-2 text-xs text-secondary-400">
+                (Plan {limitesLicencia.plan})
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => handleOpenModal()}
+            disabled={!puedeCrearUsuarios}
+            className={`flex items-center space-x-2 px-4 py-2 rounded-lg transition ${
+              puedeCrearUsuarios
+                ? 'bg-primary-600 text-white hover:bg-primary-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+            title={!puedeCrearUsuarios ? 'Has alcanzado el límite de usuarios de tu plan' : ''}
+          >
+            <Plus size={20} />
+            <span>Nuevo Usuario</span>
+          </button>
+        </div>
       </div>
+
+      {/* Alerta de límite alcanzado */}
+      {limitesLicencia && !puedeCrearUsuarios && (
+        <div className="flex items-center gap-2 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Límite de usuarios alcanzado</p>
+            <p className="text-sm">
+              Tu plan {limitesLicencia.plan} permite hasta {limitesLicencia.max_usuarios} usuarios. 
+              Para agregar más usuarios, contacta al administrador para actualizar tu plan.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Filtro */}
       <div className="relative">
@@ -196,7 +256,7 @@ export default function GestionUsuarios() {
                     </div>
                     <div className="ml-4">
                       <div className="text-sm font-medium text-secondary-900">{u.nombre_completo}</div>
-                      <div className="text-sm text-secondary-500">{u.usuario}</div>
+                      <div className="text-sm text-primary-500">{(u as any).email}</div>
                     </div>
                   </div>
                 </td>
@@ -266,14 +326,16 @@ export default function GestionUsuarios() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-secondary-700">Usuario / Email</label>
+                <label className="block text-sm font-medium text-secondary-700">Email</label>
                 <input
-                  type="text"
+                  type="email"
                   required
+                  placeholder="empleado@empresa.com"
                   className="mt-1 block w-full border border-secondary-300 rounded-md shadow-sm p-2"
-                  value={formData.usuario}
-                  onChange={(e) => setFormData({...formData, usuario: e.target.value})}
+                  value={formData.email}
+                  onChange={(e) => setFormData({...formData, email: e.target.value})}
                 />
+                <p className="mt-1 text-xs text-secondary-500">Este será el email para iniciar sesión</p>
               </div>
 
               {!usuarioEditar && (
@@ -311,7 +373,7 @@ export default function GestionUsuarios() {
                 <select
                   className="mt-1 block w-full border border-secondary-300 rounded-md shadow-sm p-2"
                   value={formData.rol_id}
-                  onChange={(e) => setFormData({...formData, rol_id: Number(e.target.value)})}
+                  onChange={(e) => setFormData({...formData, rol_id: e.target.value})}
                 >
                   <option value={0}>Seleccionar rol...</option>
                   {roles.map(r => (
