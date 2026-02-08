@@ -32,7 +32,7 @@ export default function PersonalizacionDisplay({
     return (
       <div className={className || 'text-xs space-y-1'}>
         {entradasOrdenadas.map(([key, value]) => {
-          const info = obtenerInfoPersonalizacion(parseInt(key), value as number);
+          const info = obtenerInfoPersonalizacion(key, value as string);
           if (!info) return null;
 
           return (
@@ -55,7 +55,7 @@ export default function PersonalizacionDisplay({
   if (formato === 'texto') {
     const textos = entradasOrdenadas
       .map(([key, value]) => {
-        const info = obtenerInfoPersonalizacion(parseInt(key), value as number);
+        const info = obtenerInfoPersonalizacion(key, value as string);
         if (!info) return null;
         return info.item.trim();
       })
@@ -68,7 +68,7 @@ export default function PersonalizacionDisplay({
   if (formato === 'inline') {
     const items = entradasOrdenadas
       .map(([key, value]) => {
-        const info = obtenerInfoPersonalizacion(parseInt(key), value as number);
+        const info = obtenerInfoPersonalizacion(key, value as string);
         if (!info) return null;
         return info.item.trim();
       })
@@ -94,7 +94,7 @@ export function usePersonalizacionesTexto(personalizacion: any): string[] {
   
   return entradasOrdenadas
     .map(([key, value]) => {
-      const info = obtenerInfoPersonalizacion(parseInt(key), value as number);
+      const info = obtenerInfoPersonalizacion(key, value as string);
       if (!info) return null;
       return `${info.categoria}: ${info.item}`;
     })
@@ -116,15 +116,15 @@ export function getPersonalizacionesParaImpresion(
   const entradasOrdenadas = Object.entries(personalizacion)
     .filter(([key]) => key !== 'precio_adicional')
     .sort(([keyA], [keyB]) => {
-      const catA = categorias.find(c => c.id === parseInt(keyA));
-      const catB = categorias.find(c => c.id === parseInt(keyB));
+      const catA = categorias.find(c => c.id === keyA);
+      const catB = categorias.find(c => c.id === keyB);
       return (catA?.orden || 999) - (catB?.orden || 999);
     });
 
   return entradasOrdenadas
     .map(([key, value]) => {
-      const categoriaId = parseInt(key);
-      const itemId = value as number;
+      const categoriaId = key;
+      const itemId = value as string;
       
       const itemsDeCategoria = itemsPorCategoria[categoriaId] || [];
       const itemSeleccionado = itemsDeCategoria.find((it: any) => it.id === itemId);

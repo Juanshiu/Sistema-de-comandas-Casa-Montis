@@ -2,14 +2,14 @@ import { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
 
 interface CategoriaPersonalizacion {
-  id: number;
+  id: string;
   nombre: string;
   orden: number;
   activo: boolean;
 }
 
 interface ItemPersonalizacion {
-  id: number;
+  id: string;
   nombre: string;
   precio_adicional: number;
 }
@@ -63,8 +63,8 @@ export function usePersonalizaciones() {
     return Object.entries(personalizacion)
       .filter(([key]) => key !== 'precio_adicional')
       .sort(([keyA], [keyB]) => {
-        const catA = categorias.find(c => c.id === parseInt(keyA));
-        const catB = categorias.find(c => c.id === parseInt(keyB));
+        const catA = categorias.find(c => c.id === keyA);
+        const catB = categorias.find(c => c.id === keyB);
         return (catA?.orden || 999) - (catB?.orden || 999);
       });
   };
@@ -72,7 +72,7 @@ export function usePersonalizaciones() {
   /**
    * Obtiene información formateada de una personalización
    */
-  const obtenerInfoPersonalizacion = (categoriaId: number, itemId: number) => {
+  const obtenerInfoPersonalizacion = (categoriaId: string, itemId: string) => {
     const categoria = categorias.find(c => c.id === categoriaId);
     if (!categoria) return null;
 
