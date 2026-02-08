@@ -803,26 +803,18 @@ cp .env.example .env
 **Contenido del archivo `backend/.env`:**
 
 ```env
+# Entorno
+NODE_ENV=development
+
 # Puerto del servidor
 PORT=3001
 
-# Base de Datos PostgreSQL
-DB_HOST=localhost
-DB_PORT=5432
-DB_USER=casa_montis_user
-DB_PASSWORD=tu_password_segura
-DB_NAME=casa_montis
+# Base de Datos PostgreSQL (formato URI)
+# Formato: postgresql://usuario:password@host:puerto/nombre_db
+DATABASE_URL=postgresql://postgres:tu_password@localhost:5432/casa_montis
 
 # JWT para autenticación
 JWT_SECRET=tu_clave_secreta_muy_larga_y_aleatoria_aqui_min_32_caracteres
-
-# Plugin de Impresión
-ESC_POS_URL=http://localhost:8001/imprimir
-PRINTER_COCINA_NAME=pos58
-PRINTER_CAJA_NAME=pos58
-
-# Entorno
-NODE_ENV=development
 ```
 
 ```bash
@@ -1537,18 +1529,12 @@ Cualquier impresora térmica de 58mm o 80mm con soporte ESC/POS:
 1. **Conectar impresora vía USB**
 2. **Instalar drivers** (Windows normalmente los detecta automáticamente)
 3. **Identificar nombre**: Panel de Control → Dispositivos e impresoras
-4. **Configurar en .env**:
-```env
-PRINTER_COCINA_NAME=pos58
-```
-
-**Nota**: El nombre debe coincidir EXACTAMENTE con el que aparece en Windows.
+4. **Configurar en el Panel de Administración**: Seleccionar impresora del dropdown y guardar
 
 ### Solución de Problemas de Impresión
 
 **La impresora no imprime:**
 - Verificar que está encendida y conectada
-- Confirmar nombre en .env coincide con Windows
 - Ver logs del plugin en puerto 8001: `http://localhost:8001/status`
 - Probar endpoint de prueba: `POST http://localhost:8001/probar`
 
@@ -1608,44 +1594,41 @@ PRINTER_COCINA_NAME=pos58
 ## 🔐 Seguridad y Mejores Prácticas
 
 **Implementado:**
-- **Autenticación y Autorización**: Sistema de sesiones seguro con hashing de contraseñas.
+- **Autenticación y Autorización**: Sistema JWT con hashing de contraseñas bcrypt.
 - **Control de Roles (RBAC)**: Permisos granulares por módulo y rol de usuario.
 - **Seguridad de Red**: Headers de seguridad con Helmet.
 - **Validación de Datos**: Validación en todas las rutas de API.
-- **Integridad de Datos**: Transacciones SQLite para procesos críticos.
+- **Integridad de Datos**: Transacciones PostgreSQL para procesos críticos.
 - **Sanitización**: Limpieza de inputs para prevenir inyecciones.
 
 **Recomendaciones Futuras:**
-- Implementar autenticación JWT (actualmente usa sesiones en DB).
 - Backup automático de base de datos en la nube.
 - Configuración de HTTPS en producción.
 - Rate limiting para prevenir ataques de fuerza bruta.
+- Auditoría de logs y monitoreo de seguridad.
 
-## 📈 Escalabilidad y Roadmap
+## 📈 Estado Actual del Proyecto
 
-### Estado Actual
-- ✅ SQLite para punto único
+### ✅ Características Implementadas
+- ✅ PostgreSQL con arquitectura escalable
 - ✅ Soporte multi-mesa y multi-salón
-- ✅ Sistema multi-canal (mesa/domicilio)
+- ✅ Sistema multi-canal (mesa/domicilio/llevar)
 - ✅ Edición de comandas sin duplicados
-- ✅ Impresión con encoding perfecto
+- ✅ Impresión térmica con encoding CP850 perfecto
 - ✅ Gestión completa de RRHH y Nómina
-- ✅ Autenticación y Control de Roles (RBAC)
+- ✅ Autenticación JWT y Control de Roles (RBAC)
+- ✅ Inventario avanzado con insumos y recetas
+- ✅ Sistema de facturación con múltiples métodos de pago
+- ✅ Configuración flexible de impresoras (58mm/80mm)
 
-### Próximas Funcionalidades
-- 🔄 Reportes y analíticas avanzadas
-- 🔄 Integración con delivery apps (Uber Eats, Rappi)
-- 🔄 App móvil nativa (React Native)
-- 🔄 Sistema de inventario avanzado
-- 🔄 CRM de clientes frecuentes
-
-### Escalabilidad Multi-Punto
-Para cadenas con múltiples sucursales:
-1. Migrar a PostgreSQL/MySQL
+### 🎯 Expansión Multi-Sucursal
+Esquema para cadenas con múltiples ubicaciones:
+1. ✅ Base PostgreSQL (completado)
 2. Implementar replicación maestro-esclavo
-3. API Gateway central
+3. API Gateway central con load balancing
 4. Sincronización en tiempo real con WebSockets
 5. Dashboard corporativo consolidado
+6. Gestión centralizada de productos y precios
 
 ## 🤝 Contribuir y Desarrollo
 
@@ -1731,7 +1714,7 @@ Para cadenas con múltiples sucursales:
 - **Domicilios** con data completa del cliente
 - **Categorías personalizables** (pizzas, hamburguesas, bebidas)
 - **Personalizaciones** complejas (ingredientes, tamaños, extras)
-- **Impresión optimizada** para cocina (58mm)
+- **Impresión optimizada** para cocina (58mm o 80mm)
 
 ### ☕ Cafeterías y Panaderías
 - **Catálogo de productos** con imágenes
@@ -1751,23 +1734,22 @@ Para cadenas con múltiples sucursales:
 
 ## 📈 Roadmap Futuro
 
-### 🔜 Corto Plazo (Q1-Q2 2025)
+### 🔜 Corto Plazo (Q1-Q2 2026)
 - [ ] **Dashboard de Analíticas**: Gráficos de ventas, productos estrella, tendencias
 - [ ] **App Móvil Nativa**: React Native para Android/iOS
 - [ ] **Modo Offline**: Sincronización cuando se recupere conexión
 - [ ] **Sistema de Propinas**: Tracking y distribución entre meseros
 - [ ] **Reservas Online**: Widget para página web del restaurante
 
-### 📅 Mediano Plazo (Q3-Q4 2025)
+### 📅 Mediano Plazo (Q3-Q4 2026)
 - [ ] **CRM de Clientes**: Base de datos de clientes frecuentes con historial
 - [ ] **Programa de Fidelización**: Puntos y descuentos por compras
 - [ ] **Integración Delivery Apps**: Uber Eats, Rappi, DiDi Food
 - [ ] **Pasarelas de Pago**: Mercado Pago, PayU, Stripe
 - [ ] **WhatsApp Business**: Pedidos vía chat automatizado
 
-### 🚀 Largo Plazo (2026+)
+### 🚀 Largo Plazo (2027+)
 - [ ] **Machine Learning**: Predicción de demanda y sugerencias inteligentes
-- [ ] **Multi-Tenant SaaS**: Una instancia para múltiples restaurantes
 - [ ] **API Pública**: Para integraciones de terceros
 - [ ] **Menú Digital con QR**: Clientes piden desde su celular
 - [ ] **Sistema de Delivery Propio**: Con tracking GPS de domiciliarios
@@ -1808,9 +1790,9 @@ Para cadenas con múltiples sucursales:
 
 **Licencia**: Proyecto propietario de **Montis Cloud**.
 
-**Desarrollado por**: Juan Montañez (@jmont)
+**Desarrollado por**: Juan Diego Montenegro Segura (@Juanshiu) - Ingeniero de Software Full Stack
 
-**Versión Actual**: 2.0.0 (Enero 2025)
+**Versión Actual**: 2.0.0 (Febrero 2026)
 
 **Soporte Técnico:**
 - 📖 **Documentación completa** en este README
@@ -1903,9 +1885,9 @@ Agradecimientos especiales a:
 
 **⭐ Si este proyecto te resulta útil, considera dejarnos una estrella en GitHub**
 
-**Desarrollado con ❤️ por Juan Montañez para Casa Montis**
+**Desarrollado con ❤️ por Juan Diego Montenegro Segura**
 
-**© 2025 Montis Cloud. Todos los derechos reservados.**
+**© 2026 Montis Cloud. Todos los derechos reservados.**
 
 </div>
 
