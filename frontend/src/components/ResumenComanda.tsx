@@ -8,6 +8,8 @@ import { useAuth } from '@/contexts/AuthContext';
 import PersonalizacionDisplay from './shared/PersonalizacionDisplay';
 import { getIconoCategoria } from '@/utils/personalizacionUtils';
 import { usePersonalizaciones } from './shared/hooks/usePersonalizaciones';
+import { printingService } from '@/services/printingService';
+import { generateComandaReceipt } from '@/utils/receiptFormatter';
 
 interface ResumenComandaProps {
   formulario: FormularioComanda;
@@ -101,6 +103,34 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
           imprimirCompleta
         );
         
+        // Notificar a otras partes del sistema que se editó una comanda y se descontó inventario
+        localStorage.setItem('comanda_completada', Date.now().toString());
+        window.dispatchEvent(new Event('inventario_updated'));
+        
+        // IMPRESIÓN LOCAL
+        if (imprimirAdicionales || imprimirCompleta) {
+          const printerName = localStorage.getItem('printer_cocina_local');
+          if (printerName) {
+            try {
+              const paperWidth = (localStorage.getItem('paper_width_cocina') as '58mm' | '80mm') || '80mm';
+              const fontSize = (localStorage.getItem('font_size_cocina') as 'small' | 'normal' | 'large') || 'normal';
+              const receiptContent = generateComandaReceipt(
+                formulario,
+                usuario?.nombre_completo || 'Usuario',
+                ordenarPersonalizaciones,
+                obtenerInfoPersonalizacion,
+                true, // isEditMode
+                imprimirAdicionales, // onlyNewItems
+                paperWidth,
+                fontSize
+              );
+              await printingService.printRaw(receiptContent, printerName);
+            } catch (printError) {
+              console.error('Error al imprimir localmente:', printError);
+            }
+          }
+        }
+        
         setSuccess(true);
         setTimeout(() => {
           window.location.reload();
@@ -110,6 +140,33 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
         console.log('🚀 Creando nueva comanda...');
         const response = await apiService.createComanda(comandaData);
         console.log('✅ Respuesta del servidor:', response);
+
+        // Notificar a otras partes del sistema que se creó una comanda y se descontó inventario
+        localStorage.setItem('comanda_completada', Date.now().toString());
+        window.dispatchEvent(new Event('inventario_updated'));
+
+        // IMPRESIÓN LOCAL AUTOMÁTICA
+        const printerName = localStorage.getItem('printer_cocina_local');
+        if (printerName) {
+          try {
+            const paperWidth = (localStorage.getItem('paper_width_cocina') as '58mm' | '80mm') || '80mm';
+            const fontSize = (localStorage.getItem('font_size_cocina') as 'small' | 'normal' | 'large') || 'normal';
+            const receiptContent = generateComandaReceipt(
+              formulario,
+              usuario?.nombre_completo || 'Usuario',
+              ordenarPersonalizaciones,
+              obtenerInfoPersonalizacion,
+              false, // isEditMode
+              false,  // onlyNewItems
+              paperWidth,
+              fontSize
+            );
+            await printingService.printRaw(receiptContent, printerName);
+          } catch (printError) {
+            console.error('Error al imprimir localmente:', printError);
+          }
+        }
+
         setSuccess(true);
         setTimeout(() => {
           window.location.reload();
@@ -251,7 +308,7 @@ export default function ResumenComanda({ formulario, onObservacionesChange, modo
         if (item.personalizacion && Object.keys(item.personalizacion).length > 0) {
           const entradasOrdenadas = ordenarPersonalizaciones(item.personalizacion);
           entradasOrdenadas.forEach(([catId, itemId]) => {
-            const info = obtenerInfoPersonalizacion(parseInt(catId), itemId);
+            const info = obtenerInfoPersonalizacion(catId, itemId);
             if (info) {
               lineas.push(`  ${info.item}`);
             }

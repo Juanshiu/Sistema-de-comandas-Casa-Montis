@@ -146,7 +146,7 @@ export default function PersonalizacionProducto({ producto, onPersonalizacionCha
     let precioAdicionalTotal = 0;
     for (const [catId, itmId] of Object.entries(nuevaPersonalizacion)) {
       if (catId === 'precio_adicional') continue;
-      const categoria = categoriasConItems.find(c => c.id === parseInt(catId));
+      const categoria = categoriasConItems.find(c => c.id === catId);
       if (categoria) {
         const item = categoria.items.find(i => i.id === itmId);
         if (item && item.precio_adicional > 0) {

@@ -29,7 +29,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
   const [itemPersonalizando, setItemPersonalizando] = useState<string | null>(null);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<CategoriaPersonalizacion[]>([]);
   const [itemEliminando, setItemEliminando] = useState<{ id: string; nombre: string } | null>(null);
-  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
+  const [riesgosProductos, setRiesgosProductos] = useState<Record<string, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
   const [configSistema, setConfigSistema] = useState<ConfiguracionSistema | null>(null);
 
   useEffect(() => {
@@ -78,7 +78,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
   const cargarRiesgosProductos = async () => {
     try {
       const response = await apiService.getRiesgoProductos();
-      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
+      const mapa: Record<string, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
       response.forEach((item: any) => {
         mapa[item.producto_id] = item.estado;
       });
@@ -102,14 +102,14 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
       const entradasOrdenadas = Object.entries(personalizacion)
         .filter(([key]) => key !== 'precio_adicional')
         .sort(([catIdA], [catIdB]) => {
-          const catA = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdA));
-          const catB = categoriasOrdenadas.find((c: any) => c.id === parseInt(catIdB));
+          const catA = categoriasOrdenadas.find((c: any) => c.id === catIdA);
+          const catB = categoriasOrdenadas.find((c: any) => c.id === catIdB);
           return (catA?.orden || 999) - (catB?.orden || 999);
         });
       
       // Para cada categoría ID en la personalización (ya ordenadas)
       for (const [categoriaId, itemId] of entradasOrdenadas) {
-        const catId = parseInt(categoriaId);
+        const catId = categoriaId;
         const categoria = categoriasOrdenadas.find((c: any) => c.id === catId);
         
         if (categoria) {
@@ -180,11 +180,12 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
     return precioBase + (cantidad * precioAdicional);
   };
 
-  const quitarProducto = (itemIdOProductoId: string | number) => {
-    // Si es un string, es un itemId específico
-    if (typeof itemIdOProductoId === 'string') {
-      const item = items.find(i => i.id === itemIdOProductoId);
-      if (!item) return;
+  const quitarProducto = (itemIdOProductoId: string) => {
+    // Si el id contiene un guión o es largo, probamos si es un itemId de la comanda
+    const itemEnComanda = items.find(i => i.id === itemIdOProductoId);
+    
+    if (itemEnComanda) {
+      const item = itemEnComanda;
       
       // Si el producto es personalizable, siempre eliminar el item completo (pedir confirmación)
       if (esPersonalizable(item.producto)) {
@@ -264,7 +265,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
     setItemEliminando(null);
   };
 
-  const eliminarTodosLosItemsDeProducto = (productoId: number) => {
+  const eliminarTodosLosItemsDeProducto = (productoId: string) => {
     // Eliminar todos los items de un producto específico (usado en Productos Disponibles)
     const nuevosItems = items.filter(item => item.producto.id !== productoId);
     onItemsChange(nuevosItems);
@@ -303,7 +304,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
     onItemsChange(nuevosItems);
   };
 
-  const obtenerCantidadProducto = (productoId: number): number => {
+  const obtenerCantidadProducto = (productoId: string): number => {
     // Para productos con personalización, contar todos los items con ese producto (no sumar cantidades)
     const producto = productos.find(p => p.id === productoId);
     if (producto && esPersonalizable(producto)) {
@@ -408,7 +409,7 @@ export default function SeleccionProductos({ categoria, items, onItemsChange }: 
                       )}
                     </h3>
                     {producto.descripcion && (
-                      <p className="text-sm text-secondary-600 mb-2">
+                      <p className="text-sm text-secondary-600 mb-2 break-words">
                         {producto.descripcion}
                       </p>
                     )}

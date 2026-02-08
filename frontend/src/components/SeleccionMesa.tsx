@@ -82,6 +82,29 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
     }
   };
 
+  const parseDatosCliente = (comanda: Comanda) => {
+    const raw = (comanda as any).datos_cliente;
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    return raw;
+  };
+
+  const getNombreCliente = (comanda: Comanda) => {
+    const datosCliente = parseDatosCliente(comanda);
+    return datosCliente?.nombre || (comanda as any).cliente_nombre || 'Cliente';
+  };
+
+  const esParaLlevar = (comanda: Comanda) => {
+    const datosCliente = parseDatosCliente(comanda);
+    return comanda.tipo_pedido === 'llevar' || (comanda.tipo_pedido === 'domicilio' && datosCliente?.es_para_llevar);
+  };
+
   // Funcion cargarComandasActivas...
 
   // Optimizar agrupación de mesas con useMemo
@@ -439,9 +462,9 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
               const comandasPorSalon = comandasActivas.reduce((acc: { [key: string]: Comanda[] }, comanda) => {
                 let clave: string;
                 
-                if (comanda.tipo_pedido === 'domicilio') {
-                  clave = comanda.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🏠 Domicilios';
-                } else if (comanda.mesas && comanda.mesas.length > 0) {
+                if (comanda.tipo_pedido === 'domicilio' || comanda.tipo_pedido === 'llevar') {
+                  clave = esParaLlevar(comanda) ? '🛍️ Para Llevar' : '🏠 Domicilios';
+                } else if (comanda.mesas && Array.isArray(comanda.mesas) && comanda.mesas.length > 0) {
                   // Usar el salón de la primera mesa
                   clave = comanda.mesas[0].salon;
                 } else {
@@ -475,33 +498,33 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                       >
                         <div className="flex justify-between items-start mb-2">
                           <div className="flex-1">
-                            {comanda.tipo_pedido === 'domicilio' ? (
+                            {comanda.tipo_pedido === 'domicilio' || comanda.tipo_pedido === 'llevar' ? (
                               <>
                                 <div className="flex items-center mb-1">
                                   <span className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                                    comanda.datos_cliente?.es_para_llevar 
+                                    esParaLlevar(comanda) 
                                       ? 'bg-amber-100 text-amber-800' 
                                       : 'bg-purple-100 text-purple-800'
                                   }`}>
-                                    {comanda.datos_cliente?.es_para_llevar ? '🛍️ Para llevar' : '🏠 Domicilio'}
+                                    {esParaLlevar(comanda) ? '🛍️ Para llevar' : '🏠 Domicilio'}
                                   </span>
                                 </div>
                                 <h3 className="font-semibold text-secondary-800">
-                                  {comanda.datos_cliente?.nombre || 'Cliente'}
+                                  {getNombreCliente(comanda)}
                                 </h3>
-                                {comanda.datos_cliente?.direccion && !comanda.datos_cliente.es_para_llevar && (
+                                {parseDatosCliente(comanda)?.direccion && !esParaLlevar(comanda) && (
                                   <p className="text-xs text-secondary-500 mt-1">
-                                    📍 {comanda.datos_cliente.direccion}
+                                    📍 {parseDatosCliente(comanda).direccion}
                                   </p>
                                 )}
                               </>
                             ) : (
                               <h3 className="font-semibold text-secondary-800">
-                                {comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                                {Array.isArray(comanda.mesas) ? comanda.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ') : 'Sin mesa'}
                               </h3>
                             )}
                             <p className="text-sm text-secondary-600 mt-1">
-                              Mesero: {comanda.mesero}
+                              Atendido por: {comanda.usuario_nombre || comanda.mesero || 'N/A'}
                             </p>
                           </div>
                           <div className={`px-2 py-1 rounded-full text-xs font-medium flex items-center space-x-1 ${getStatusBadgeStyles(comanda.estado)}`}>
@@ -577,7 +600,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                     Cambiar Mesa
                   </h2>
                   <p className="text-sm text-secondary-600 mt-1">
-                    Comanda actual: {comandaCambiandoMesa.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ')}
+                    Comanda actual: {Array.isArray(comandaCambiandoMesa.mesas) ? comandaCambiandoMesa.mesas.map(m => `${m.salon} - ${m.numero}`).join(', ') : 'Sin mesa'}
                   </p>
                 </div>
                 <button
@@ -613,7 +636,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                     <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2">
                       {mesasSalon.map((mesa) => {
                         const estaSeleccionada = mesasSeleccionadasCambio.find(m => m.id === mesa.id);
-                        const esLaMesaActual = comandaCambiandoMesa.mesas.find(m => m.id === mesa.id);
+                        const esLaMesaActual = Array.isArray(comandaCambiandoMesa.mesas) && comandaCambiandoMesa.mesas.find(m => m.id === mesa.id);
                         
                         return (
                           <button
@@ -710,7 +733,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                   <p className="text-sm text-secondary-600 mt-1">
                     Destino: {comandaDestinoCombine.tipo_pedido === 'domicilio' 
                       ? `Domicilio - ${comandaDestinoCombine.datos_cliente?.nombre}`
-                      : `Mesas: ${comandaDestinoCombine.mesas.map(m => m.numero).join(', ')}`
+                      : `Mesas: ${Array.isArray(comandaDestinoCombine.mesas) ? comandaDestinoCombine.mesas.map(m => m.numero).join(', ') : 'Sin mesa'}`
                     }
                   </p>
                 </div>
@@ -757,7 +780,7 @@ export default function SeleccionMesaYMesero({ mesasSeleccionadas, onMesasChange
                           <p className="font-bold text-secondary-900">
                             {comanda.tipo_pedido === 'domicilio' 
                               ? `🏠 ${comanda.datos_cliente?.nombre || 'Domicilio'}`
-                              : `🪑 Mesas: ${comanda.mesas.map(m => m.numero).join(', ')}`
+                              : `🪑 Mesas: ${Array.isArray(comanda.mesas) ? comanda.mesas.map(m => m.numero).join(', ') : 'Sin mesa'}`
                             }
                           </p>
                           <p className="text-xs text-secondary-500">
