@@ -3,6 +3,29 @@
 import { useState } from 'react';
 import { AlertTriangle, Database, RefreshCw, Trash2, CheckCircle, XCircle, Coffee, Calendar, FileX } from 'lucide-react';
 import apiService from '../../services/api';
+import axios from 'axios';
+
+// Crear instancia de axios con configuración similar a api.ts
+const api = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api',
+  timeout: 10000,
+});
+
+// Interceptor para agregar el token de autenticación
+api.interceptors.request.use(
+  (config) => {
+    if (typeof window !== 'undefined') {
+      const token = localStorage.getItem('token');
+      if (token) {
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
 
 export default function ConfiguracionSistema() {
   const [modalAbierto, setModalAbierto] = useState<string | null>(null);
@@ -58,8 +81,8 @@ export default function ConfiguracionSistema() {
     }
   };
 
-  // Resetear Base de Datos
-  const handleResetearBaseDatos = async () => {
+  // Resetear Sistema de Comandas de la empresa
+  const handleResetearSistemaComandas = async () => {
     if (confirmacion1 !== 'RESETEAR' || confirmacion2 !== 'CONFIRMAR') {
       alert('Debes escribir correctamente las palabras de confirmación');
       return;
@@ -67,26 +90,19 @@ export default function ConfiguracionSistema() {
 
     setProcesando(true);
     try {
-      const response = await fetch('http://localhost:3001/api/sistema/resetear-base-datos', {
-        method: 'POST',
-      });
-
-      if (response.ok) {
-        alert('✅ Base de datos reseteada exitosamente. Se recomienda recargar la página.');
-        window.location.reload();
-      } else {
-        alert('❌ Error al resetear la base de datos');
-      }
-    } catch (error) {
+      const response = await api.post('/sistema/resetear-sistema-comandas');
+      alert(`✅ ${response.data.mensaje || 'Sistema de comandas reseteado exitosamente'}. Se recomienda recargar la página.`);
+      window.location.reload();
+    } catch (error: any) {
       console.error('Error:', error);
-      alert('❌ Error de conexión al servidor');
+      alert(`❌ Error al resetear el sistema: ${error.response?.data?.error || error.message}`);
     } finally {
       setProcesando(false);
       cerrarModal();
     }
   };
 
-  // Liberar todas las mesas
+  // Liberar todas las mesas de la empresa
   const handleLiberarTodasMesas = async () => {
     if (confirmacion1 !== 'LIBERAR') {
       alert('Debes escribir "LIBERAR" para confirmar');
@@ -95,28 +111,20 @@ export default function ConfiguracionSistema() {
 
     setProcesando(true);
     try {
-      const response = await fetch('http://localhost:3001/api/sistema/liberar-mesas', {
-        method: 'POST',
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        alert(`✅ ${data.mensaje}\n${data.mesasLiberadas} mesa(s) liberada(s)\n${data.comandasEliminadas} comanda(s) eliminada(s)`);
-        window.location.reload();
-      } else {
-        alert(`❌ Error al liberar las mesas: ${data.detalles || data.error}`);
-      }
-    } catch (error) {
+      const response = await api.post('/sistema/liberar-mesas');
+      const data = response.data;
+      alert(`✅ ${data.mensaje}\n${data.mesasLiberadas} mesa(s) liberada(s)\n${data.comandasEliminadas} comanda(s) eliminada(s)`);
+      window.location.reload();
+    } catch (error: any) {
       console.error('Error:', error);
-      alert('❌ Error de conexión al servidor');
+      alert(`❌ Error al liberar las mesas: ${error.response?.data?.error || error.message}`);
     } finally {
       setProcesando(false);
       cerrarModal();
     }
   };
 
-  // Limpiar comandas antiguas
+  // Limpiar comandas antiguas de la empresa
   const handleLimpiarComandasAntiguas = async () => {
     if (confirmacion1 !== 'LIMPIAR') {
       alert('Debes escribir "LIMPIAR" para confirmar');
@@ -125,27 +133,19 @@ export default function ConfiguracionSistema() {
 
     setProcesando(true);
     try {
-      const response = await fetch('http://localhost:3001/api/sistema/limpiar-comandas-antiguas', {
-        method: 'POST',
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        alert(`✅ ${data.mensaje}\nComandas: ${data.comandas}\nFacturas: ${data.facturas}`);
-      } else {
-        alert(`❌ Error al limpiar comandas antiguas: ${data.detalles || data.error}`);
-      }
-    } catch (error) {
+      const response = await api.post('/sistema/limpiar-comandas-antiguas');
+      const data = response.data;
+      alert(`✅ ${data.mensaje}\nComandas: ${data.comandas}\nFacturas: ${data.facturas}`);
+      cerrarModal();
+    } catch (error: any) {
       console.error('Error:', error);
-      alert('❌ Error de conexión al servidor');
+      alert(`❌ Error al limpiar comandas antiguas: ${error.response?.data?.error || error.message}`);
     } finally {
       setProcesando(false);
-      cerrarModal();
     }
   };
 
-  // Limpiar SOLO comandas (todas)
+  // Limpiar SOLO comandas de la empresa (todas)
   const handleLimpiarSoloComandas = async () => {
     if (confirmacion1 !== 'ELIMINAR') {
       alert('Debes escribir "ELIMINAR" para confirmar');
@@ -154,21 +154,13 @@ export default function ConfiguracionSistema() {
 
     setProcesando(true);
     try {
-      const response = await fetch('http://localhost:3001/api/sistema/limpiar-solo-comandas', {
-        method: 'POST',
-      });
-
-      const data = await response.json();
-      
-      if (response.ok) {
-        alert(`✅ ${data.mensaje}\n\nDetalles:\n- Comandas eliminadas: ${data.comandas}\n- Facturas eliminadas: ${data.facturas}\n- Items eliminados: ${data.items}\n- Mesas liberadas: ${data.mesasLiberadas}`);
-        window.location.reload();
-      } else {
-        alert(`❌ Error al limpiar comandas: ${data.detalles || data.error}`);
-      }
-    } catch (error) {
+      const response = await api.post('/sistema/limpiar-solo-comandas');
+      const data = response.data;
+      alert(`✅ ${data.mensaje}\n\nDetalles:\n- Comandas eliminadas: ${data.comandas}\n- Facturas eliminadas: ${data.facturas}\n- Items eliminados: ${data.items}\n- Mesas liberadas: ${data.mesasLiberadas}`);
+      window.location.reload();
+    } catch (error: any) {
       console.error('Error:', error);
-      alert('❌ Error de conexión al servidor');
+      alert(`❌ Error al limpiar comandas: ${error.response?.data?.error || error.message}`);
     } finally {
       setProcesando(false);
       cerrarModal();
@@ -191,7 +183,7 @@ export default function ConfiguracionSistema() {
     {
       id: 'liberar-mesas',
       titulo: 'Liberar Todas las Mesas',
-      descripcion: 'Marca todas las mesas como disponibles y elimina todas las comandas activas. Útil para resetear el estado al inicio del día.',
+      descripcion: 'Marca todas las mesas de tu empresa como disponibles y elimina las comandas activas. Útil para resetear el estado al inicio del día.',
       icon: Coffee,
       color: 'blue',
       peligro: 'medio',
@@ -200,7 +192,7 @@ export default function ConfiguracionSistema() {
     {
       id: 'limpiar-solo-comandas',
       titulo: 'Limpiar SOLO Comandas',
-      descripcion: 'Elimina TODAS las comandas y facturas de la base de datos, dejando intactos productos, mesas y personalizaciones. Limpia el historial y reportes completamente.',
+      descripcion: 'Elimina TODAS las comandas y facturas de tu empresa, dejando intactos productos, mesas y personalizaciones. Limpia el historial y reportes completamente.',
       icon: Trash2,
       color: 'orange',
       peligro: 'alto',
@@ -209,7 +201,7 @@ export default function ConfiguracionSistema() {
     {
       id: 'limpiar-comandas',
       titulo: 'Limpiar Comandas Antiguas',
-      descripcion: 'Elimina comandas y facturas con 30 días o más. Ayuda a mantener la base de datos optimizada.',
+      descripcion: 'Elimina comandas y facturas de tu empresa con 30 días o más. Ayuda a mantener los datos optimizados.',
       icon: RefreshCw,
       color: 'yellow',
       peligro: 'medio',
@@ -218,20 +210,20 @@ export default function ConfiguracionSistema() {
     {
       id: 'eliminar-historial-nomina',
       titulo: 'Depurar Historial de Nómina',
-      descripcion: 'Elimina registros de nómina, pagos e historial por periodo o fechas. Útil para correcciones masivas.',
+      descripcion: 'Elimina registros de nómina, pagos e historial de tu empresa por periodo o fechas. Útil para correcciones masivas.',
       icon: FileX,
       color: 'red',
       peligro: 'alto',
       accion: handleEliminarHistorialNomina
     },
     {
-      id: 'resetear-db',
-      titulo: 'Resetear Base de Datos',
-      descripcion: '⚠️ PELIGRO: Elimina TODOS los datos (comandas, facturas, productos, etc.). Esta acción NO se puede deshacer.',
+      id: 'resetear-sistema',
+      titulo: 'Resetear Sistema de Comandas',
+      descripcion: '⚠️ PELIGRO: Elimina TODOS los datos de tu empresa (comandas, facturas, productos, etc.). Esta acción NO se puede deshacer.',
       icon: Database,
       color: 'red',
       peligro: 'alto',
-      accion: handleResetearBaseDatos
+      accion: handleResetearSistemaComandas
     }
   ];
 
@@ -350,7 +342,7 @@ export default function ConfiguracionSistema() {
 
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
               <p className="text-yellow-800 text-sm">
-                Esta acción marcará todas las mesas como disponibles y eliminará todas las comandas activas (pendientes, en preparación, listas y entregadas).
+                Esta acción marcará todas las mesas de tu empresa como disponibles y eliminará todas las comandas activas (pendientes, en preparación, listas y entregadas).
               </p>
             </div>
 
@@ -400,8 +392,8 @@ export default function ConfiguracionSistema() {
 
             <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
               <p className="text-yellow-800 text-sm">
-                Se eliminarán todas las comandas y facturas con 30 días o más de antigüedad.
-                Esto ayuda a mantener la base de datos optimizada.
+                Se eliminarán todas las comandas y facturas de tu empresa con 30 días o más de antigüedad.
+                Esto ayuda a mantener los datos optimizados.
               </p>
             </div>
 
@@ -463,9 +455,9 @@ export default function ConfiguracionSistema() {
                 NO eliminará:
               </p>
               <ul className="text-orange-700 text-sm list-disc list-inside space-y-1">
-                <li>Productos</li>
-                <li>Mesas y salones</li>
-                <li>Personalizaciones</li>
+                <li>Productos de tu empresa</li>
+                <li>Mesas y salones de tu empresa</li>
+                <li>Personalizaciones de tu empresa</li>
               </ul>
             </div>
 
@@ -502,8 +494,8 @@ export default function ConfiguracionSistema() {
         </div>
       )}
 
-      {/* Modal de confirmación - Resetear DB (doble confirmación) */}
-      {modalAbierto === 'resetear-db' && (
+      {/* Modal de confirmación - Resetear Sistema de Comandas (doble confirmación) */}
+      {modalAbierto === 'resetear-sistema' && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg shadow-xl max-w-md w-full p-6">
             <div className="flex items-center mb-4">
@@ -554,11 +546,11 @@ export default function ConfiguracionSistema() {
 
             <div className="flex space-x-3">
               <button
-                onClick={handleResetearBaseDatos}
+                onClick={handleResetearSistemaComandas}
                 disabled={confirmacion1 !== 'RESETEAR' || confirmacion2 !== 'CONFIRMAR' || procesando}
                 className="flex-1 bg-red-600 text-white px-4 py-2 rounded-md hover:bg-red-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors font-semibold"
               >
-                {procesando ? 'Reseteando...' : 'RESETEAR TODO'}
+                {procesando ? 'Reseteando...' : 'RESETEAR SISTEMA'}
               </button>
               <button
                 onClick={cerrarModal}
@@ -584,7 +576,7 @@ export default function ConfiguracionSistema() {
 
             <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
               <p className="text-red-800 text-sm">
-                Esta acción eliminará permanentemente las nóminas, pagos y auditorías que coincidan con el criterio seleccionado.
+                Esta acción eliminará permanentemente las nóminas, pagos y auditorías de tu empresa que coincidan con el criterio seleccionado.
               </p>
             </div>
 
