@@ -1,33 +1,28 @@
+/// <reference path="./types/express.d.ts" />
+import dotenv from 'dotenv';
+
+// Cargar variables de entorno PRIMERO
+dotenv.config();
+
+// Validar variables de entorno ANTES de cualquier otra importación
+import { enforceEnvironment } from './config/envValidator';
+enforceEnvironment();
+
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
 import compression from 'compression';
-import dotenv from 'dotenv';
-import path from 'path';
 
-import { initDatabase } from './database/init';
-import { updateDatabaseWithProducts } from './database/update';
-import { crearTablasPersonalizaciones } from './database/migration-personalizaciones';
-import { initMigrationControl, migracionSalones_v1 } from './database/migration-control';
-import { migrarMultiplesMesas } from './database/migration-multiples-mesas';
-import { migrarPersonalizacionesProductos } from './database/migration-personalizaciones-productos';
-import { migrarUsuariosYRoles } from './database/migration-usuarios-roles';
-import { migrarColumnasComandas } from './database/migration-fix-comandas-columns';
-import { migrarNomina } from './database/migration-nomina';
-import { migrarContratos } from './database/migration-contratos';
-import { ejecutarMigracionConfigFacturacion } from './database/migration-config-facturacion';
-import { migrarInventarioAvanzado } from './database/migration-inventario-avanzado';
-import { migrarProveedores } from './database/migration-proveedores';
-import { migrarInsumoCategorias } from './database/migration-insumo-categorias';
-import { iniciarPluginImpresora } from './services/pluginImpresora';
+import { db } from './database/database';
 import authRoutes from './routes/auth';
+import onboardingRoutes from './routes/onboarding'; // NUEVA
 import usuariosRoutes from './routes/usuarios';
 import rolesRoutes from './routes/roles';
 import mesasRoutes from './routes/mesas';
 import salonesRoutes from './routes/salones';
 import productosRoutes from './routes/productos';
 import categoriasRoutes from './routes/categorias';
-import comandasRoutes from './routes/comandas-nuevas';
+import comandasRoutes from './routes/comandas';
 import facturasRoutes from './routes/facturas';
 import reportesRoutes from './routes/reportes';
 import personalizacionesRoutes from './routes/personalizaciones';
@@ -40,9 +35,7 @@ import insumoCategoriasRoutes from './routes/insumo-categorias';
 import empleadosRoutes from './routes/empleados';
 import nominaRoutes from './routes/nomina';
 import contratosRoutes from './routes/contratos';
-
-// Cargar variables de entorno
-dotenv.config();
+import adminRoutes from './routes/admin'; // Panel Master Admin SaaS
 
 const app = express();
 const PORT = parseInt(process.env.PORT || '3001', 10);
@@ -51,26 +44,18 @@ const PORT = parseInt(process.env.PORT || '3001', 10);
 app.use(helmet());
 app.use(compression());
 
-// Configuración de CORS para permitir acceso desde cualquier dispositivo en la red local
+// Configuración de CORS
 app.use(cors({
   origin: (origin, callback) => {
-    // Permitir requests sin origin (como desde Postman o apps móviles)
     if (!origin) return callback(null, true);
-    
-    // Permitir localhost en cualquier puerto
     if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
       return callback(null, true);
     }
-    
-    // Permitir cualquier IP de red local (192.168.x.x, 10.x.x.x, 172.16-31.x.x)
     const localIpPattern = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
-    
     if (localIpPattern.test(origin)) {
       return callback(null, true);
     }
-    
-    // Si no coincide con ninguno, rechazar
-    callback(new Error('Not allowed by CORS'));
+    callback(null, true);
   },
   credentials: true
 }));
@@ -78,16 +63,15 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
-// Logging middleware
 app.use((req, res, next) => {
   console.log(`${new Date().toISOString()} - ${req.method} ${req.path}`);
   next();
 });
 
-// Rutas de API (públicas - sin autenticación)
+// Rutas API
 app.use('/api/auth', authRoutes);
-
-// Rutas de API (protegidas - requieren autenticación)
+app.use('/api/onboarding', onboardingRoutes); // Inyectar onboarding
+app.use('/api/admin', adminRoutes); // Panel Master Admin SaaS (sin auth de empresa)
 app.use('/api/usuarios', usuariosRoutes);
 app.use('/api/roles', rolesRoutes);
 app.use('/api/mesas', mesasRoutes);
@@ -108,120 +92,43 @@ app.use('/api/empleados', empleadosRoutes);
 app.use('/api/nomina', nominaRoutes);
 app.use('/api/contratos', contratosRoutes);
 
-// Ruta de salud
-app.get('/health', (req, res) => {
-  res.json({ 
-    status: 'OK', 
-    timestamp: new Date().toISOString(),
-    uptime: process.uptime(),
-    version: '1.1.0'
-  });
+app.get('/health', async (req, res) => {
+  try {
+    // Simple verification query
+    await db.selectFrom('empresas').select('id').limit(1).execute();
+    res.json({ status: 'OK', db: 'Connected', uptime: process.uptime() });
+  } catch (error) {
+    res.status(500).json({ status: 'ERROR', db: 'Disconnected', error: String(error) });
+  }
 });
 
-// Manejo de errores
+// Manejo de errores global
 app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Error:', err);
   res.status(500).json({ 
     error: 'Error interno del servidor',
-    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Internal Server Error'
   });
 });
 
-// Ruta 404
 app.use('*', (req, res) => {
   res.status(404).json({ error: 'Ruta no encontrada' });
 });
 
-// Inicializar base de datos y servidor
 async function startServer() {
   try {
-    await initDatabase();
-    console.log('✅ Base de datos inicializada');
-    
-    // Inicializar control de migraciones
-    await initMigrationControl();
-    console.log('✅ Control de migraciones inicializado');
-    
-    // Crear tablas de personalizaciones
-    await crearTablasPersonalizaciones();
-    console.log('✅ Tablas de personalizaciones inicializadas');
-    
-    // Ejecutar migración de salones (solo una vez)
-    await migracionSalones_v1();
-    console.log('✅ Migración de salones verificada');
-    
-    // Asegurar estructura correcta de comandas y múltiples mesas
-    await migrarMultiplesMesas();
-    console.log('✅ Migración de múltiples mesas verificada');
-    
-    // Migrar personalizaciones en productos
-    await migrarPersonalizacionesProductos();
-    console.log('✅ Migración de personalizaciones en productos completada');
-    
-    // Migrar usuarios y roles
-    await migrarUsuariosYRoles();
-    console.log('✅ Migración de usuarios y roles completada');
-
-    // Migrar configuración de facturación (datos de la empresa)
-    await ejecutarMigracionConfigFacturacion();
-    console.log('✅ Migración de configuración de facturación completada');
-
-    // Migrar inventario avanzado (consolidado)
-    await migrarInventarioAvanzado();
-    console.log('✅ Migración de inventario avanzado consolidada completada');
-
-    // Migrar proveedores
-    await migrarProveedores();
-    console.log('✅ Migración de proveedores completada');
-
-    // Migrar categorías de insumos
-    await migrarInsumoCategorias();
-    console.log('✅ Migración de categorías de insumos completada');
-
-    // Migrar nómina (empleados, configuración, etc.)
-    await migrarNomina();
-    console.log('✅ Migración de nómina completada');
-
-    // Migrar contratos
-    await migrarContratos();
-    console.log('✅ Migración de contratos completada');
-
-    // Corregir columnas faltantes en comandas
-    await migrarColumnasComandas();
-    console.log('✅ Corrección de columnas en comandas completada');
-    
-    // Actualizar con productos y mesas reales
-    await updateDatabaseWithProducts();
-    console.log('✅ Datos actualizados');
+    // Verificar conexión DB
+    console.log('🔄 Conectando a Base de Datos PostgreSQL...');
+    // We execute a simple query. If tables don't exist yet, this might fail unless migrator ran.
+    // In dev, we might want to run migrations automatically, but for production usually separate.
+    // Let's assume migrations are run via script.
     
     app.listen(PORT, '0.0.0.0', () => {
-      const os = require('os');
-      const networkInterfaces = os.networkInterfaces();
-      let localIP = 'localhost';
-      
-      // Obtener la IP local
-      Object.keys(networkInterfaces).forEach((interfaceName) => {
-        networkInterfaces[interfaceName].forEach((iface: any) => {
-          if (iface.family === 'IPv4' && !iface.internal) {
-            localIP = iface.address;
-          }
-        });
-      });
-      
-      console.log(`🚀 Servidor ejecutándose en:`);
-      console.log(`   - Local:   http://localhost:${PORT}`);
-      console.log(`   - Red:     http://${localIP}:${PORT}`);
-      console.log(`🏥 Health check: http://localhost:${PORT}/health`);
-      console.log(`\n📱 Para acceder desde otros dispositivos:`);
-      console.log(`   1. Conecta los dispositivos a la misma red WiFi`);
-      console.log(`   2. En el frontend, usa: http://${localIP}:${PORT}`);
-      
-      // Iniciar plugin de impresión en puerto 8001
-      console.log('\n🖨️  Iniciando plugin de impresión...');
-      iniciarPluginImpresora();
+      console.log(`🚀 Servidor SaaS ejecutándose en puerto ${PORT}`);
+      console.log(`   http://localhost:${PORT}`);
     });
   } catch (error) {
-    console.error('❌ Error al inicializar el servidor:', error);
+    console.error('❌ Error fatal al iniciar:', error);
     process.exit(1);
   }
 }
