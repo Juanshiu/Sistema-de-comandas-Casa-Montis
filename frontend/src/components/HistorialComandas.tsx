@@ -124,15 +124,23 @@ export default function HistorialComandas() {
       return `Domicilio${comanda.datos_cliente?.nombre ? ': ' + comanda.datos_cliente.nombre : ''}`;
     }
     if (Array.isArray(comanda.mesas) && comanda.mesas.length > 0) {
-      return `Mesa: ${comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`;
+      return `Mesa ${comanda.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`;
     }
     return 'N/A';
+  };
+
+  // Helper para centrar texto en facturas térmicas (32 caracteres aprox)
+  const centrarTexto = (texto: string, ancho: number = 32): string => {
+    if (texto.length >= ancho) return texto;
+    const espacios = Math.floor((ancho - texto.length) / 2);
+    return ' '.repeat(espacios) + texto;
   };
 
   const reimprimirRecibo = (comanda: ComandaHistorial) => {
     if (!configFacturacion) return;
 
-    const fechaActual = new Date(comanda.fecha_creacion || new Date());
+    // Usar la fecha original de la comanda para evitar actualizaciones incorrectas
+    const fechaComanda = comanda.fecha_creacion ? new Date(comanda.fecha_creacion) : new Date();
     const numeroFactura = Math.floor(Math.random() * 9999) + 1000;
     const esCancelada = comanda.estado.toLowerCase() === 'cancelada';
     const metodoPago = comanda.metodo_pago ? comanda.metodo_pago.toUpperCase() : 'NO REGISTRADO';
@@ -148,7 +156,7 @@ export default function HistorialComandas() {
       if (!comanda.datos_cliente.es_para_llevar && comanda.datos_cliente.direccion) {
         mesaInfo += `\nDir: ${comanda.datos_cliente.direccion}`;
       }
-    } else if (comanda.mesas && comanda.mesas.length > 0) {
+    } else if (Array.isArray(comanda.mesas) && comanda.mesas.length > 0) {
       mesaInfo = `MESA: ${comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}`;
     }
 
@@ -161,21 +169,37 @@ export default function HistorialComandas() {
       subtotal = comanda.total / (1 + configFacturacion.porcentaje_iva / 100);
       iva = comanda.total - subtotal;
     }
+
+    // Construir línea de teléfonos
+    const telefonos = [];
+    if (configFacturacion.telefonos && configFacturacion.telefonos.length > 0 && configFacturacion.telefonos[0]) {
+      telefonos.push(configFacturacion.telefonos[0]);
+    }
+    if (configFacturacion.telefono2 && configFacturacion.telefono2.trim()) {
+      telefonos.push(configFacturacion.telefono2);
+    }
+    const lineaTelefonos = telefonos.length > 0 ? `TEL: ${telefonos.join(' - ')}` : '';
+
+    // Construir línea de ubicación (departamento + ciudad)
+    const ubicacionParts = [];
+    if (configFacturacion.departamento) ubicacionParts.push(configFacturacion.departamento);
+    if (configFacturacion.ciudad) ubicacionParts.push(configFacturacion.ciudad);
+    const lineaUbicacion = ubicacionParts.length > 0 ? ubicacionParts.join(' - ') : (configFacturacion.ubicacion_geografica || '');
     
     const reciboContent = `
 ================================
-  ${configFacturacion.nombre_empresa}
-    CC./NIT.: ${configFacturacion.nit}
-  ${configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA'}
-${configFacturacion.direccion}
-      ${configFacturacion.ubicacion_geografica}
-TEL: ${configFacturacion.telefonos.join(' - ')}
+${centrarTexto(configFacturacion.nombre_empresa)}
+${centrarTexto(`CC./NIT.: ${configFacturacion.nit}`)}
+${centrarTexto(configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA')}
+${centrarTexto(configFacturacion.direccion)}
+${lineaUbicacion ? centrarTexto(lineaUbicacion) : ''}
+${lineaTelefonos ? centrarTexto(lineaTelefonos) : ''}
 ================================
       RECIBO DE PAGO
 No. ${numeroFactura}
 CAJA 01
 ${mesaInfo}
-FECHA: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
+FECHA: ${fechaComanda.toLocaleDateString('es-CO')} ${fechaComanda.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
 ${esCancelada ? '*** SERVICIO CANCELADO ***' : `PAGO: ${metodoPago}`}
 ================================
 CANT ARTICULO          TOTAL
@@ -357,7 +381,7 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
                     <div className="flex flex-wrap items-center gap-3">
                       {/* Número y estado */}
                       <div className="flex items-center gap-2">
-                        <span className="font-bold text-lg text-gray-800">#{totalComandas - index}</span>
+                        <span className="font-bold text-lg text-gray-800">#{(comanda as any).numero_comanda || comanda.id.slice(0, 8)}</span>
                         <span className={`px-3 py-1.5 rounded-lg text-xs font-bold shadow-sm ${getEstadoColor(comanda.estado)}`}>
                           {comanda.estado.charAt(0).toUpperCase() + comanda.estado.slice(1)}
                         </span>
@@ -457,8 +481,8 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
                                         const entradasOrdenadas = ordenarPersonalizaciones(item.personalizacion);
                                         
                                         return entradasOrdenadas.map(([key, value]) => {
-                                          const categoriaId = parseInt(key);
-                                          const itemId = value as number;
+                                          const categoriaId = key;
+                                          const itemId = value as string;
                                           
                                           const categoria = categoriasPersonalizacion.find((c: any) => c.id === categoriaId);
                                           if (!categoria) return null;
@@ -527,11 +551,11 @@ CAMBIO                 ${(comanda.cambio || 0).toLocaleString('es-CO').padStart(
                                   <>
                                     <div className="flex justify-between">
                                       <span className="text-gray-600">Subtotal:</span>
-                                      <span className="font-medium">${comanda.subtotal.toLocaleString('es-CO')}</span>
+                                      <span className="font-medium">${(comanda.subtotal || comanda.total || 0).toLocaleString('es-CO')}</span>
                                     </div>
                                     <div className="flex justify-between border-t pt-2">
                                       <span className="text-gray-900 font-medium">Total:</span>
-                                      <span className="font-bold text-lg">${comanda.total.toLocaleString('es-CO')}</span>
+                                      <span className="font-bold text-lg">${(comanda.total || 0).toLocaleString('es-CO')}</span>
                                     </div>
                                   </>
                                 )}

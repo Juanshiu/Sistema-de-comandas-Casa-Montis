@@ -132,7 +132,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       console.error('Error al cargar configuración de facturación:', err);
       // Usar configuración por defecto si falla
       setConfigFacturacion({
-        nombre_empresa: 'CASA MONTIS RESTAURANTE',
+        nombre_empresa: 'MONTIS CLOUD',
         nit: '26420708-2',
         responsable_iva: false,
         porcentaje_iva: null,
@@ -200,6 +200,29 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     
     const itemsPagadosComanda = itemsPagados[comanda.id] || new Set();
     return comanda.items.filter(item => !itemsPagadosComanda.has(item.id));
+  };
+
+  const parseDatosCliente = (comanda: Comanda) => {
+    const raw = (comanda as any).datos_cliente;
+    if (!raw) return null;
+    if (typeof raw === 'string') {
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return null;
+      }
+    }
+    return raw;
+  };
+
+  const getNombreCliente = (comanda: Comanda) => {
+    const datosCliente = parseDatosCliente(comanda);
+    return datosCliente?.nombre || (comanda as any).cliente_nombre || 'Cliente';
+  };
+
+  const esParaLlevar = (comanda: Comanda) => {
+    const datosCliente = parseDatosCliente(comanda);
+    return comanda.tipo_pedido === 'llevar' || (comanda.tipo_pedido === 'domicilio' && datosCliente?.es_para_llevar);
   };
 
   const marcarTodosComoNoPagados = (comandaId: string) => {
@@ -319,6 +342,13 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
     setFacturasImpresas(prev => new Set(prev).add(comandaId));
   };
 
+  // Helper para centrar texto en facturas térmicas (32 caracteres aprox)
+  const centrarTexto = (texto: string, ancho: number = 32): string => {
+    if (texto.length >= ancho) return texto;
+    const espacios = Math.floor((ancho - texto.length) / 2);
+    return ' '.repeat(espacios) + texto;
+  };
+
   const generarFactura = () => {
     if (!comandaSeleccionada || !configFacturacion) return;
     
@@ -336,7 +366,7 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       if (!comandaSeleccionada.datos_cliente.es_para_llevar && comandaSeleccionada.datos_cliente.direccion) {
         mesaInfo += `\nDir: ${comandaSeleccionada.datos_cliente.direccion}`;
       }
-    } else if (comandaSeleccionada.mesas && comandaSeleccionada.mesas.length > 0) {
+    } else if (comandaSeleccionada.mesas && Array.isArray(comandaSeleccionada.mesas) && comandaSeleccionada.mesas.length > 0) {
       mesaInfo = `Mesa(s): ${comandaSeleccionada.mesas.map(m => `${m.salon}-${m.numero}`).join(', ')}`;
     }
 
@@ -351,30 +381,47 @@ export default function InterfazCaja({ onMesaLiberada }: InterfazCajaProps) {
       subtotal = comandaSeleccionada.total / (1 + configFacturacion.porcentaje_iva / 100);
       iva = comandaSeleccionada.total - subtotal;
     }
+
+    // Construir línea de teléfonos
+    const telefonos = [];
+    if (configFacturacion.telefonos && configFacturacion.telefonos.length > 0 && configFacturacion.telefonos[0]) {
+      telefonos.push(configFacturacion.telefonos[0]);
+    }
+    if (configFacturacion.telefono2 && configFacturacion.telefono2.trim()) {
+      telefonos.push(configFacturacion.telefono2);
+    }
+    const lineaTelefonos = telefonos.length > 0 ? `TEL: ${telefonos.join(' - ')}` : '';
+
+    // Construir línea de ubicación (departamento + ciudad)
+    const ubicacionParts = [];
+    if (configFacturacion.departamento) ubicacionParts.push(configFacturacion.departamento);
+    if (configFacturacion.ciudad) ubicacionParts.push(configFacturacion.ciudad);
+    const lineaUbicacion = ubicacionParts.length > 0 ? ubicacionParts.join(' - ') : (configFacturacion.ubicacion_geografica || '');
     
     const facturaContent = `
 ================================
-    ${configFacturacion.nombre_empresa}
-      CC./NIT.: ${configFacturacion.nit}
-    ${configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA'}
-${configFacturacion.direccion}
-      ${configFacturacion.ubicacion_geografica}
-TEL: ${configFacturacion.telefonos.join(' - ')}
+${centrarTexto(configFacturacion.nombre_empresa)}
+${centrarTexto(`CC./NIT.: ${configFacturacion.nit}`)}
+${centrarTexto(configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA')}
+${centrarTexto(configFacturacion.direccion)}
+${lineaUbicacion ? centrarTexto(lineaUbicacion) : ''}
+${lineaTelefonos ? centrarTexto(lineaTelefonos) : ''}
 ================================
 ${mesaInfo}
 Fecha: ${new Date().toLocaleString('es-CO', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
 Atendido por: ${comandaSeleccionada.usuario_nombre || comandaSeleccionada.mesero}
 ================================
-CANT ARTICULO          TOTAL
+CANT ARTICULO    V.UNIT  TOTAL
 --------------------------------
 ${(comandaSeleccionada.items || []).map(item => {
-  const maxLength = 16;
+  const maxLength = 12;
   const nombre = item.producto.nombre;
+  const valorUnitario = item.precio_unitario;
   
   // Si el nombre es corto, usar padding normal
   let itemText = '';
   if (nombre.length <= maxLength) {
-    itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${nombre.padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    itemText = `${item.cantidad.toString().padStart(3, ' ')} ${nombre.padEnd(maxLength)} ${valorUnitario.toLocaleString('es-CO').padStart(6, ' ')} ${item.subtotal.toLocaleString('es-CO').padStart(6, ' ')}`;
   } else {
     // Si es largo, dividir en múltiples líneas
     const words = nombre.split(' ');
@@ -391,12 +438,12 @@ ${(comandaSeleccionada.items || []).map(item => {
     }
     if (currentLine) lines.push(currentLine);
     
-    // Primera línea con cantidad y total
-    itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${lines[0].padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    // Primera línea con cantidad, valor unitario y total
+    itemText = `${item.cantidad.toString().padStart(3, ' ')} ${lines[0].padEnd(maxLength)} ${valorUnitario.toLocaleString('es-CO').padStart(6, ' ')} ${item.subtotal.toLocaleString('es-CO').padStart(6, ' ')}`;
     
     // Líneas adicionales del nombre, indentadas
     for (let i = 1; i < lines.length; i++) {
-      itemText += `\n     ${lines[i]}`;
+      itemText += `\n    ${lines[i]}`;
     }
   }
   
@@ -409,12 +456,12 @@ ${(comandaSeleccionada.items || []).map(item => {
     );
     
     if (personalizaciones.length > 0) {
-      itemText += `\n     ${personalizaciones.join(' | ')}`;
+      itemText += `\n    ${personalizaciones.join(' | ')}`;
     }
   }
   
   if (item.observaciones) {
-    itemText += `\n     Obs: ${item.observaciones}`;
+    itemText += `\n    Obs: ${item.observaciones}`;
   }
   
   return itemText;
@@ -454,7 +501,7 @@ IVA (${configFacturacion.porcentaje_iva}%)              ${iva.toLocaleString('es
       if (!factura.comanda.datos_cliente.es_para_llevar && factura.comanda.datos_cliente.direccion) {
         mesaInfo += `\nDir: ${factura.comanda.datos_cliente.direccion}`;
       }
-    } else if (factura.comanda.mesas && factura.comanda.mesas.length > 0) {
+    } else if (factura.comanda.mesas && Array.isArray(factura.comanda.mesas) && factura.comanda.mesas.length > 0) {
       mesaInfo = `MESA: ${factura.comanda.mesas.map((m: any) => `${m.salon}-${m.numero}`).join(', ')}`;
     }
 
@@ -467,15 +514,31 @@ IVA (${configFacturacion.porcentaje_iva}%)              ${iva.toLocaleString('es
       subtotal = factura.comanda.total / (1 + configFacturacion.porcentaje_iva / 100);
       iva = factura.comanda.total - subtotal;
     }
+
+    // Construir línea de teléfonos
+    const telefonos = [];
+    if (configFacturacion.telefonos && configFacturacion.telefonos.length > 0 && configFacturacion.telefonos[0]) {
+      telefonos.push(configFacturacion.telefonos[0]);
+    }
+    if (configFacturacion.telefono2 && configFacturacion.telefono2.trim()) {
+      telefonos.push(configFacturacion.telefono2);
+    }
+    const lineaTelefonos = telefonos.length > 0 ? `TEL: ${telefonos.join(' - ')}` : '';
+
+    // Construir línea de ubicación (departamento + ciudad)
+    const ubicacionParts = [];
+    if (configFacturacion.departamento) ubicacionParts.push(configFacturacion.departamento);
+    if (configFacturacion.ciudad) ubicacionParts.push(configFacturacion.ciudad);
+    const lineaUbicacion = ubicacionParts.length > 0 ? ubicacionParts.join(' - ') : (configFacturacion.ubicacion_geografica || '');
     
     const reciboContent = `
 ================================
-  ${configFacturacion.nombre_empresa}
-    CC./NIT.: ${configFacturacion.nit}
-  ${configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA'}
-${configFacturacion.direccion}
-      ${configFacturacion.ubicacion_geografica}
-TEL: ${configFacturacion.telefonos.join(' - ')}
+${centrarTexto(configFacturacion.nombre_empresa)}
+${centrarTexto(`CC./NIT.: ${configFacturacion.nit}`)}
+${centrarTexto(configFacturacion.responsable_iva ? 'RESPONSABLE DE IVA' : 'NO RESPONSABLE DE IVA')}
+${centrarTexto(configFacturacion.direccion)}
+${lineaUbicacion ? centrarTexto(lineaUbicacion) : ''}
+${lineaTelefonos ? centrarTexto(lineaTelefonos) : ''}
 ================================
       RECIBO DE PAGO
 No. ${numeroFactura}
@@ -484,15 +547,23 @@ ${mesaInfo}
 FECHA: ${fechaActual.toLocaleDateString('es-CO')} ${fechaActual.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit' })}
 PAGO: ${factura.metodo_pago.toUpperCase()}
 ================================
-CANT ARTICULO          TOTAL
+CANT ARTICULO    V.UNIT  TOTAL
 --------------------------------
 ${(factura.comanda.items || []).map((item: any) => {
-  const maxLength = 16;
+  const maxLength = 12;
   const nombre = item.producto.nombre;
+  const valorUnitario = item.precio_unitario;
   
   // Si el nombre es corto, usar padding normal
   if (nombre.length <= maxLength) {
-    return `${item.cantidad.toString().padStart(3, ' ')}  ${nombre.padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    let itemText = `${item.cantidad.toString().padStart(3, ' ')} ${nombre.padEnd(maxLength)} ${valorUnitario.toLocaleString('es-CO').padStart(6, ' ')} ${item.subtotal.toLocaleString('es-CO').padStart(6, ' ')}`;
+    
+    // Agregar observaciones si existen
+    if (item.observaciones) {
+      itemText += `\n    Obs: ${item.observaciones}`;
+    }
+    
+    return itemText;
   } else {
     // Si es largo, dividir en múltiples líneas
     const words = nombre.split(' ');
@@ -509,12 +580,17 @@ ${(factura.comanda.items || []).map((item: any) => {
     }
     if (currentLine) lines.push(currentLine);
     
-    // Primera línea con cantidad y total
-    let itemText = `${item.cantidad.toString().padStart(3, ' ')}  ${lines[0].padEnd(maxLength)} ${item.subtotal.toLocaleString('es-CO').padStart(7, ' ')}`;
+    // Primera línea con cantidad, valor unitario y total
+    let itemText = `${item.cantidad.toString().padStart(3, ' ')} ${lines[0].padEnd(maxLength)} ${valorUnitario.toLocaleString('es-CO').padStart(6, ' ')} ${item.subtotal.toLocaleString('es-CO').padStart(6, ' ')}`;
     
     // Líneas adicionales del nombre, indentadas
     for (let i = 1; i < lines.length; i++) {
-      itemText += `\n     ${lines[i]}`;
+      itemText += `\n    ${lines[i]}`;
+    }
+    
+    // Agregar observaciones si existen
+    if (item.observaciones) {
+      itemText += `\n    Obs: ${item.observaciones}`;
     }
     
     return itemText;
@@ -641,9 +717,9 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                 const comandasPorSalon = comandasActivas.reduce((acc: { [key: string]: Comanda[] }, comanda) => {
                   let clave: string;
                   
-                  if (comanda.tipo_pedido === 'domicilio') {
-                    clave = comanda.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🏠 Domicilios';
-                  } else if (comanda.mesas && comanda.mesas.length > 0) {
+                  if (comanda.tipo_pedido === 'domicilio' || comanda.tipo_pedido === 'llevar') {
+                    clave = esParaLlevar(comanda) ? '🛍️ Para Llevar' : '🏠 Domicilios';
+                  } else if (comanda.mesas && Array.isArray(comanda.mesas) && comanda.mesas.length > 0) {
                     // Usar el salón de la primera mesa
                     clave = comanda.mesas[0].salon;
                   } else {
@@ -682,26 +758,26 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                         >
                           <div className="flex justify-between items-start mb-2">
                             <div className="flex-1 min-w-0">
-                              {comanda.tipo_pedido === 'domicilio' ? (
+                              {comanda.tipo_pedido === 'domicilio' || comanda.tipo_pedido === 'llevar' ? (
                                 <>
                                   <h4 className="font-semibold text-sm text-secondary-800 truncate">
-                                    {comanda.datos_cliente?.nombre}
+                                    {getNombreCliente(comanda)}
                                   </h4>
-                                  {comanda.datos_cliente?.telefono && (
+                                  {parseDatosCliente(comanda)?.telefono && (
                                     <p className="text-xs text-secondary-600">
-                                      📞 {comanda.datos_cliente.telefono}
+                                      📞 {parseDatosCliente(comanda).telefono}
                                     </p>
                                   )}
                                 </>
                               ) : (
                                 <>
                                   <h4 className="font-semibold text-sm text-secondary-800">
-                                    {comanda.mesas.map(m => m.numero).join(', ')}
+                                    {Array.isArray(comanda.mesas) ? comanda.mesas.map(m => m.numero).join(', ') : 'Sin mesa'}
                                   </h4>
                                 </>
                               )}
                               <p className="text-xs text-secondary-500 truncate">
-                                {comanda.usuario_nombre || comanda.mesero}
+                                Atendido por: {comanda.usuario_nombre || comanda.mesero}
                               </p>
                             </div>
                             <div className="flex flex-col items-end space-y-1 ml-2">
@@ -786,23 +862,23 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
           ) : (
             <div className="space-y-4">
               <div className="bg-secondary-50 p-4 rounded-lg">
-                {comandaSeleccionada.tipo_pedido === 'domicilio' ? (
+                {comandaSeleccionada.tipo_pedido === 'domicilio' || comandaSeleccionada.tipo_pedido === 'llevar' ? (
                   <>
                     <h3 className="font-semibold text-secondary-800 mb-2 flex items-center">
-                      {comandaSeleccionada.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'}
-                      <span className="ml-2">- {comandaSeleccionada.datos_cliente?.nombre}</span>
+                      {esParaLlevar(comandaSeleccionada) ? '🛍️ Para Llevar' : '🚚 Domicilio'}
+                      <span className="ml-2">- {getNombreCliente(comandaSeleccionada)}</span>
                     </h3>
-                    {comandaSeleccionada.datos_cliente?.telefono && (
+                    {parseDatosCliente(comandaSeleccionada)?.telefono && (
                       <p className="text-sm text-secondary-600">
-                        📞 Teléfono: {comandaSeleccionada.datos_cliente.telefono}
+                        📞 Teléfono: {parseDatosCliente(comandaSeleccionada).telefono}
                       </p>
                     )}
-                    {!comandaSeleccionada.datos_cliente?.es_para_llevar && comandaSeleccionada.datos_cliente?.direccion && (
+                    {!esParaLlevar(comandaSeleccionada) && parseDatosCliente(comandaSeleccionada)?.direccion && (
                       <p className="text-sm text-secondary-600">
-                        📍 Dirección: {comandaSeleccionada.datos_cliente.direccion}
+                        📍 Dirección: {parseDatosCliente(comandaSeleccionada).direccion}
                       </p>
                     )}
-                    {comandaSeleccionada.datos_cliente?.es_para_llevar && (
+                    {esParaLlevar(comandaSeleccionada) && (
                       <p className="text-xs text-green-600 mt-1">
                         ⚠️ Cliente recoge en el restaurante
                       </p>
@@ -819,7 +895,18 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                   Atendido por: {comandaSeleccionada.usuario_nombre || comandaSeleccionada.mesero}
                 </p>
                 <p className="text-sm text-secondary-600">
-                  Fecha: {new Date(comandaSeleccionada.fecha_creacion).toLocaleString()}
+                  Fecha: {(() => {
+                    try {
+                      // Usar fecha_apertura si fecha_creacion no está disponible
+                      const fechaStr = comandaSeleccionada.fecha_creacion || comandaSeleccionada.fecha_apertura;
+                      if (!fechaStr) return 'Fecha no disponible';
+                      
+                      const fecha = new Date(fechaStr);
+                      return isNaN(fecha.getTime()) ? 'Fecha inválida' : fecha.toLocaleString('es-CO');
+                    } catch (e) {
+                      return 'Error en fecha';
+                    }
+                  })()}
                 </p>
                 {comandaSeleccionada.observaciones_generales && (
                   <div className="mt-2 pt-2 border-t border-secondary-200">
@@ -881,7 +968,7 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                                 
                                 return entradasOrdenadas.map(([key, value]: [string, any]) => {
                                   // key es el ID de la categoría, value es el ID del item seleccionado
-                                  const categoriaId = parseInt(key);
+                                  const categoriaId = key;
                                   const itemId = value;
                                   
                                   // Buscar la categoría por ID
@@ -1168,9 +1255,9 @@ CAMBIO                 ${factura.cambio.toLocaleString('es-CO').padStart(7, ' ')
                 ¿Está seguro que desea cancelar esta comanda?
               </p>
               <div className="bg-secondary-50 p-3 rounded-lg mt-3">
-                {comandaACancelar.tipo_pedido === 'domicilio' ? (
+                {comandaACancelar.tipo_pedido === 'domicilio' || comandaACancelar.tipo_pedido === 'llevar' ? (
                   <p className="text-sm">
-                    <strong>{comandaACancelar.datos_cliente?.es_para_llevar ? '🛍️ Para Llevar' : '🚚 Domicilio'}:</strong> {comandaACancelar.datos_cliente?.nombre}
+                    <strong>{esParaLlevar(comandaACancelar) ? '🛍️ Para Llevar' : '🚚 Domicilio'}:</strong> {getNombreCliente(comandaACancelar)}
                   </p>
                 ) : (
                   <p className="text-sm">
