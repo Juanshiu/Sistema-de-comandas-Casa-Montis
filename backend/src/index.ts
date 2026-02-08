@@ -45,17 +45,37 @@ app.use(helmet());
 app.use(compression());
 
 // Configuración de CORS
+const allowedOrigins = [
+  'http://localhost:3000',
+  'http://localhost:3002',
+  // IPs locales (desarrollo en red local)
+  /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/,
+  // Dominios de producción en Render (actualizar con tus URLs reales)
+  'https://montis-cloud-frontend.onrender.com',
+  'https://montis-cloud-admin.onrender.com',
+];
+
 app.use(cors({
   origin: (origin, callback) => {
+    // Permitir requests sin origin (como Postman, curl, o server-to-server)
     if (!origin) return callback(null, true);
-    if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
-      return callback(null, true);
+    
+    // Verificar si está en la lista de orígenes permitidos
+    const isAllowed = allowedOrigins.some(allowedOrigin => {
+      if (typeof allowedOrigin === 'string') {
+        return origin === allowedOrigin;
+      } else if (allowedOrigin instanceof RegExp) {
+        return allowedOrigin.test(origin);
+      }
+      return false;
+    });
+    
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`⚠️ CORS blocked origin: ${origin}`);
+      callback(new Error(`Origin ${origin} not allowed by CORS`));
     }
-    const localIpPattern = /^http:\/\/(192\.168\.\d{1,3}\.\d{1,3}|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(1[6-9]|2[0-9]|3[0-1])\.\d{1,3}\.\d{1,3})(:\d+)?$/;
-    if (localIpPattern.test(origin)) {
-      return callback(null, true);
-    }
-    callback(null, true);
   },
   credentials: true
 }));
