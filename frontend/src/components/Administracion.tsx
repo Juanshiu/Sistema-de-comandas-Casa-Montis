@@ -278,7 +278,7 @@ export default function Administracion() {
               <div>
                 <h1 className="text-sm md:text-xl font-bold text-secondary-800">
                   {mostrandoInicio 
-                    ? 'Administración - Casa Montis'
+                    ? 'Administración - Montis Cloud'
                     : seccionActualData?.nombre || 'Administración'}
                 </h1>
                 {!mostrandoInicio && seccionActualData && (

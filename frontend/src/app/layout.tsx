@@ -3,8 +3,13 @@ import './globals.css'
 import { Providers } from '@/components/Providers'
 
 export const metadata: Metadata = {
-  title: 'Casa Montis - Sistema de Comandas',
-  description: 'Sistema de comandas para restaurante Casa Montis',
+  title: 'Montis Cloud - Sistema de Comandas',
+  description: 'Sistema de comandas para restaurantes Montis Cloud',
+  icons: {
+    icon: '/favicon.webp',
+    shortcut: '/favicon.webp',
+    apple: '/favicon.webp',
+  },
 }
 
 export default function RootLayout({

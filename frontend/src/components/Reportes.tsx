@@ -83,7 +83,7 @@ export default function Reportes() {
     if (vistaActual === 'dia' && reporte) {
       const desglose = calcularDesgloseIVA(reporte.total_ventas);
       
-      let contenido = `REPORTE DE VENTAS - CASA MONTIS
+      let contenido = `REPORTE DE VENTAS - MONTIS CLOUD
 Fecha: ${new Date(reporte.fecha).toLocaleDateString('es-CO')}
 ========================================
 
@@ -195,7 +195,7 @@ vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaj
 
   // Combinar productos de múltiples reportes (para vista rango)
   const combinarProductosRango = () => {
-    const combinado: { [productoId: number]: ProductoVendido } = {};
+    const combinado: { [productoId: string]: ProductoVendido } = {};
     
     reporteRango.forEach(reporte => {
       reporte.productos_mas_vendidos.forEach(item => {
@@ -384,12 +384,13 @@ vs Promedio Semanal: ${reporte.comparativas.vs_promedio_semanal.ventas_porcentaj
                 <div className="flex-1">
                   <p className="text-green-100 text-sm mb-1">Total Ventas</p>
                   <p className="text-3xl font-bold mb-2">
-                    ${reporte.total_ventas.toLocaleString()}
+                    ${(reporte.total_ventas || (reporte as any).resumen?.total_ventas || 0).toLocaleString()}
                   </p>
                   {configFacturacion?.responsable_iva && configFacturacion.porcentaje_iva && (
                     <div className="text-xs text-green-100 mb-2">
                       {(() => {
-                        const desglose = calcularDesgloseIVA(reporte.total_ventas);
+                        const totalVentas = (reporte.total_ventas || (reporte as any).resumen?.total_ventas || 0);
+                        const desglose = calcularDesgloseIVA(totalVentas);
                         return (
                           <>
                             <div>Subtotal: ${Math.round(desglose.subtotal).toLocaleString()}</div>
