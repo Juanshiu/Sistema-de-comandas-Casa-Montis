@@ -1,4 +1,4 @@
-# Sistema de Inventario de Productos - Casa Montis
+# Sistema de Inventario de Productos - Montis Cloud
 
 ## Índice
 1. [Descripción General](#descripción-general)
@@ -15,7 +15,7 @@
 
 ## Descripción General
 
-Se ha implementado un sistema completo de control de inventario para productos en Casa Montis, siguiendo el mismo patrón arquitectónico que el sistema de inventario de personalizaciones. Este sistema permite gestionar automáticamente el stock de productos, con alertas, validaciones y actualizaciones automáticas.
+Se ha implementado un sistema completo de control de inventario para productos en Montis Cloud, siguiendo el mismo patrón arquitectónico que el sistema de inventario de personalizaciones. Este sistema permite gestionar automáticamente el stock de productos, con alertas, validaciones y actualizaciones automáticas.
 
 El sistema ha sido completamente refactorizado para eliminar hardcodeo, duplicación de código y mejorar la mantenibilidad, siguiendo las mejores prácticas de desarrollo.
 

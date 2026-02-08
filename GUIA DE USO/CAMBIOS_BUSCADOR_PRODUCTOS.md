@@ -189,13 +189,13 @@ const nuevoItem: ItemComanda = {
 
 #### 1. Badge de personalización en resultados
 ```
-[Almuerzo Casa Montis ⚙️]  $15,000
+[Almuerzo Montis Cloud ⚙️]  $15,000
 Categoría: Almuerzo
 ```
 
 #### 2. Alerta en producto seleccionado
 ```
-📦 Almuerzo Casa Montis
+📦 Almuerzo Montis Cloud
 Categoría: Almuerzo
 $15,000 c/u
 ⚠️ [⚙️ Requiere personalización (se configurará en el siguiente paso)]
@@ -223,7 +223,7 @@ $15,000 c/u
 
 | Búsqueda | Resultados |
 |----------|-----------|
-| `"alm"` | Almuerzo Casa Montis, Almuerzo Especial |
+| `"alm"` | Almuerzo Montis Cloud, Almuerzo Especial |
 | `"pechuga"` | Pechuga a la Plancha, Pechuga BBQ, Pechuga Hawaiana |
 | `"bebida"` | Gaseosa, Jugo Natural, Agua, Café |
 | `"desayuno"` | Desayuno Montis, Desayuno Light |
@@ -271,7 +271,7 @@ $15,000 c/u
 
 ### Caso 2: Producto con personalización
 1. Buscar "almuerzo"
-2. Seleccionar "Almuerzo Casa Montis"
+2. Seleccionar "Almuerzo Montis Cloud"
 3. Verificar que aparece el icono ⚙️ y la alerta de personalización
 4. Agregar el producto
 5. Avanzar al paso 2

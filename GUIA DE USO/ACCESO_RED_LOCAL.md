@@ -86,7 +86,7 @@ New-NetFirewallRule -DisplayName "Node.js Backend" -Direction Inbound -LocalPort
 5. TCP → Puertos específicos: **3000, 3001** → Siguiente
 6. **Permitir la conexión** → Siguiente
 7. Selecciona **todos los perfiles** → Siguiente
-8. Nombre: **"Casa Montis Sistema"** → Finalizar
+8. Nombre: **"Montis Cloud Sistema"** → Finalizar
 
 ---
 
@@ -125,7 +125,7 @@ Abre en el navegador:
 ```
 http://TU_IP:3000
 ```
-Deberías ver la aplicación de Casa Montis.
+Deberías ver la aplicación de Montis Cloud.
 
 ---
 

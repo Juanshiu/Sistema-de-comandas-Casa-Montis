@@ -1,4 +1,4 @@
-# 🖨️ Plugin de Impresión Propio - Casa Montis
+# 🖨️ Plugin de Impresión Propio - Montis Cloud
 
 ## 📌 ¿Qué es esto?
 
@@ -85,7 +85,7 @@ Estado del servidor del plugin.
 ```json
 {
   "success": true,
-  "servicio": "Plugin de Impresión Casa Montis",
+  "servicio": "Plugin de Impresión Montis Cloud",
   "version": "1.0.0",
   "puerto": 8001,
   "sistema": "win32",
@@ -135,7 +135,7 @@ npm run dev
 
 Deberías ver:
 ```
-🖨️  PLUGIN DE IMPRESIÓN CASA MONTIS
+🖨️  PLUGIN DE IMPRESIÓN MONTIS CLOUD
 ==================================================
 ✅ Servidor HTTP iniciado en http://127.0.0.1:8001
 📡 Endpoints disponibles:
@@ -241,4 +241,4 @@ El plugin mapea caracteres españoles a CP850:
 
 ---
 
-**Hecho con ❤️ para Casa Montis**
+**Hecho con ❤️ para Montis Cloud**

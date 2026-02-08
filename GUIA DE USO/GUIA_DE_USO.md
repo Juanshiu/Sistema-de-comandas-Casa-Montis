@@ -1,4 +1,4 @@
-# Sistema de Comandas Casa Montis - Guía de Uso Completa
+# Sistema de Comandas Montis Cloud - Guía de Uso Completa
 
 ## 🎯 Estado Actual
 ✅ **SISTEMA COMPLETAMENTE FUNCIONAL** - Todos los módulos implementados:
@@ -135,7 +135,7 @@ Filete de Tilapia: +$5,000
 ### **Formatos de Impresión**
 ```
 ==================================================
-                 CASA MONTIS
+                 MONTIS CLOUD
                COMANDA DE COCINA
 ==================================================
 Mesa: 5                    Comanda: #ABC123
@@ -268,6 +268,6 @@ cd frontend && npm run dev
 
 ---
 
-**🎉 ¡El Sistema de Comandas Casa Montis está completamente funcional y listo para producción!**
+**🎉 ¡El Sistema de Comandas Montis Cloud está completamente funcional y listo para producción!**
 
 **Acceder al sistema**: http://localhost:3000
