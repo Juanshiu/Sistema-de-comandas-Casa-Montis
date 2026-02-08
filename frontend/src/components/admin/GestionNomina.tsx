@@ -25,7 +25,7 @@ const GestionNomina: React.FC = () => {
     const [histNominas, setHistNominas] = useState<NominaDetalle[]>([]);
     const [histPagos, setHistPagos] = useState<PagoNomina[]>([]);
     const [histCambios, setHistCambios] = useState<HistorialNomina[]>([]);
-    const [selectedHistNominaId, setSelectedHistNominaId] = useState<number | null>(null);
+    const [selectedHistNominaId, setSelectedHistNominaId] = useState<string | null>(null);
     const [nuevoPagoValor, setNuevoPagoValor] = useState<number>(0);
     const [nuevoPagoFecha, setNuevoPagoFecha] = useState<string>('');
     const [historyLoading, setHistoryLoading] = useState(false);
@@ -63,7 +63,7 @@ const GestionNomina: React.FC = () => {
         if (!selectedEmpleadoId) return alert('Seleccione un empleado');
         setLoading(true);
         try {
-            const calculo = await apiService.calcularNomina(parseInt(selectedEmpleadoId), diasTrabajados, {
+            const calculo = await apiService.calcularNomina(selectedEmpleadoId, diasTrabajados, {
                 horas_diurnas: horasDiurnas,
                 horas_dominicales_diurnas: horasDom,
                 horas_festivas_diurnas: horasFest,
@@ -93,7 +93,7 @@ const GestionNomina: React.FC = () => {
         setLoading(true);
         try {
             const resultado = await apiService.guardarNominaDetalle({
-                empleado_id: parseInt(selectedEmpleadoId),
+                empleado_id: selectedEmpleadoId,
                 dias_trabajados: diasTrabajados,
                 horas_diurnas: horasDiurnas,
                 horas_dominicales_diurnas: horasDom,
@@ -147,15 +147,29 @@ const GestionNomina: React.FC = () => {
         }
         setHistoryLoading(true);
         try {
-            const data = await apiService.getHistorialNomina(parseInt(selectedEmpleadoId), {
+            const data = await apiService.getHistorialNomina(selectedEmpleadoId, {
                 periodo_mes: mesPeriodo,
                 periodo_anio: anioPeriodo
             });
             setHistNominas(data.nominas || []);
-            setHistPagos(data.pagos || []);
+            
+            // Extraer pagos de todas las nóminas (vienen en pagos_registrados de cada una)
+            const todosPagos: PagoNomina[] = [];
+            for (const nom of (data.nominas || [])) {
+                if (nom.pagos_registrados) {
+                    for (const pago of nom.pagos_registrados) {
+                        todosPagos.push({
+                            ...pago,
+                            nomina_detalle_id: nom.id || '' // Mapear nomina_id a nomina_detalle_id para compatibilidad
+                        });
+                    }
+                }
+            }
+            setHistPagos(todosPagos);
+            
             setHistCambios(data.historial || []);
             if (data.nominas && data.nominas.length > 0) {
-                setSelectedHistNominaId(data.nominas[0].id);
+                setSelectedHistNominaId(data.nominas[0].id || null);
             } else {
                 setSelectedHistNominaId(null);
             }
@@ -168,12 +182,19 @@ const GestionNomina: React.FC = () => {
     };
 
     const handleRegistrarPago = async () => {
+        console.log('🔔 handleRegistrarPago llamado');
+        console.log('   selectedHistNominaId:', selectedHistNominaId);
+        console.log('   nuevoPagoValor:', nuevoPagoValor);
+        console.log('   nuevoPagoFecha:', nuevoPagoFecha);
+        
         if (!selectedHistNominaId) {
             alert('Seleccione una nómina para registrar el pago');
             return;
         }
 
         const selectedNomina = histNominas.find(n => n.id === selectedHistNominaId);
+        console.log('   selectedNomina:', selectedNomina);
+        
         if (selectedNomina && selectedNomina.estado !== 'ABIERTA') {
             alert('No se pueden registrar pagos en versiones históricas. Seleccione la versión activa (ABIERTA).');
             return;
@@ -183,25 +204,41 @@ const GestionNomina: React.FC = () => {
             alert('Ingrese un valor de pago válido');
             return;
         }
+        
+        // Validar que el pago no supere el saldo pendiente
+        if (selectedNomina) {
+            const pagosDeEstaNomina = histPagos.filter(p => p.nomina_detalle_id === selectedHistNominaId);
+            const totalPagado = pagosDeEstaNomina.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+            const netoPagar = Number(selectedNomina.neto_pagado) || 0;
+            const saldoPendiente = netoPagar - totalPagado;
+            
+            if (nuevoPagoValor > saldoPendiente) {
+                alert(`El valor del pago ($${nuevoPagoValor.toLocaleString()}) supera el saldo pendiente ($${Math.round(saldoPendiente).toLocaleString()})`);
+                return;
+            }
+        }
+        
         setHistoryLoading(true);
         try {
+            console.log('   📤 Enviando pago al servidor...');
             await apiService.registrarPagoNomina(selectedHistNominaId, {
                 valor: nuevoPagoValor,
                 fecha: nuevoPagoFecha || undefined,
                 tipo: 'QUINCENA'
             });
+            console.log('   ✅ Pago registrado correctamente');
             await handleCargarHistorial();
             setNuevoPagoValor(0);
             setNuevoPagoFecha('');
         } catch (error: any) {
-            console.error('Error registrando pago de nómina:', error);
+            console.error('❌ Error registrando pago de nómina:', error);
             alert(error.response?.data?.error || 'Error al registrar pago');
         } finally {
             setHistoryLoading(false);
         }
     };
 
-    const handleDescargarPDFNomina = async (nominaDetalleId: number) => {
+    const handleDescargarPDFNomina = async (nominaDetalleId: string) => {
         try {
             const blob = await apiService.descargarPDFNomina(nominaDetalleId);
             const url = window.URL.createObjectURL(blob);
@@ -435,19 +472,19 @@ const GestionNomina: React.FC = () => {
                                             {nominaCalculada.valor_extra_diurna_dominical && nominaCalculada.valor_extra_diurna_dominical > 0 && (
                                                 <div className="flex justify-between">
                                                     <span>H. Extra Dominical ({nominaCalculada.horas_extra_diurna_dominical}h)</span>
-                                                    <span>${Math.round(nominaCalculada.valor_extra_diurna_dominical).toLocaleString()}</span>
+                                                    <span>${Math.round(nominaCalculada.valor_extra_diurna_dominical || 0).toLocaleString()}</span>
                                                 </div>
                                             )}
-                                            {nominaCalculada.comisiones > 0 && (
+                                            {(nominaCalculada.comisiones || 0) > 0 && (
                                                 <div className="flex justify-between">
                                                     <span>Comisiones</span>
-                                                    <span>${Math.round(nominaCalculada.comisiones).toLocaleString()}</span>
+                                                    <span>${Math.round(nominaCalculada.comisiones || 0).toLocaleString()}</span>
                                                 </div>
                                             )}
-                                            {nominaCalculada.otros_devengados > 0 && (
+                                            {(nominaCalculada.otros_devengados || 0) > 0 && (
                                                 <div className="flex justify-between">
                                                     <span>Otros Devengados</span>
-                                                    <span>${Math.round(nominaCalculada.otros_devengados).toLocaleString()}</span>
+                                                    <span>${Math.round(nominaCalculada.otros_devengados || 0).toLocaleString()}</span>
                                                 </div>
                                             )}
                                             <div className="flex justify-between font-bold pt-2 border-t mt-2">
@@ -461,11 +498,11 @@ const GestionNomina: React.FC = () => {
                                         <div className="space-y-2 text-sm">
                                             <div className="flex justify-between">
                                                 <span>Salud (4%)</span>
-                                                <span>${Math.round(nominaCalculada.salud_empleado).toLocaleString()}</span>
+                                                <span>${Math.round(nominaCalculada.salud_empleado || nominaCalculada.salud || 0).toLocaleString()}</span>
                                             </div>
                                             <div className="flex justify-between">
                                                 <span>Pensión (4%)</span>
-                                                <span>${Math.round(nominaCalculada.pension_empleado).toLocaleString()}</span>
+                                                <span>${Math.round(nominaCalculada.pension_empleado || nominaCalculada.pension || 0).toLocaleString()}</span>
                                             </div>
                                             {nominaCalculada.otras_deducciones > 0 && (
                                                 <div className="flex justify-between text-red-700 bg-red-50 p-1 rounded">
@@ -764,7 +801,7 @@ const GestionNomina: React.FC = () => {
                                                         <td className="px-3 py-2 text-right">${Math.round(n.neto_pagado).toLocaleString()}</td>
                                                         <td className="px-3 py-2 text-right">
                                                             <button
-                                                                onClick={() => handleDescargarPDFNomina(n.id)}
+                                                                onClick={() => n.id && handleDescargarPDFNomina(n.id)}
                                                                 disabled={!n.pdf_path}
                                                                 className="text-xs text-blue-600 hover:underline disabled:text-gray-400"
                                                             >
@@ -773,7 +810,7 @@ const GestionNomina: React.FC = () => {
                                                         </td>
                                                         <td className="px-3 py-2 text-right">
                                                             <button
-                                                                onClick={() => setSelectedHistNominaId(n.id)}
+                                                                onClick={() => setSelectedHistNominaId(n.id || null)}
                                                                 className="text-xs px-2 py-1 rounded border text-blue-700 border-blue-200 hover:bg-blue-50"
                                                             >
                                                                 {n.estado === 'ABIERTA' ? 'Registrar Pago / Detalle' : 'Ver Detalle Histórico'}
@@ -794,8 +831,11 @@ const GestionNomina: React.FC = () => {
                                                 {(() => {
                                                     const selectedNomina = histNominas.find(n => n.id === selectedHistNominaId);
                                                     if (selectedNomina && selectedNomina.estado === 'ABIERTA') {
-                                                        const totalPagado = histPagos.reduce((acc, p) => acc + p.valor, 0);
-                                                        const saldo = Math.round(selectedNomina.neto_pagado - totalPagado);
+                                                        // Filtrar solo los pagos de esta nómina específica
+                                                        const pagosDeEstaNomina = histPagos.filter(p => p.nomina_detalle_id === selectedHistNominaId);
+                                                        const totalPagado = pagosDeEstaNomina.reduce((acc, p) => acc + Number(p.valor || 0), 0);
+                                                        const netoPagar = Number(selectedNomina.neto_pagado) || 0;
+                                                        const saldo = Math.round(netoPagar - totalPagado);
                                                         return (
                                                             <div className="text-right">
                                                                 <div className="text-[10px] text-gray-500 uppercase font-bold">Saldo Pendiente</div>
@@ -893,9 +933,9 @@ const GestionNomina: React.FC = () => {
                                                         <tbody>
                                                             {histCambios.filter(h => h.nomina_detalle_id === selectedHistNominaId).map(h => (
                                                                 <tr key={h.id} className="border-t">
-                                                                    <td className="px-2 py-1">{h.version}</td>
-                                                                    <td className="px-2 py-1">{new Date(h.fecha).toLocaleString()}</td>
-                                                                    <td className="px-2 py-1">{h.cambio_realizado}</td>
+                                                                    <td className="px-2 py-1">{h.version || '-'}</td>
+                                                                    <td className="px-2 py-1">{h.fecha ? new Date(h.fecha).toLocaleString() : (h.fecha_generacion ? new Date(h.fecha_generacion).toLocaleString() : '-')}</td>
+                                                                    <td className="px-2 py-1">{(h as any).cambio || h.cambio_realizado || '-'}</td>
                                                                 </tr>
                                                             ))}
                                                         </tbody>

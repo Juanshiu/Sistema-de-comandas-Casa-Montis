@@ -59,7 +59,7 @@ const GestionLiquidacion: React.FC = () => {
         setLoading(true);
         try {
             const res = await apiService.calcularLiquidacion(
-                parseInt(selectedEmpleadoId),
+                selectedEmpleadoId,
                 fechaRetiro, // Pasar el string YYYY-MM-DD directamente
                 motivoRetiro,
                 {
@@ -92,7 +92,7 @@ const GestionLiquidacion: React.FC = () => {
         return new Date(dateStr).toLocaleDateString();
     };
 
-    const selectedEmpleado = empleados.find(e => e.id === parseInt(selectedEmpleadoId));
+    const selectedEmpleado = empleados.find(e => e.id === selectedEmpleadoId);
 
     return (
         <div className="space-y-6">
@@ -112,7 +112,7 @@ const GestionLiquidacion: React.FC = () => {
                                 setResultado(null);
                                 
                                 // Sincronizar Aux Transporte con el empleado
-                                const emp = empleados.find(emp => emp.id === parseInt(id));
+                                const emp = empleados.find(emp => emp.id === id);
                                 if (emp) {
                                     setIncluirAuxTransp(emp.auxilio_transporte);
                                 }
