@@ -1,31 +1,21 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../database/init';
+import { db } from '../database/database';
+import { verificarAutenticacion } from '../middleware/authMiddleware';
 
 const router = Router();
 
-// Helpers para base de datos
-const runAsync = (sql: string, params: any[] = []): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, (err) => {
-      if (err) reject(err);
-      else resolve();
-    });
-  });
-};
-
-const allAsync = (sql: string, params: any[] = []): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) reject(err);
-      else resolve(rows || []);
-    });
-  });
-};
+router.use(verificarAutenticacion);
 
 // Listar categorías de insumos
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const categorias = await allAsync('SELECT * FROM insumo_categorias WHERE activo = 1 ORDER BY nombre ASC');
+    const { empresaId } = req.context;
+    const categorias = await db.selectFrom('insumo_categorias')
+      .selectAll()
+      .where('empresa_id', '=', empresaId)
+      .where('activo', '=', true)
+      .orderBy('nombre', 'asc')
+      .execute();
     res.json(categorias);
   } catch (error: any) {
     res.status(500).json({ error: 'Error al listar categorías de insumos', details: error.message });
@@ -35,16 +25,21 @@ router.get('/', async (req: Request, res: Response) => {
 // Crear categoría de insumo
 router.post('/', async (req: Request, res: Response) => {
   try {
+    const { empresaId } = req.context;
     const { nombre, descripcion } = req.body;
     if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
-    await runAsync(
-      'INSERT INTO insumo_categorias (nombre, descripcion) VALUES (?, ?)',
-      [nombre, descripcion]
-    );
+    await db.insertInto('insumo_categorias')
+      .values({
+        empresa_id: empresaId,
+        nombre,
+        descripcion,
+        activo: true
+      })
+      .execute();
     res.status(201).json({ message: 'Categoría creada correctamente' });
   } catch (error: any) {
-    if (error.message.includes('UNIQUE constraint failed')) {
+    if (error.message.includes('UNIQUE constraint failed') || error.message.includes('duplicate key value')) {
       return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
     }
     res.status(500).json({ error: 'Error al crear categoría', details: error.message });
@@ -55,13 +50,24 @@ router.post('/', async (req: Request, res: Response) => {
 router.put('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { empresaId } = req.context;
     const { nombre, descripcion } = req.body;
     if (!nombre) return res.status(400).json({ error: 'El nombre es obligatorio' });
 
-    await runAsync(
-      'UPDATE insumo_categorias SET nombre = ?, descripcion = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [nombre, descripcion, id]
-    );
+    const result = await db.updateTable('insumo_categorias')
+      .set({
+        nombre,
+        descripcion,
+        updated_at: new Date() as any
+      })
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+
+    if (Number(result.numUpdatedRows) === 0) {
+      return res.status(404).json({ error: 'Categoría no encontrada' });
+    }
+
     res.json({ message: 'Categoría actualizada correctamente' });
   } catch (error: any) {
     res.status(500).json({ error: 'Error al actualizar categoría', details: error.message });
@@ -72,13 +78,30 @@ router.put('/:id', async (req: Request, res: Response) => {
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
     const { id } = req.params;
+    const { empresaId } = req.context;
+
     // Verificar si hay insumos usando esta categoría
-    const insumosExistentes = await allAsync('SELECT id FROM insumos WHERE categoria_id = ? AND activo = 1', [id]);
-    if (insumosExistentes.length > 0) {
+    const insumosExistentes = await db.selectFrom('insumos')
+      .select('id')
+      .where('categoria_id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .where('activo', '=', true)
+      .executeTakeFirst();
+
+    if (insumosExistentes) {
       return res.status(400).json({ error: 'No se puede eliminar la categoría porque hay insumos asociados a ella' });
     }
 
-    await runAsync('UPDATE insumo_categorias SET activo = 0 WHERE id = ?', [id]);
+    const result = await db.updateTable('insumo_categorias')
+      .set({ activo: false, updated_at: new Date() as any })
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+
+    if (Number(result.numUpdatedRows) === 0) {
+      return res.status(404).json({ error: 'Categoría no encontrada' });
+    }
+
     res.json({ message: 'Categoría eliminada correctamente' });
   } catch (error: any) {
     res.status(500).json({ error: 'Error al eliminar categoría', details: error.message });
@@ -86,3 +109,4 @@ router.delete('/:id', async (req: Request, res: Response) => {
 });
 
 export default router;
+

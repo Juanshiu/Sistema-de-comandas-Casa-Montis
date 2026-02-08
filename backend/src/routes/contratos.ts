@@ -1,6 +1,6 @@
 
 import { Router, Request, Response } from 'express';
-import { db } from '../database/init';
+import { db } from '../database/database';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
@@ -15,72 +15,391 @@ if (!fs.existsSync(storageDir)) {
     fs.mkdirSync(storageDir, { recursive: true });
 }
 
-// Helper para convertir fecha YYYY-MM-DD a formato legible (DD de MM de YYYY)
-function formatearFechaLegible(fechaStr: string): string {
+// ==================== CONSTANTES ====================
+
+const MAX_TEMPLATE_LENGTH = 50000;
+
+const VARIABLES_DISPONIBLES = {
+    empresa: [
+        { variable: '{{NOMBRE_EMPLEADOR}}', descripcion: 'Nombre / Razón social del empleador' },
+        { variable: '{{IDENTIFICACION_EMPLEADOR}}', descripcion: 'NIT o cédula del empleador' },
+        { variable: '{{RAZON_SOCIAL}}', descripcion: 'Razón social del establecimiento' },
+        { variable: '{{DIRECCION_EMPRESA}}', descripcion: 'Dirección de la empresa' },
+        { variable: '{{MUNICIPIO_EMPRESA}}', descripcion: 'Municipio de la empresa' },
+    ],
+    empleado: [
+        { variable: '{{NOMBRE_TRABAJADOR}}', descripcion: 'Nombre completo del trabajador' },
+        { variable: '{{CEDULA_TRABAJADOR}}', descripcion: 'Cédula del trabajador' },
+        { variable: '{{DIRECCION_TRABAJADOR}}', descripcion: 'Dirección del trabajador' },
+        { variable: '{{MUNICIPIO_TRABAJADOR}}', descripcion: 'Municipio del trabajador' },
+        { variable: '{{CARGO}}', descripcion: 'Cargo del trabajador' },
+        { variable: '{{SALARIO}}', descripcion: 'Salario formateado ($X.XXX.XXX)' },
+        { variable: '{{SALARIO_LETRAS}}', descripcion: 'Salario en letras (PESOS M/CTE)' },
+    ],
+    contrato: [
+        { variable: '{{TIPO_CONTRATO}}', descripcion: 'Tipo de contrato' },
+        { variable: '{{DURACION_CONTRATO}}', descripcion: 'Duración del contrato' },
+        { variable: '{{FECHA_INICIO}}', descripcion: 'Fecha de inicio (formato legible)' },
+        { variable: '{{FECHA_FIN}}', descripcion: 'Fecha de finalización (formato legible)' },
+        { variable: '{{PERIODO_PRUEBA}}', descripcion: 'Período de prueba' },
+        { variable: '{{DIAS_LABORADOS}}', descripcion: 'Días laborados semanalmente' },
+        { variable: '{{HORARIO_TRABAJO}}', descripcion: 'Horario de trabajo' },
+        { variable: '{{FORMA_PAGO}}', descripcion: 'Forma de pago' },
+        { variable: '{{PERIODO_PAGO}}', descripcion: 'Período de pago' },
+        { variable: '{{FECHAS_PAGO}}', descripcion: 'Días específicos de pago' },
+        { variable: '{{LUGAR_FIRMA}}', descripcion: 'Lugar de firma del contrato' },
+        { variable: '{{FECHA_FIRMA}}', descripcion: 'Fecha de firma (formato legible)' },
+    ]
+};
+
+// ==================== HELPERS ====================
+
+function formatearFechaLegible(fechaStr: string | undefined | null): string {
     if (!fechaStr) return '_______________';
-    const date = new Date(fechaStr);
-    // Ajustar zona horaria si es necesario, o asumir que la fecha es correcta.
-    // Usaremos un array de meses simple para evitar problemas de locale en el servidor
-    const meses = ['Enero', 'Febrero', 'Marzo', 'Abril', 'Mayo', 'Junio', 'Julio', 'Agosto', 'Septiembre', 'Octubre', 'Noviembre', 'Diciembre'];
-    
-    // Asumiendo que la fecha viene como YYYY-MM-DD y queremos evitar conversión a UTC que cambie el día
-    const parts = fechaStr.split('-');
-    if (parts.length === 3) {
-        const year = parseInt(parts[0]);
-        const month = parseInt(parts[1]) - 1;
-        const day = parseInt(parts[2]);
-        return `${day} de ${meses[month]} de ${year}`;
+    try {
+        const meses = ['ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+        const d = new Date(fechaStr + 'T12:00:00');
+        return `${d.getDate()} DE ${meses[d.getMonth()]} DE ${d.getFullYear()}`;
+    } catch {
+        return fechaStr;
     }
-    return fechaStr;
 }
+
+function sanitizarPlantilla(texto: string): string {
+    return texto
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        .replace(/<[^>]+>/g, '')
+        .replace(/javascript:/gi, '')
+        .replace(/on\w+\s*=/gi, '');
+}
+
+// ==================== PARSER DE MARCADO LIGERO ====================
+
+/** Estilo dominante de una línea (un solo estilo por línea, sin anidamiento) */
+type LineStyle = 'bold' | 'italic' | 'underline' | 'bullet' | 'normal';
+
+function parseLineStyle(line: string): { style: LineStyle; text: string } {
+    const trimmed = line.trim();
+    if (!trimmed) return { style: 'normal', text: '' };
+
+    // Viñetas: - texto o • texto (al inicio de línea)
+    if (/^[-•]\s+/.test(trimmed)) {
+        return { style: 'bullet', text: trimmed.replace(/^[-•]\s+/, '') };
+    }
+
+    // Negrilla: **texto**
+    const boldMatch = trimmed.match(/^\*\*(.+)\*\*$/);
+    if (boldMatch) {
+        return { style: 'bold', text: boldMatch[1] };
+    }
+
+    // Subrayado: __texto__ (verificar antes de cursiva porque __ contiene _)
+    const underlineMatch = trimmed.match(/^__(.+)__$/);
+    if (underlineMatch) {
+        return { style: 'underline', text: underlineMatch[1] };
+    }
+
+    // Cursiva: _texto_ (excluyendo __ que ya fue capturado arriba)
+    const italicMatch = trimmed.match(/^_([^_].*)_$/);
+    if (italicMatch) {
+        return { style: 'italic', text: italicMatch[1] };
+    }
+
+    return { style: 'normal', text: trimmed };
+}
+
+function cargarPlantillaPorDefecto(): string {
+    try {
+        const contratoPath = path.resolve(__dirname, '../../CONTRATO.TXT');
+        return fs.readFileSync(contratoPath, 'utf-8');
+    } catch {
+        return 'CONTRATO DE TRABAJO\n\nNo se encontró la plantilla por defecto. Por favor configure una plantilla en el sistema.';
+    }
+}
+
+/** Obtiene la plantilla activa para una empresa: primero busca plantilla default de empresa, luego archivo */
+async function obtenerPlantillaEmpresa(empresaId: string): Promise<{ contenido: string; origen: 'empresa' | 'archivo'; plantillaId?: string; nombre?: string }> {
+    try {
+        const plantillaEmpresa = await db.selectFrom('plantillas_contrato')
+            .selectAll()
+            .where('empresa_id', '=', empresaId)
+            .where('es_default', '=', true)
+            .executeTakeFirst();
+
+        if (plantillaEmpresa) {
+            return {
+                contenido: plantillaEmpresa.contenido,
+                origen: 'empresa',
+                plantillaId: plantillaEmpresa.id,
+                nombre: plantillaEmpresa.nombre
+            };
+        }
+    } catch (err) {
+        // La tabla puede no existir aún si la migración no se ha corrido
+        console.warn('Aviso: tabla plantillas_contrato no disponible aún, usando archivo:', (err as Error).message);
+    }
+
+    return {
+        contenido: cargarPlantillaPorDefecto(),
+        origen: 'archivo'
+    };
+}
+
+// ==================== ENDPOINTS DE PLANTILLAS (CRUD Multi-tenant) ====================
+
+// Listar plantillas de la empresa
+router.get('/plantillas', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+
+        const plantillas = await db.selectFrom('plantillas_contrato')
+            .selectAll()
+            .where('empresa_id', '=', empresaId)
+            .orderBy('es_default', 'desc')
+            .orderBy('updated_at', 'desc')
+            .execute();
+
+        res.json(plantillas);
+    } catch (error: any) {
+        console.error('Error listando plantillas:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Crear nueva plantilla
+router.post('/plantillas', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+        const { nombre, contenido, es_default } = req.body;
+
+        if (!nombre || !contenido) {
+            return res.status(400).json({ error: 'Se requiere nombre y contenido para la plantilla' });
+        }
+
+        if (contenido.length > MAX_TEMPLATE_LENGTH) {
+            return res.status(400).json({ error: `La plantilla excede el límite de ${MAX_TEMPLATE_LENGTH.toLocaleString()} caracteres` });
+        }
+
+        const contenidoSanitizado = sanitizarPlantilla(contenido);
+
+        // Si se marca como default, quitar default de las demás
+        if (es_default) {
+            await db.updateTable('plantillas_contrato')
+                .set({ es_default: false })
+                .where('empresa_id', '=', empresaId)
+                .where('es_default', '=', true)
+                .execute();
+        }
+
+        const resultado = await db.insertInto('plantillas_contrato')
+            .values({
+                empresa_id: empresaId,
+                nombre: nombre.trim(),
+                contenido: contenidoSanitizado,
+                es_default: es_default || false,
+                updated_at: new Date()
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+
+        res.json({ success: true, plantilla: resultado });
+    } catch (error: any) {
+        console.error('Error creando plantilla:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Actualizar plantilla existente
+router.put('/plantillas/:id', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { empresaId } = req.context;
+        const { nombre, contenido } = req.body;
+
+        if (!nombre && !contenido) {
+            return res.status(400).json({ error: 'Se requiere al menos nombre o contenido para actualizar' });
+        }
+
+        if (contenido && contenido.length > MAX_TEMPLATE_LENGTH) {
+            return res.status(400).json({ error: `La plantilla excede el límite de ${MAX_TEMPLATE_LENGTH.toLocaleString()} caracteres` });
+        }
+
+        const updateData: any = { updated_at: new Date() };
+        if (nombre) updateData.nombre = nombre.trim();
+        if (contenido) updateData.contenido = sanitizarPlantilla(contenido);
+
+        const resultado = await db.updateTable('plantillas_contrato')
+            .set(updateData)
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .returningAll()
+            .executeTakeFirst();
+
+        if (!resultado) {
+            return res.status(404).json({ error: 'Plantilla no encontrada' });
+        }
+
+        res.json({ success: true, plantilla: resultado });
+    } catch (error: any) {
+        console.error('Error actualizando plantilla:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Establecer plantilla como default de la empresa
+router.put('/plantillas/:id/set-default', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { empresaId } = req.context;
+
+        // Verificar que la plantilla existe y pertenece a la empresa
+        const plantilla = await db.selectFrom('plantillas_contrato')
+            .select('id')
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
+
+        if (!plantilla) {
+            return res.status(404).json({ error: 'Plantilla no encontrada' });
+        }
+
+        // Quitar default de todas las plantillas de la empresa
+        await db.updateTable('plantillas_contrato')
+            .set({ es_default: false, updated_at: new Date() })
+            .where('empresa_id', '=', empresaId)
+            .execute();
+
+        // Establecer la nueva default
+        await db.updateTable('plantillas_contrato')
+            .set({ es_default: true, updated_at: new Date() })
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .execute();
+
+        res.json({ success: true, message: 'Plantilla establecida como predeterminada' });
+    } catch (error: any) {
+        console.error('Error estableciendo plantilla default:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// Eliminar plantilla
+router.delete('/plantillas/:id', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
+    try {
+        const { id } = req.params;
+        const { empresaId } = req.context;
+
+        const resultado = await db.deleteFrom('plantillas_contrato')
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
+
+        if (!resultado || Number(resultado.numDeletedRows) === 0) {
+            return res.status(404).json({ error: 'Plantilla no encontrada' });
+        }
+
+        res.json({ success: true, message: 'Plantilla eliminada correctamente' });
+    } catch (error: any) {
+        console.error('Error eliminando plantilla:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// ==================== ENDPOINTS DE PLANTILLA DEFAULT Y VARIABLES ====================
+
+// Obtener plantilla por defecto (prioriza la de empresa, luego archivo)
+router.get('/plantilla-default', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+        const { contenido, origen, plantillaId, nombre } = await obtenerPlantillaEmpresa(empresaId);
+
+        res.json({
+            plantilla: contenido,
+            variables: VARIABLES_DISPONIBLES,
+            origen,
+            plantillaId: plantillaId || null,
+            nombrePlantilla: nombre || null
+        });
+    } catch (error: any) {
+        console.error('Error obteniendo plantilla default:', error);
+        // Fallback seguro
+        res.json({
+            plantilla: cargarPlantillaPorDefecto(),
+            variables: VARIABLES_DISPONIBLES,
+            origen: 'archivo',
+            plantillaId: null,
+            nombrePlantilla: null
+        });
+    }
+});
+
+// Variables disponibles
+router.get('/variables', verificarAutenticacion, verificarPermiso('nomina.gestion'), (_req: Request, res: Response) => {
+    res.json(VARIABLES_DISPONIBLES);
+});
+
+// ==================== GENERAR CONTRATO PDF ====================
 
 router.post('/generar', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req: Request, res: Response) => {
     try {
-        const { empleado_id, contrato_details } = req.body;
+        const { empresaId, userId: usuarioId } = req.context;
+        const { empleado_id, contrato_details, contrato_template } = req.body;
 
         if (!empleado_id || !contrato_details) {
             return res.status(400).json({ error: 'Faltan datos requeridos (empleado_id o contrato_details)' });
         }
 
-        // 1. Fetch Company Info
-        const empresa: any = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM config_facturacion ORDER BY id DESC LIMIT 1', [], (err, row) => {
-                if (err) reject(err);
-                resolve(row || {});
-            });
-        });
+        // 1. Determinar la plantilla a usar
+        let templateOriginal: string;
+        if (contrato_template && typeof contrato_template === 'string' && contrato_template.trim().length > 0) {
+            if (contrato_template.length > MAX_TEMPLATE_LENGTH) {
+                return res.status(400).json({ 
+                    error: `La plantilla excede el límite de ${MAX_TEMPLATE_LENGTH.toLocaleString()} caracteres` 
+                });
+            }
+            templateOriginal = sanitizarPlantilla(contrato_template);
+        } else {
+            // Usar plantilla de empresa o archivo por defecto
+            const { contenido } = await obtenerPlantillaEmpresa(empresaId);
+            templateOriginal = contenido;
+        }
 
-        // 2. Fetch Employee Info
-        const empleado: any = await new Promise((resolve, reject) => {
-            db.get('SELECT * FROM empleados WHERE id = ?', [empleado_id], (err, row) => {
-                if (err) reject(err);
-                resolve(row);
-            });
-        });
+        // 2. Fetch Company Info
+        const empresa = await db.selectFrom('config_facturacion')
+            .selectAll()
+            .where('empresa_id', '=', empresaId)
+            // @ts-ignore
+            .where('activo', '=', true)
+            .executeTakeFirst();
+
+        // 3. Fetch Employee Info
+        const empleado = await db.selectFrom('empleados')
+            .selectAll()
+            .where('id', '=', empleado_id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
 
         if (!empleado) {
             return res.status(404).json({ error: 'Empleado no encontrado' });
         }
 
-        // 3. Prepare Variables
-        // Empresa
-        const NOMBRE_EMPLEADOR = empresa.representante_legal ? empresa.representante_legal.toUpperCase() : 'REPRESENTANTE LEGAL';
-        const IDENTIFICACION_EMPLEADOR = empresa.nit || 'NIT';
-        const RAZON_SOCIAL = empresa.nombre_empresa ? empresa.nombre_empresa.toUpperCase() : 'CASA MONTIS';
-        const DIRECCION_EMPRESA = empresa.direccion ? empresa.direccion.toUpperCase() : '';
-        const MUNICIPIO_EMPRESA = empresa.ciudad ? empresa.ciudad.toUpperCase() : (empresa.ubicacion_geografica ? empresa.ubicacion_geografica.toUpperCase() : '');
+        // 4. Preparar variables de reemplazo
+        const RAZON_SOCIAL = ((empresa as any)?.nombre_empresa || empresa?.razon_social || 'MONTIS CLOUD').toUpperCase();
+        const NOMBRE_EMPLEADOR = RAZON_SOCIAL; 
+        const IDENTIFICACION_EMPLEADOR = (empresa as any)?.nit || empresa?.rut || 'NIT';
+        const DIRECCION_EMPRESA = (empresa?.direccion || '').toUpperCase();
+        const MUNICIPIO_EMPRESA = ((empresa as any)?.ciudad || empresa?.giro || '').toUpperCase(); 
 
-        // Empleado
         const NOMBRE_TRABAJADOR = `${empleado.nombres} ${empleado.apellidos}`.toUpperCase();
-        const CEDULA_TRABAJADOR = empleado.numero_documento;
-        const DIRECCION_TRABAJADOR = empleado.direccion ? empleado.direccion.toUpperCase() : '';
-        const MUNICIPIO_TRABAJADOR = empleado.municipio ? empleado.municipio.toUpperCase() : ''; 
+        const CEDULA_TRABAJADOR = empleado.numero_documento || '';
+        const DIRECCION_TRABAJADOR = (empleado.direccion || '').toUpperCase();
+        const MUNICIPIO_TRABAJADOR = (empleado.municipio || '').toUpperCase(); 
         
-        const CARGO = empleado.cargo ? empleado.cargo.toUpperCase() : '';
+        const CARGO = (empleado.cargo || '').toUpperCase();
         const SALARIO = empleado.salario_base || 0;
-        const SALARIO_LETRAS = numeroALetras(SALARIO);
+        const SALARIO_LETRAS = numeroALetras(Number(SALARIO));
 
-        // Form Details
         const {
             TIPO_CONTRATO,
             DURACION_CONTRATO,
@@ -96,19 +415,11 @@ router.post('/generar', verificarAutenticacion, verificarPermiso('nomina.gestion
             FECHA_FIRMA
         } = contrato_details;
 
-        // Formatear fechas si vienen en YYYY-MM-DD
         const fechaInicioFmt = formatearFechaLegible(FECHA_INICIO);
         const fechaFinFmt = formatearFechaLegible(FECHA_FIN);
         const fechaFirmaFmt = formatearFechaLegible(FECHA_FIRMA);
 
-        // 4. Read Template
-        const templatePath = path.resolve(__dirname, '../../CONTRATO.TXT');
-        if (!fs.existsSync(templatePath)) {
-            return res.status(500).json({ error: 'Plantilla de contrato no encontrada en el servidor' });
-        }
-        let content = fs.readFileSync(templatePath, 'utf-8');
-
-        // 5. Replace Variables
+        // 5. Reemplazar variables en la plantilla
         const replacements: {[key: string]: string} = {
             '{{NOMBRE_EMPLEADOR}}': NOMBRE_EMPLEADOR,
             '{{IDENTIFICACION_EMPLEADOR}}': IDENTIFICACION_EMPLEADOR,
@@ -120,7 +431,7 @@ router.post('/generar', verificarAutenticacion, verificarPermiso('nomina.gestion
             '{{DIRECCION_TRABAJADOR}}': DIRECCION_TRABAJADOR,
             '{{MUNICIPIO_TRABAJADOR}}': MUNICIPIO_TRABAJADOR,
             '{{CARGO}}': CARGO,
-            '{{SALARIO}}': `$${SALARIO.toLocaleString('es-CO')}`,
+            '{{SALARIO}}': `$${Number(SALARIO).toLocaleString('es-CO')}`,
             '{{SALARIO_LETRAS}}': `${SALARIO_LETRAS} PESOS M/CTE`,
             '{{TIPO_CONTRATO}}': TIPO_CONTRATO ? TIPO_CONTRATO.toUpperCase() : '_______________',
             '{{DURACION_CONTRATO}}': DURACION_CONTRATO ? DURACION_CONTRATO.toUpperCase() : '_______________',
@@ -136,16 +447,14 @@ router.post('/generar', verificarAutenticacion, verificarPermiso('nomina.gestion
             '{{FECHA_FIRMA}}': fechaFirmaFmt
         };
 
-        // Replace bullets and problematic characters for Helvetica
-        content = content.replace(/[•·▪]/g, '-');
-        content = content.replace(/\t/g, '    '); // Replace tabs with spaces
+        let content = templateOriginal;
+        content = content.replace(/\t/g, '    ');
 
         for (const [key, value] of Object.entries(replacements)) {
-            // Global replace (replaceAll logic)
             content = content.split(key).join(value || '');
         }
 
-        // 6. Generate PDF
+        // 6. Generar PDF
         const doc = new PDFDocument({ 
             margin: 50,
             size: 'LETTER'
@@ -157,137 +466,155 @@ router.post('/generar', verificarAutenticacion, verificarPermiso('nomina.gestion
 
         doc.pipe(writeStream);
 
-        // Content processing
-        const paragraphs = content.split(/\r?\n/); // Split by lines to preserve structure better
+        const paragraphs = content.split(/\r?\n/);
         
-        // Use Arial if available, otherwise fallback to Helvetica
         const fontRegular = fs.existsSync('C:/Windows/Fonts/arial.ttf') ? 'C:/Windows/Fonts/arial.ttf' : 'Helvetica';
         const fontBold = fs.existsSync('C:/Windows/Fonts/arialbd.ttf') ? 'C:/Windows/Fonts/arialbd.ttf' : 'Helvetica-Bold';
+        const fontItalic = fs.existsSync('C:/Windows/Fonts/ariali.ttf') ? 'C:/Windows/Fonts/ariali.ttf' : 'Helvetica-Oblique';
 
         doc.font(fontRegular).fontSize(12);
 
         let previousLineWasEmpty = false;
-        let inSignatureSection = false;
 
         for (let i = 0; i < paragraphs.length; i++) {
             const line = paragraphs[i];
             const trimmedLine = line.trim();
             
-            // Detect signature section start (usually starts with many underscores after the content)
+            // Detectar bloque de firma (EL EMPLEADOR / EL TRABAJADOR)
             if (trimmedLine.startsWith('EL EMPLEADOR,') && line.includes('EL TRABAJADOR,')) {
-                inSignatureSection = true;
-                doc.moveDown(2);
-                
-                // Draw signatures in two columns
+                // FIX BUG: Asegurar que el bloque completo de firmas quepa en la página actual
+                const signatureBlockHeight = 180;
+                const pageBottom = doc.page.height - doc.page.margins.bottom;
+                if (doc.y + signatureBlockHeight > pageBottom) {
+                    doc.addPage();
+                }
+
+                doc.moveDown(1.5);
                 const startY = doc.y;
                 const columnWidth = (doc.page.width - 100) / 2;
+                const leftX = 50;
+                const rightX = 50 + columnWidth;
                 
-                // 1. Labels
                 doc.font(fontBold).fontSize(12);
-                doc.text('EL EMPLEADOR,', 50, startY, { width: columnWidth, align: 'left' });
-                doc.text('EL TRABAJADOR,', 50 + columnWidth, startY, { width: columnWidth, align: 'left' });
+                doc.text('EL EMPLEADOR,', leftX, startY, { width: columnWidth, align: 'left' });
+                doc.text('EL TRABAJADOR,', rightX, startY, { width: columnWidth, align: 'left' });
                 
-                // 2. Lines (underscores)
-                doc.moveDown(3);
+                doc.moveDown(2);
                 const lineY = doc.y;
-                doc.text('____________________', 50, lineY, { width: columnWidth, align: 'left' });
-                doc.text('____________________', 50 + columnWidth, lineY, { width: columnWidth, align: 'left' });
+                doc.text('____________________', leftX, lineY, { width: columnWidth, align: 'left' });
+                doc.text('____________________', rightX, lineY, { width: columnWidth, align: 'left' });
                 
-                // 3. Names and CC
-                doc.moveDown(1);
+                doc.moveDown(0.8);
                 const nameY = doc.y;
-                
-                // However, it's better to just use the variables directly here to be safe
                 doc.font(fontRegular).fontSize(11);
-                doc.text(NOMBRE_EMPLEADOR, 50, nameY, { width: columnWidth, align: 'left' });
-                doc.text(NOMBRE_TRABAJADOR, 50 + columnWidth, nameY, { width: columnWidth, align: 'left' });
+                doc.text(NOMBRE_EMPLEADOR, leftX, nameY, { width: columnWidth, align: 'left' });
+                doc.text(NOMBRE_TRABAJADOR, rightX, nameY, { width: columnWidth, align: 'left' });
                 
-                doc.moveDown(0.5);
+                doc.moveDown(0.3);
                 const ccY = doc.y;
-                doc.text(`C.C. ${IDENTIFICACION_EMPLEADOR}`, 50, ccY, { width: columnWidth, align: 'left' });
-                doc.text(`C.C. ${CEDULA_TRABAJADOR}`, 50 + columnWidth, ccY, { width: columnWidth, align: 'left' });
+                doc.text(`C.C. ${IDENTIFICACION_EMPLEADOR}`, leftX, ccY, { width: columnWidth, align: 'left' });
+                doc.text(`C.C. ${CEDULA_TRABAJADOR}`, rightX, ccY, { width: columnWidth, align: 'left' });
                 
-                // Skip the next lines since we already handled them
-                i = paragraphs.length; // End loop
+                i = paragraphs.length;
                 continue;
             }
 
             if (trimmedLine === '') {
-                if (!previousLineWasEmpty) {
-                     doc.moveDown();
-                }
+                if (!previousLineWasEmpty) doc.moveDown(0.5);
                 previousLineWasEmpty = true;
                 continue;
             }
             previousLineWasEmpty = false;
 
-            // Check for titles
-            const isTitle = trimmedLine.startsWith('ARTÍCULO') || 
-                            trimmedLine.startsWith('CONTRATO DE TRABAJO') ||
-                            trimmedLine === 'Entre las partes:';
+            // Parsear estilo dominante de la línea (marcado ligero)
+            const { style, text: lineText } = parseLineStyle(trimmedLine);
 
-            if (isTitle) {
-                doc.moveDown(0.5);
-                doc.font(fontBold).fontSize(14);
-                doc.text(trimmedLine, { align: 'left' });
-                doc.font(fontRegular).fontSize(12);
-            } else {
-                 // Regular text
-                 // If it starts with dash (was bullet), indent
-                 if (trimmedLine.startsWith('-')) {
-                     doc.text(trimmedLine, { indent: 15, align: 'justify' });
-                 } else {
-                     doc.text(trimmedLine, { align: 'justify' });
-                 }
+            switch (style) {
+                case 'bold':
+                    doc.moveDown(0.3);
+                    doc.font(fontBold).fontSize(13);
+                    doc.text(lineText, { align: 'left' });
+                    doc.font(fontRegular).fontSize(12);
+                    break;
+
+                case 'italic':
+                    doc.font(fontItalic).fontSize(12);
+                    doc.text(lineText, { align: 'justify' });
+                    doc.font(fontRegular).fontSize(12);
+                    break;
+
+                case 'underline':
+                    doc.font(fontRegular).fontSize(12);
+                    doc.text(lineText, { align: 'justify', underline: true });
+                    break;
+
+                case 'bullet':
+                    doc.font(fontRegular).fontSize(12);
+                    doc.text(`  \u2022  ${lineText}`, { indent: 10, align: 'justify' });
+                    break;
+
+                case 'normal':
+                default:
+                    doc.font(fontRegular).fontSize(12);
+                    doc.text(lineText, { align: 'justify' });
+                    break;
             }
         }
 
         doc.end();
 
+        // 7. Esperar a que el PDF se escriba y LUEGO guardar en historial
         writeStream.on('finish', async () => {
             try {
-                // Save to database
-                const usuario_nombre = (req as any).user?.usuario || 'Sistema';
-                const usuario_id = (req as any).user?.id || null;
+                const usuario_nombre = req.context.nombre || 'Sistema';
 
-                await new Promise<void>((resolve, reject) => {
-                    db.run(`
-                        INSERT INTO contratos (
-                            empleado_id, tipo_contrato, fecha_inicio, fecha_fin, 
-                            duracion_contrato, cargo, salario, file_name, file_path, 
-                            contrato_details, usuario_id, usuario_nombre
-                        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                    `, [
-                        empleado_id,
-                        TIPO_CONTRATO,
-                        FECHA_INICIO,
-                        FECHA_FIN || null,
-                        DURACION_CONTRATO,
-                        empleado.cargo,
-                        empleado.salario_base,
-                        fileName,
-                        filePath,
-                        JSON.stringify(contrato_details),
-                        usuario_id,
-                        usuario_nombre
-                    ], (err) => {
-                        if (err) reject(err);
-                        else resolve();
+                // Construir valores del INSERT
+                const insertValues: any = {
+                    empresa_id: empresaId,
+                    empleado_id: empleado_id,
+                    tipo_contrato: TIPO_CONTRATO || 'DESCONOCIDO',
+                    fecha_inicio: new Date(FECHA_INICIO),
+                    fecha_fin: FECHA_FIN ? new Date(FECHA_FIN) : null,
+                    duracion_contrato: DURACION_CONTRATO || null,
+                    cargo: empleado.cargo || null,
+                    salario: empleado.salario_base || null,
+                    file_name: fileName,
+                    file_path: filePath,
+                    contrato_details: JSON.stringify(contrato_details),
+                    contrato_template: templateOriginal,
+                    usuario_id: usuarioId || null,
+                    usuario_nombre: usuario_nombre
+                };
+
+                const insertResult = await db.insertInto('contratos')
+                    .values(insertValues)
+                    .returning('id')
+                    .executeTakeFirst();
+
+                if (!insertResult) {
+                    console.error('❌ INSERT en contratos no retornó ID');
+                    return res.status(500).json({ 
+                        error: 'El contrato PDF se generó pero no se pudo guardar en el historial.',
+                        url: `/api/contratos/download/${fileName}`,
+                        file_name: fileName
                     });
-                });
+                }
+
+                console.log(`✅ Contrato historial guardado: ${insertResult.id} | empleado: ${empleado_id}`);
 
                 res.json({ 
                     success: true, 
-                    message: 'Contrato generado correctamente',
+                    message: 'Contrato generado y guardado en historial correctamente',
                     url: `/api/contratos/download/${fileName}`,
-                    file_name: fileName
+                    file_name: fileName,
+                    contrato_id: insertResult.id
                 });
-            } catch (dbErr) {
-                console.error('Error saving contract to DB:', dbErr);
-                // Even if DB fails, we have the file, but we should notify or handle it
-                res.json({ 
-                    success: true, 
-                    message: 'Contrato generado correctamente (Error guardando en historial)',
+            } catch (dbErr: any) {
+                console.error('❌ Error guardando contrato en historial:', dbErr.message || dbErr);
+
+                // FIX BUG 1: No enmascarar el error - reportarlo correctamente
+                res.status(500).json({ 
+                    error: `Contrato PDF generado pero error al guardar historial: ${dbErr.message || 'Error de base de datos'}`,
                     url: `/api/contratos/download/${fileName}`,
                     file_name: fileName
                 });
@@ -305,10 +632,10 @@ router.post('/generar', verificarAutenticacion, verificarPermiso('nomina.gestion
     }
 });
 
-// Download route
+// ==================== DOWNLOAD ====================
+
 router.get('/download/:filename', (req, res) => {
     const filename = req.params.filename;
-    // Sanitize filename to prevent directory traversal
     const safeFilename = path.basename(filename);
     const filePath = path.join(storageDir, safeFilename);
     
@@ -319,25 +646,24 @@ router.get('/download/:filename', (req, res) => {
     }
 });
 
-// Historial por empleado
+// ==================== HISTORIAL ====================
+
 router.get('/historial/:empleado_id', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req, res) => {
     try {
         const { empleado_id } = req.params;
-        const historial: any[] = await new Promise((resolve, reject) => {
-            db.all(`
-                SELECT * FROM contratos 
-                WHERE empleado_id = ? 
-                ORDER BY created_at DESC
-            `, [empleado_id], (err, rows) => {
-                if (err) reject(err);
-                resolve(rows || []);
-            });
-        });
+        const { empresaId } = req.context;
+        
+        const historial = await db.selectFrom('contratos')
+            .selectAll()
+            .where('empleado_id', '=', empleado_id)
+            .where('empresa_id', '=', empresaId)
+            .orderBy('created_at', 'desc')
+            .execute();
 
-        // Parse JSON details for each contract
         const result = historial.map(c => ({
             ...c,
-            contrato_details: c.contrato_details ? JSON.parse(c.contrato_details) : {}
+            contrato_details: c.contrato_details ? (typeof c.contrato_details === 'string' ? JSON.parse(c.contrato_details as string) : c.contrato_details) : {},
+            contrato_template: (c as any).contrato_template || null
         }));
 
         res.json(result);
@@ -347,40 +673,35 @@ router.get('/historial/:empleado_id', verificarAutenticacion, verificarPermiso('
     }
 });
 
-// Eliminar contrato
+// ==================== ELIMINAR CONTRATO ====================
+
 router.delete('/:id', verificarAutenticacion, verificarPermiso('nomina.gestion'), async (req, res) => {
     try {
         const { id } = req.params;
+        const { empresaId } = req.context;
 
-        // 1. Obtener información del contrato para borrar el archivo
-        const contrato: any = await new Promise((resolve, reject) => {
-            db.get('SELECT file_path FROM contratos WHERE id = ?', [id], (err, row) => {
-                if (err) reject(err);
-                resolve(row);
-            });
-        });
+        const contrato = await db.selectFrom('contratos')
+            .select('file_path')
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
 
         if (!contrato) {
             return res.status(404).json({ error: 'Contrato no encontrado' });
         }
 
-        // 2. Borrar el archivo físico si existe
         if (contrato.file_path && fs.existsSync(contrato.file_path)) {
             try {
                 fs.unlinkSync(contrato.file_path);
             } catch (err) {
                 console.error('Error al borrar el archivo físico del contrato:', err);
-                // Continuamos aunque falle el borrado del archivo
             }
         }
 
-        // 3. Borrar el registro de la base de datos
-        await new Promise<void>((resolve, reject) => {
-            db.run('DELETE FROM contratos WHERE id = ?', [id], (err) => {
-                if (err) reject(err);
-                resolve();
-            });
-        });
+        await db.deleteFrom('contratos')
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
 
         res.json({ success: true, message: 'Contrato eliminado correctamente' });
     } catch (error: any) {

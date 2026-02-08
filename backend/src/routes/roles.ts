@@ -1,304 +1,220 @@
-import express, { Request, Response } from 'express';
-import { db } from '../database/init';
-import { verificarAutenticacion, verificarSuperUsuario } from '../middleware/authMiddleware';
-import { Rol, PermisoRol } from '../models';
+import { Router, Request, Response } from 'express';
+import { db } from '../database/database';
+import { verificarAutenticacion, verificarPermiso, verificarSuperUsuario } from '../middleware/authMiddleware';
 
-const router = express.Router();
+const router = Router();
 
-// Aplicar autenticación a todas las rutas
 router.use(verificarAutenticacion);
 
-/**
- * GET /api/roles
- * Listar todos los roles (solo superusuarios)
- */
-router.get('/', verificarSuperUsuario, (req: Request, res: Response) => {
-  db.all(`
-    SELECT 
-      r.id,
-      r.nombre,
-      r.descripcion,
-      r.es_superusuario,
-      r.activo,
-      r.created_at,
-      COUNT(DISTINCT u.id) as cantidad_usuarios
-    FROM roles r
-    LEFT JOIN usuarios u ON r.id = u.rol_id AND u.activo = 1
-    GROUP BY r.id
-    ORDER BY r.nombre
-  `, [], (err, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener roles:', err);
-      return res.status(500).json({ error: 'Error al obtener roles' });
-    }
+// Listar Roles (Superusuario o ver_roles)
+router.get('/', verificarSuperUsuario, async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    
+    // Roles de la empresa con conteo de usuarios
+    const roles = await db.selectFrom('roles')
+        .leftJoin('usuarios', 'usuarios.rol_id', 'roles.id')
+        .select([
+          'roles.id', 
+          'roles.nombre', 
+          'roles.descripcion', 
+          'roles.activo',
+          'roles.es_superusuario',
+          'roles.created_at',
+          db.fn.count('usuarios.id').as('cantidad_usuarios')
+        ])
+        .where('roles.empresa_id', '=', empresaId)
+        .groupBy(['roles.id', 'roles.nombre', 'roles.descripcion', 'roles.activo', 'roles.es_superusuario', 'roles.created_at'])
+        .orderBy('roles.nombre')
+        .execute();
 
-    res.json(rows);
-  });
-});
-
-/**
- * GET /api/roles/:id
- * Obtener un rol específico con sus permisos
- */
-router.get('/:id', verificarSuperUsuario, (req: Request, res: Response) => {
-  const { id } = req.params;
-
-  db.get(`
-    SELECT 
-      r.id,
-      r.nombre,
-      r.descripcion,
-      r.es_superusuario,
-      r.activo,
-      r.created_at,
-      COUNT(DISTINCT u.id) as cantidad_usuarios
-    FROM roles r
-    LEFT JOIN usuarios u ON r.id = u.rol_id AND u.activo = 1
-    WHERE r.id = ?
-    GROUP BY r.id
-  `, [id], (err, rol: any) => {
-    if (err) {
-      console.error('Error al obtener rol:', err);
-      return res.status(500).json({ error: 'Error al obtener rol' });
-    }
-
-    if (!rol) {
-      return res.status(404).json({ error: 'Rol no encontrado' });
-    }
-
-    // Obtener permisos del rol
-    db.all(`
-      SELECT id, permiso, activo
-      FROM permisos_rol
-      WHERE rol_id = ?
-    `, [id], (err, permisos: any[]) => {
-      if (err) {
-        console.error('Error al obtener permisos:', err);
-        return res.status(500).json({ error: 'Error al obtener permisos' });
-      }
-
-      res.json({
-        ...rol,
-        permisos
-      });
-    });
-  });
-});
-
-/**
- * POST /api/roles
- * Crear un nuevo rol con permisos (solo superusuarios)
- */
-router.post('/', verificarSuperUsuario, (req: Request, res: Response) => {
-  const { nombre, descripcion, es_superusuario, permisos, activo } = req.body;
-
-  // Validaciones
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre del rol es requerido' });
+    res.json(roles);
+  } catch (error) {
+    console.error('Error fetching roles:', error);
+    res.status(500).json({ error: 'Error al obtener roles' });
   }
-
-  // Verificar que el rol no exista
-  db.get('SELECT id FROM roles WHERE nombre = ?', [nombre], (err, row) => {
-    if (err) {
-      console.error('Error al verificar rol:', err);
-      return res.status(500).json({ error: 'Error al verificar rol' });
-    }
-
-    if (row) {
-      return res.status(400).json({ error: 'Ya existe un rol con ese nombre' });
-    }
-
-    // Crear rol
-    db.run(`
-      INSERT INTO roles (nombre, descripcion, es_superusuario, activo)
-      VALUES (?, ?, ?, ?)
-    `, [
-      nombre,
-      descripcion || null,
-      es_superusuario || false,
-      activo !== undefined ? activo : true
-    ], function(err) {
-      if (err) {
-        console.error('Error al crear rol:', err);
-        return res.status(500).json({ error: 'Error al crear rol' });
-      }
-
-      const rolId = this.lastID;
-
-      // Si se proporcionaron permisos, agregarlos
-      if (permisos && Array.isArray(permisos) && permisos.length > 0) {
-        const stmt = db.prepare(`
-          INSERT INTO permisos_rol (rol_id, permiso, activo) VALUES (?, ?, 1)
-        `);
-
-        permisos.forEach((permiso: string) => {
-          stmt.run([rolId, permiso]);
-        });
-
-        stmt.finalize((err) => {
-          if (err) {
-            console.error('Error al agregar permisos:', err);
-          }
-        });
-      }
-
-      console.log(`✅ Rol creado: ${nombre} (ID: ${rolId})`);
-      res.status(201).json({ 
-        id: rolId,
-        mensaje: 'Rol creado exitosamente' 
-      });
-    });
-  });
 });
 
-/**
- * PUT /api/roles/:id
- * Actualizar un rol y sus permisos (solo superusuarios)
- */
-router.put('/:id', verificarSuperUsuario, (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { nombre, descripcion, es_superusuario, permisos, activo } = req.body;
+// Crear Rol
+router.post('/', verificarSuperUsuario, async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+        const { nombre, descripcion, es_superusuario = false, permisos = [], activo = true } = req.body;
 
-  // Validación básica
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre del rol es requerido' });
-  }
+        // Crear el rol
+        const newRol = await db.insertInto('roles')
+            .values({
+                empresa_id: empresaId,
+                nombre,
+                descripcion,
+                es_superusuario,
+                activo
+            })
+            .returningAll()
+            .executeTakeFirstOrThrow();
+        
+        // Si hay permisos y no es superusuario, asignarlos
+        if (permisos.length > 0 && !es_superusuario) {
+            // Obtener IDs de permisos por clave
+            const permisosDb = await db.selectFrom('permisos')
+                .select(['id', 'clave'])
+                .where('clave', 'in', permisos)
+                .execute();
 
-  // Verificar que el rol existe
-  db.get('SELECT id FROM roles WHERE id = ?', [id], (err, row) => {
-    if (err) {
-      console.error('Error al verificar rol:', err);
-      return res.status(500).json({ error: 'Error al verificar rol' });
+            // Insertar relaciones rol-permiso
+            for (const permiso of permisosDb) {
+                await db.insertInto('permisos_rol')
+                    .values({
+                        rol_id: newRol.id,
+                        permiso_id: permiso.id,
+                        empresa_id: empresaId
+                    })
+                    .execute();
+            }
+        }
+        
+        res.status(201).json(newRol);
+    } catch (error) {
+        console.error('Error creating rol:', error);
+        res.status(500).json({ error: 'Error al crear rol' });
     }
+});
 
-    if (!row) {
-      return res.status(404).json({ error: 'Rol no encontrado' });
-    }
+// Detalle Rol (con permisos)
+router.get('/:id', verificarSuperUsuario, async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+        const { id } = req.params;
 
-    // Actualizar rol
-    db.run(`
-      UPDATE roles 
-      SET 
-        nombre = ?,
-        descripcion = ?,
-        es_superusuario = ?,
-        activo = ?,
-        updated_at = CURRENT_TIMESTAMP
-      WHERE id = ?
-    `, [
-      nombre,
-      descripcion || null,
-      es_superusuario || false,
-      activo !== undefined ? activo : true,
-      id
-    ], function(err) {
-      if (err) {
-        console.error('Error al actualizar rol:', err);
-        return res.status(500).json({ error: 'Error al actualizar rol' });
-      }
+        const rol = await db.selectFrom('roles')
+            .selectAll()
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
+        
+        if (!rol) {
+            res.status(404).json({ error: 'Rol no encontrado' });
+            return;
+        }
 
-      // Si se proporcionaron permisos, actualizarlos
-      if (permisos && Array.isArray(permisos)) {
-        // Primero, eliminar todos los permisos existentes
-        db.run('DELETE FROM permisos_rol WHERE rol_id = ?', [id], (err) => {
-          if (err) {
-            console.error('Error al eliminar permisos anteriores:', err);
-          }
+        // Obtener permisos asignados al rol
+        const permisosRol = await db.selectFrom('permisos_rol')
+            .innerJoin('permisos', 'permisos.id', 'permisos_rol.permiso_id')
+            .select(['permisos.clave as permiso', 'permisos.nombre'])
+            .where('permisos_rol.rol_id', '=', id)
+            .where('permisos_rol.empresa_id', '=', empresaId)
+            .execute();
 
-          // Luego, agregar los nuevos permisos
-          if (permisos.length > 0) {
-            const stmt = db.prepare(`
-              INSERT INTO permisos_rol (rol_id, permiso, activo) VALUES (?, ?, 1)
-            `);
-
-            permisos.forEach((permiso: string) => {
-              stmt.run([id, permiso]);
-            });
-
-            stmt.finalize((err) => {
-              if (err) {
-                console.error('Error al agregar nuevos permisos:', err);
-              }
-            });
-          }
+        res.json({
+            ...rol,
+            permisos: permisosRol
         });
-      }
-
-      console.log(`✅ Rol actualizado: ID ${id}`);
-      res.json({ mensaje: 'Rol actualizado exitosamente' });
-    });
-  });
+    } catch (error) {
+        console.error('Error obteniendo rol:', error);
+        res.status(500).json({ error: 'Error obteniendo rol' });
+    }
 });
 
-/**
- * DELETE /api/roles/:id
- * Desactivar rol (soft delete) (solo superusuarios)
- * Solo si no tiene usuarios asignados
- */
-router.delete('/:id', verificarSuperUsuario, (req: Request, res: Response) => {
-  const { id } = req.params;
+// Actualizar Rol
+router.put('/:id', verificarSuperUsuario, async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+        const { id } = req.params;
+        const { nombre, descripcion, es_superusuario, permisos, activo } = req.body;
 
-  // Verificar que el rol no tenga usuarios activos
-  db.get(`
-    SELECT COUNT(*) as count
-    FROM usuarios
-    WHERE rol_id = ? AND activo = 1
-  `, [id], (err, row: any) => {
-    if (err) {
-      console.error('Error al verificar usuarios:', err);
-      return res.status(500).json({ error: 'Error al verificar usuarios del rol' });
+        // Actualizar datos básicos del rol
+        const updateData: any = {};
+        if (nombre !== undefined) updateData.nombre = nombre;
+        if (descripcion !== undefined) updateData.descripcion = descripcion;
+        if (es_superusuario !== undefined) updateData.es_superusuario = es_superusuario;
+        if (activo !== undefined) updateData.activo = activo;
+
+        const result = await db.updateTable('roles')
+            .set(updateData)
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .returningAll()
+            .executeTakeFirst();
+        
+        if (!result) {
+            res.status(404).json({ error: 'Rol no encontrado' });
+            return;
+        }
+
+        // Actualizar permisos si se proporcionaron
+        if (permisos !== undefined && !es_superusuario) {
+            // Eliminar permisos actuales
+            await db.deleteFrom('permisos_rol')
+                .where('rol_id', '=', id)
+                .where('empresa_id', '=', empresaId)
+                .execute();
+
+            // Insertar nuevos permisos
+            if (permisos.length > 0) {
+                const permisosDb = await db.selectFrom('permisos')
+                    .select(['id', 'clave'])
+                    .where('clave', 'in', permisos)
+                    .execute();
+
+                for (const permiso of permisosDb) {
+                    await db.insertInto('permisos_rol')
+                        .values({
+                            rol_id: id,
+                            permiso_id: permiso.id,
+                            empresa_id: empresaId
+                        })
+                        .execute();
+                }
+            }
+        }
+
+        // Si es superusuario, asignar todos los permisos
+        if (es_superusuario) {
+            // Eliminar permisos individuales (superusuario tiene todos)
+            await db.deleteFrom('permisos_rol')
+                .where('rol_id', '=', id)
+                .where('empresa_id', '=', empresaId)
+                .execute();
+
+            // Asignar todos los permisos
+            const todosPermisos = await db.selectFrom('permisos').select('id').execute();
+            for (const permiso of todosPermisos) {
+                await db.insertInto('permisos_rol')
+                    .values({
+                        rol_id: id,
+                        permiso_id: permiso.id,
+                        empresa_id: empresaId
+                    })
+                    .execute();
+            }
+        }
+
+        res.json(result);
+    } catch (error) {
+        console.error('Error actualizando rol:', error);
+        res.status(500).json({ error: 'Error actualizando rol' });
     }
-
-    if (row.count > 0) {
-      return res.status(400).json({ 
-        error: `No se puede eliminar el rol porque tiene ${row.count} usuario(s) asignado(s)` 
-      });
-    }
-
-    // Desactivar rol
-    db.run(`
-      UPDATE roles SET activo = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?
-    `, [id], function(err) {
-      if (err) {
-        console.error('Error al desactivar rol:', err);
-        return res.status(500).json({ error: 'Error al desactivar rol' });
-      }
-
-      if (this.changes === 0) {
-        return res.status(404).json({ error: 'Rol no encontrado' });
-      }
-
-      console.log(`✅ Rol desactivado: ID ${id}`);
-      res.json({ mensaje: 'Rol desactivado exitosamente' });
-    });
-  });
 });
 
-/**
- * GET /api/roles/:id/usuarios
- * Obtener usuarios asignados a un rol
- */
-router.get('/:id/usuarios', verificarSuperUsuario, (req: Request, res: Response) => {
-  const { id } = req.params;
+// Eliminar Rol
+router.delete('/:id', verificarSuperUsuario, async (req: Request, res: Response) => {
+    try {
+        const { empresaId } = req.context;
+        const { id } = req.params;
 
-  db.all(`
-    SELECT 
-      u.id,
-      u.usuario,
-      u.nombre_completo,
-      u.activo,
-      u.ultimo_login
-    FROM usuarios u
-    WHERE u.rol_id = ?
-    ORDER BY u.nombre_completo
-  `, [id], (err, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener usuarios del rol:', err);
-      return res.status(500).json({ error: 'Error al obtener usuarios del rol' });
+        const result = await db.deleteFrom('roles')
+            .where('id', '=', id)
+            .where('empresa_id', '=', empresaId)
+            .executeTakeFirst();
+        
+        if (Number(result.numDeletedRows) === 0) {
+            res.status(404).json({ error: 'Rol no encontrado' });
+            return;
+        }
+        res.json({ success: true });
+    } catch (error) {
+        res.status(500).json({ error: 'Error eliminando rol' });
     }
-
-    res.json(rows);
-  });
 });
 
 export default router;

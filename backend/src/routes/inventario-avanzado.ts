@@ -1,8 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../database/init';
+import { db } from '../database/database';
 import * as XLSX from 'xlsx';
+import { sql } from 'kysely';
+import { verificarAutenticacion } from '../middleware/authMiddleware';
 
 const router = Router();
+
+router.use(verificarAutenticacion);
 
 const UNIDADES_VALIDAS = ['g', 'kg', 'ml', 'unidad'];
 
@@ -21,42 +25,6 @@ const combinarEstadoRiesgo = (estadoActual: string | null, nuevoEstado: string) 
   return 'OK';
 };
 
-const runAsync = (sql: string, params: any[] = []): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, (err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve();
-    });
-  });
-};
-
-const getAsync = (sql: string, params: any[] = []): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(row);
-    });
-  });
-};
-
-const allAsync = (sql: string, params: any[] = []): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(rows || []);
-    });
-  });
-};
-
 const normalizarNumero = (valor: any) => {
   if (valor === null || valor === undefined || valor === '') return null;
   const num = Number(valor);
@@ -64,31 +32,64 @@ const normalizarNumero = (valor: any) => {
 };
 
 const registrarHistorialInsumo = async (data: {
-  insumo_id: number;
+  empresa_id: string;
+  insumo_id: string;
   cantidad: number;
   unidad_medida: string;
-  producto_id?: number | null;
+  producto_id?: string | null;
   comanda_id?: string | null;
   tipo_evento: string;
   motivo?: string | null;
-  usuario_id?: number | null;
-  proveedor_id?: number | null;
-}) => {
-  await runAsync(
-    `INSERT INTO insumo_historial (insumo_id, cantidad, unidad_medida, producto_id, comanda_id, tipo_evento, motivo, usuario_id, proveedor_id)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
-    , [
-      data.insumo_id,
-      data.cantidad,
-      data.unidad_medida,
-      data.producto_id ?? null,
-      data.comanda_id ?? null,
-      data.tipo_evento,
-      data.motivo ?? null,
-      data.usuario_id ?? null,
-      data.proveedor_id ?? null
-    ]
-  );
+  usuario_id?: string | null;
+  proveedor_id?: string | null;
+}, trx?: any) => {
+  const client = trx || db;
+  await client.insertInto('insumo_historial')
+    .values({
+      empresa_id: data.empresa_id,
+      insumo_id: data.insumo_id,
+      cantidad: data.cantidad,
+      unidad_medida: data.unidad_medida,
+      producto_id: data.producto_id || null,
+      comanda_id: data.comanda_id || null,
+      tipo_evento: data.tipo_evento,
+      motivo: data.motivo || null,
+      usuario_id: data.usuario_id || null,
+      proveedor_id: data.proveedor_id || null
+    })
+    .execute();
+};
+
+// ===================== AUTO-GENERACIÓN DE SKU =====================
+
+/**
+ * Genera el siguiente código SKU disponible para una tabla/empresa.
+ * Formato: PREFIJO-NNN (ej: PROD-001, INS-042)
+ * Nunca reutiliza números — siempre incrementa sobre el máximo existente.
+ */
+const generarSiguienteCodigo = async (
+  tabla: 'productos' | 'insumos' | 'items_personalizacion' | 'categorias_personalizacion',
+  prefijo: string,
+  empresaId: string,
+  trx?: any
+): Promise<string> => {
+  const client = trx || db;
+  const result = await sql`
+    SELECT codigo FROM ${sql.table(tabla)}
+    WHERE empresa_id = ${empresaId}
+      AND codigo LIKE ${prefijo + '-%'}
+    ORDER BY codigo DESC
+    LIMIT 1
+  `.execute(client);
+
+  let nextNum = 1;
+  if ((result.rows as any[]).length > 0) {
+    const last = (result.rows as any[])[0].codigo as string;
+    const num = parseInt(last.replace(prefijo + '-', ''), 10);
+    if (!isNaN(num)) nextNum = num + 1;
+  }
+
+  return `${prefijo}-${String(nextNum).padStart(3, '0')}`;
 };
 
 const validarInsumo = (data: any) => {
@@ -124,62 +125,70 @@ const validarInsumo = (data: any) => {
 
 // ===================== INSUMOS =====================
 
-router.get('/insumos', (req: Request, res: Response) => {
-  const query = `
-    SELECT i.*, ic.nombre as categoria_nombre 
-    FROM insumos i 
-    LEFT JOIN insumo_categorias ic ON i.categoria_id = ic.id 
-    WHERE i.activo = 1 
-    ORDER BY i.nombre
-  `;
-  db.all(query, [], (err, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener insumos:', err);
-      return res.status(500).json({ error: 'Error al obtener insumos' });
-    }
+router.get('/insumos', async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    const rows = await db.selectFrom('insumos as i')
+      .leftJoin('insumo_categorias as ic', 'i.categoria_id', 'ic.id')
+      .select([
+        'i.id', 'i.empresa_id', 'i.codigo', 'i.nombre', 'i.unidad_medida', 
+        'i.stock_actual', 'i.stock_minimo', 'i.stock_critico', 
+        'i.costo_unitario', 'i.categoria_id', 'i.activo', 
+        'i.created_at', 'i.updated_at',
+        'ic.nombre as categoria_nombre'
+      ])
+      .where('i.empresa_id', '=', empresaId)
+      .where('i.activo', '=', true)
+      .orderBy('i.nombre', 'asc')
+      .execute();
 
     const insumos = rows.map(row => ({
       ...row,
-      activo: row.activo === 1,
-      estado: calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico)
+      estado: calcularEstadoInsumo(Number(row.stock_actual), Number(row.stock_minimo), Number(row.stock_critico))
     }));
 
     res.json(insumos);
-  });
+  } catch (error) {
+    console.error('Error al obtener insumos:', error);
+    res.status(500).json({ error: 'Error al obtener insumos' });
+  }
 });
 
 router.post('/insumos', async (req: Request, res: Response) => {
-  const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id } = req.body;
-  const validacion = validarInsumo({ nombre, unidad_medida, stock_actual, stock_minimo, stock_critico });
-
-  if (validacion.errores.length > 0) {
-    return res.status(400).json({ error: validacion.errores.join(' | ') });
-  }
-
   try {
-    await runAsync(
-      `INSERT INTO insumos (nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        nombre.trim(),
-        unidad_medida,
-        validacion.stockActual,
-        validacion.stockMinimo,
-        validacion.stockCritico,
-        normalizarNumero(costo_unitario),
-        categoria_id || null
-      ]
-    );
+    const { empresaId } = req.context;
+    const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id } = req.body;
+    const validacion = validarInsumo({ nombre, unidad_medida, stock_actual, stock_minimo, stock_critico });
 
-    const creado = await getAsync('SELECT * FROM insumos WHERE id = (SELECT last_insert_rowid())');
+    if (validacion.errores.length > 0) {
+      return res.status(400).json({ error: validacion.errores.join(' | ') });
+    }
+
+    const codigoAuto = await generarSiguienteCodigo('insumos', 'INS', empresaId);
+
+    const nuevo = await db.insertInto('insumos')
+      .values({
+        empresa_id: empresaId,
+        codigo: codigoAuto,
+        nombre: nombre.trim(),
+        unidad_medida,
+        stock_actual: validacion.stockActual as any,
+        stock_minimo: validacion.stockMinimo as any,
+        stock_critico: validacion.stockCritico as any,
+        costo_unitario: normalizarNumero(costo_unitario) as any,
+        categoria_id: categoria_id || null,
+        activo: true
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+
     res.status(201).json({
-      ...creado,
-      activo: creado.activo === 1,
-      estado: calcularEstadoInsumo(creado.stock_actual, creado.stock_minimo, creado.stock_critico)
+      ...nuevo,
+      estado: calcularEstadoInsumo(Number(nuevo.stock_actual), Number(nuevo.stock_minimo), Number(nuevo.stock_critico))
     });
   } catch (error: any) {
     console.error('Error al crear insumo:', error);
-    if (error.message && error.message.includes('UNIQUE')) {
+    if (error.constraint === 'insumos_nombre_empresa_unique' || (error.message && error.message.includes('unique'))) {
       return res.status(400).json({ error: 'Ya existe un insumo con ese nombre' });
     }
     res.status(500).json({ error: 'Error al crear insumo' });
@@ -187,45 +196,44 @@ router.post('/insumos', async (req: Request, res: Response) => {
 });
 
 router.put('/insumos/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id, activo } = req.body;
-  const validacion = validarInsumo({ nombre, unidad_medida, stock_actual, stock_minimo, stock_critico });
-
-  if (validacion.errores.length > 0) {
-    return res.status(400).json({ error: validacion.errores.join(' | ') });
-  }
-
   try {
-    await runAsync(
-      `UPDATE insumos
-       SET nombre = ?, unidad_medida = ?, stock_actual = ?, stock_minimo = ?, stock_critico = ?, costo_unitario = ?, categoria_id = ?, activo = ?, updated_at = CURRENT_TIMESTAMP
-       WHERE id = ?`,
-      [
-        nombre.trim(),
-        unidad_medida,
-        validacion.stockActual,
-        validacion.stockMinimo,
-        validacion.stockCritico,
-        normalizarNumero(costo_unitario),
-        categoria_id || null,
-        activo === undefined ? 1 : (activo ? 1 : 0),
-        id
-      ]
-    );
+    const { id } = req.params;
+    const { empresaId } = req.context;
+    const { nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario, categoria_id, activo } = req.body;
+    const validacion = validarInsumo({ nombre, unidad_medida, stock_actual, stock_minimo, stock_critico });
 
-    const actualizado = await getAsync('SELECT * FROM insumos WHERE id = ?', [id]);
+    if (validacion.errores.length > 0) {
+      return res.status(400).json({ error: validacion.errores.join(' | ') });
+    }
+
+    const actualizado = await db.updateTable('insumos')
+      .set({
+        nombre: nombre.trim(),
+        unidad_medida,
+        stock_actual: validacion.stockActual as any,
+        stock_minimo: validacion.stockMinimo as any,
+        stock_critico: validacion.stockCritico as any,
+        costo_unitario: normalizarNumero(costo_unitario) as any,
+        categoria_id: categoria_id || null,
+        activo: activo !== undefined ? !!activo : undefined,
+        updated_at: new Date() as any
+      })
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .returningAll()
+      .executeTakeFirst();
+
     if (!actualizado) {
       return res.status(404).json({ error: 'Insumo no encontrado' });
     }
 
     res.json({
       ...actualizado,
-      activo: actualizado.activo === 1,
-      estado: calcularEstadoInsumo(actualizado.stock_actual, actualizado.stock_minimo, actualizado.stock_critico)
+      estado: calcularEstadoInsumo(Number(actualizado.stock_actual), Number(actualizado.stock_minimo), Number(actualizado.stock_critico))
     });
   } catch (error: any) {
     console.error('Error al actualizar insumo:', error);
-    if (error.message && error.message.includes('UNIQUE')) {
+    if (error.constraint === 'insumos_nombre_empresa_unique' || (error.message && error.message.includes('unique'))) {
       return res.status(400).json({ error: 'Ya existe un insumo con ese nombre' });
     }
     res.status(500).json({ error: 'Error al actualizar insumo' });
@@ -233,17 +241,34 @@ router.put('/insumos/:id', async (req: Request, res: Response) => {
 });
 
 router.delete('/insumos/:id', async (req: Request, res: Response) => {
-  const { id } = req.params;
-
   try {
-    const usosProducto = await getAsync('SELECT COUNT(*) as count FROM producto_insumos WHERE insumo_id = ?', [id]);
-    const usosPersonalizacion = await getAsync('SELECT COUNT(*) as count FROM personalizacion_insumos WHERE insumo_id = ?', [id]);
+    const { id } = req.params;
+    const { empresaId } = req.context;
 
-    if ((usosProducto?.count || 0) > 0 || (usosPersonalizacion?.count || 0) > 0) {
+    // Verificar si se usa en recetas
+    const usosProducto = await db.selectFrom('producto_insumos')
+      .select(sql<number>`count(*)`.as('count'))
+      .where('insumo_id', '=', id)
+      .executeTakeFirst();
+      
+    const usosPersonalizacion = await db.selectFrom('personalizacion_insumos')
+      .select(sql<number>`count(*)`.as('count'))
+      .where('insumo_id', '=', id)
+      .executeTakeFirst();
+
+    if (Number(usosProducto?.count || 0) > 0 || Number(usosPersonalizacion?.count || 0) > 0) {
       return res.status(400).json({ error: 'No se puede eliminar el insumo porque está asociado a recetas' });
     }
 
-    await runAsync('DELETE FROM insumos WHERE id = ?', [id]);
+    const result = await db.deleteFrom('insumos')
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+      
+    if (Number(result.numDeletedRows) === 0) {
+      return res.status(404).json({ error: 'Insumo no encontrado' });
+    }
+      
     res.json({ mensaje: 'Insumo eliminado exitosamente' });
   } catch (error) {
     console.error('Error al eliminar insumo:', error);
@@ -253,16 +278,22 @@ router.delete('/insumos/:id', async (req: Request, res: Response) => {
 
 // Ajuste manual de stock
 router.post('/insumos/:id/ajuste', async (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { cantidad, motivo, usuario_id, proveedor_id } = req.body;
-
-  const cantidadNum = Number(cantidad);
-  if (Number.isNaN(cantidadNum) || cantidadNum === 0) {
-    return res.status(400).json({ error: 'cantidad debe ser un número diferente de 0' });
-  }
-
   try {
-    const insumo = await getAsync('SELECT * FROM insumos WHERE id = ?', [id]);
+    const { id } = req.params;
+    const { empresaId } = req.context;
+    const { cantidad, motivo, usuario_id, proveedor_id } = req.body;
+
+    const cantidadNum = Number(cantidad);
+    if (Number.isNaN(cantidadNum) || cantidadNum === 0) {
+      return res.status(400).json({ error: 'cantidad debe ser un número diferente de 0' });
+    }
+
+    const insumo = await db.selectFrom('insumos')
+      .selectAll()
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+
     if (!insumo) {
       return res.status(404).json({ error: 'Insumo no encontrado' });
     }
@@ -273,26 +304,35 @@ router.post('/insumos/:id/ajuste', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'El ajuste deja el stock en negativo' });
     }
 
-    await runAsync(
-      'UPDATE insumos SET stock_actual = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-      [nuevoStock, id]
-    );
+    await db.transaction().execute(async (trx) => {
+      await trx.updateTable('insumos')
+        .set({ 
+          stock_actual: nuevoStock as any, 
+          updated_at: new Date() as any 
+        })
+        .where('id', '=', id)
+        .execute();
 
-    await registrarHistorialInsumo({
-      insumo_id: Number(id),
-      cantidad: cantidadNum,
-      unidad_medida: insumo.unidad_medida,
-      tipo_evento: 'AJUSTE',
-      motivo: motivo ? String(motivo) : 'Ajuste manual',
-      usuario_id: usuario_id ? Number(usuario_id) : null,
-      proveedor_id: proveedor_id ? Number(proveedor_id) : null
+      await registrarHistorialInsumo({
+        empresa_id: empresaId,
+        insumo_id: id,
+        cantidad: cantidadNum,
+        unidad_medida: insumo.unidad_medida,
+        tipo_evento: 'AJUSTE',
+        motivo: motivo ? String(motivo) : 'Ajuste manual',
+        usuario_id: usuario_id || null,
+        proveedor_id: proveedor_id || null
+      }, trx);
     });
 
-    const actualizado = await getAsync('SELECT * FROM insumos WHERE id = ?', [id]);
+    const actualizado = await db.selectFrom('insumos')
+      .selectAll()
+      .where('id', '=', id)
+      .executeTakeFirstOrThrow();
+
     res.json({
       ...actualizado,
-      activo: actualizado.activo === 1,
-      estado: calcularEstadoInsumo(actualizado.stock_actual, actualizado.stock_minimo, actualizado.stock_critico)
+      estado: calcularEstadoInsumo(Number(actualizado.stock_actual), Number(actualizado.stock_minimo), Number(actualizado.stock_critico))
     });
   } catch (error) {
     console.error('Error al ajustar insumo:', error);
@@ -302,94 +342,71 @@ router.post('/insumos/:id/ajuste', async (req: Request, res: Response) => {
 
 // Historial de movimientos
 router.get('/insumos/historial', async (req: Request, res: Response) => {
-  const { insumo_id, limit, fecha_inicio, fecha_fin } = req.query;
-  const limitNum = Math.min(Math.max(Number(limit) || 100, 1), 500);
-
   try {
-    const params: any[] = [];
-    let where = 'WHERE 1=1';
-    
+    const { empresaId } = req.context;
+    const { insumo_id, limit, fecha_inicio, fecha_fin } = req.query;
+    const limitNum = Math.min(Math.max(Number(limit) || 100, 1), 1000);
+
+    let query = db.selectFrom('insumo_historial as h')
+      .innerJoin('insumos as i', 'h.insumo_id', 'i.id')
+      .leftJoin('productos as p', 'h.producto_id', 'p.id')
+      .leftJoin('proveedores as prov', 'h.proveedor_id', 'prov.id')
+      .selectAll('h')
+      .select([
+        'i.nombre as insumo_nombre',
+        'p.nombre as producto_nombre',
+        'prov.nombre as proveedor_nombre'
+      ])
+      .where('h.empresa_id', '=', empresaId);
+
     if (insumo_id) {
-      where += ' AND h.insumo_id = ?';
-      params.push(Number(insumo_id));
+      query = query.where('h.insumo_id', '=', insumo_id as string);
     }
 
     if (fecha_inicio) {
-      where += ' AND DATE(h.fecha_hora) >= DATE(?)';
-      params.push(fecha_inicio);
+      query = query.where(sql`DATE(h.fecha_hora)`, '>=', fecha_inicio as string);
     }
 
     if (fecha_fin) {
-      where += ' AND DATE(h.fecha_hora) <= DATE(?)';
-      params.push(fecha_fin);
+      query = query.where(sql`DATE(h.fecha_hora)`, '<=', fecha_fin as string);
     }
 
-    const rows = await allAsync(
-      `SELECT h.*, i.nombre as insumo_nombre, p.nombre as producto_nombre, prov.nombre as proveedor_nombre
-       FROM insumo_historial h
-       JOIN insumos i ON h.insumo_id = i.id
-       LEFT JOIN productos p ON h.producto_id = p.id
-       LEFT JOIN proveedores prov ON h.proveedor_id = prov.id
-       ${where}
-       ORDER BY h.fecha_hora DESC
-       LIMIT ?`,
-      [...params, limitNum]
-    );
+    const rows = await query
+      .orderBy('h.fecha_hora', 'desc')
+      .limit(limitNum)
+      .execute();
 
-    res.json(rows || []);
+    res.json(rows);
   } catch (error) {
     console.error('Error al obtener historial de insumos:', error);
     res.status(500).json({ error: 'Error al obtener historial de insumos' });
   }
 });
 
-// Limpiar historial antiguo
-router.delete('/historial/limpiar', async (req: Request, res: Response) => {
-  const { dias } = req.body;
-  const diasNum = Number(dias);
-
-  if (isNaN(diasNum) || diasNum < 0) {
-    return res.status(400).json({ error: 'Días inválidos' });
-  }
-
-  try {
-    const query = `
-      DELETE FROM insumo_historial 
-      WHERE datetime(fecha_hora) < datetime('now', '-' || ? || ' days')
-    `;
-    
-    // Obtener cuántos se van a borrar (opcional para informar)
-    const countResult = await getAsync(
-      `SELECT COUNT(*) as count FROM insumo_historial WHERE datetime(fecha_hora) < datetime('now', '-' || ? || ' days')`,
-      [diasNum]
-    );
-
-    await runAsync(query, [diasNum]);
-
-    res.json({ 
-      message: `Se han eliminado ${countResult.count} registros del historial de más de ${diasNum} días.`,
-      deletedCount: countResult.count 
-    });
-  } catch (error) {
-    console.error('Error al limpiar historial:', error);
-    res.status(500).json({ error: 'Error al limpiar historial' });
-  }
-});
-
 // Riesgo por insumos en productos
 router.get('/riesgo/productos', async (req: Request, res: Response) => {
   try {
-    const rows = await allAsync(
-      `SELECT pi.producto_id, i.stock_actual, i.stock_minimo, i.stock_critico, pi.cantidad_usada
-       FROM producto_insumos pi
-       JOIN insumos i ON pi.insumo_id = i.id
-       JOIN productos p ON pi.producto_id = p.id
-       WHERE i.activo = 1 AND p.usa_insumos = 1`
-    );
+    const { empresaId } = req.context;
+    const rows = await db.selectFrom('producto_insumos as pi')
+      .innerJoin('insumos as i', 'pi.insumo_id', 'i.id')
+      .innerJoin('productos as p', 'pi.producto_id', 'p.id')
+      .select([
+        'pi.producto_id', 'i.stock_actual', 'i.stock_minimo', 
+        'i.stock_critico', 'pi.cantidad'
+      ])
+      .where('i.empresa_id', '=', empresaId)
+      .where('i.activo', '=', true)
+      .where('p.usa_insumos', '=', true)
+      .execute();
 
-    const riesgos = new Map<number, string>();
+    const riesgos = new Map<string, string>();
     rows.forEach(row => {
-      const estado = calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico, row.cantidad_usada);
+      const estado = calcularEstadoInsumo(
+        Number(row.stock_actual), 
+        Number(row.stock_minimo), 
+        Number(row.stock_critico), 
+        Number(row.cantidad)
+      );
       const actual = riesgos.get(row.producto_id) || null;
       riesgos.set(row.producto_id, combinarEstadoRiesgo(actual, estado));
     });
@@ -405,17 +422,27 @@ router.get('/riesgo/productos', async (req: Request, res: Response) => {
 // Riesgo por insumos en personalizaciones
 router.get('/riesgo/personalizaciones', async (req: Request, res: Response) => {
   try {
-    const rows = await allAsync(
-      `SELECT pi.item_personalizacion_id, i.stock_actual, i.stock_minimo, i.stock_critico, pi.cantidad_ajuste
-       FROM personalizacion_insumos pi
-       JOIN insumos i ON pi.insumo_id = i.id
-       JOIN items_personalizacion ip ON pi.item_personalizacion_id = ip.id
-       WHERE i.activo = 1 AND ip.usa_insumos = 1`
-    );
+    const { empresaId } = req.context;
+    const rows = await db.selectFrom('personalizacion_insumos as pi')
+      .innerJoin('insumos as i', 'pi.insumo_id', 'i.id')
+      .innerJoin('items_personalizacion as ip', 'pi.item_personalizacion_id', 'ip.id')
+      .select([
+        'pi.item_personalizacion_id', 'i.stock_actual', 'i.stock_minimo', 
+        'i.stock_critico', 'pi.cantidad'
+      ])
+      .where('i.empresa_id', '=', empresaId)
+      .where('i.activo', '=', true)
+      .where('ip.usa_insumos', '=', true)
+      .execute();
 
-    const riesgos = new Map<number, string>();
+    const riesgos = new Map<string, string>();
     rows.forEach(row => {
-      const estado = calcularEstadoInsumo(row.stock_actual, row.stock_minimo, row.stock_critico, row.cantidad_ajuste);
+      const estado = calcularEstadoInsumo(
+        Number(row.stock_actual), 
+        Number(row.stock_minimo), 
+        Number(row.stock_critico), 
+        Number(row.cantidad)
+      );
       const actual = riesgos.get(row.item_personalizacion_id) || null;
       riesgos.set(row.item_personalizacion_id, combinarEstadoRiesgo(actual, estado));
     });
@@ -430,156 +457,118 @@ router.get('/riesgo/personalizaciones', async (req: Request, res: Response) => {
 
 // ===================== RECETAS PRODUCTOS =====================
 
-router.get('/recetas/productos/:productoId', (req: Request, res: Response) => {
-  const { productoId } = req.params;
+router.get('/recetas/productos/:productoId', async (req: Request, res: Response) => {
+  try {
+    const { productoId } = req.params;
+    const { empresaId } = req.context;
 
-  const query = `
-    SELECT pi.*, i.nombre as insumo_nombre, i.unidad_medida
-    FROM producto_insumos pi
-    JOIN insumos i ON pi.insumo_id = i.id
-    WHERE pi.producto_id = ?
-    ORDER BY i.nombre
-  `;
+    const rows = await db.selectFrom('producto_insumos as pi')
+      .innerJoin('insumos as i', 'pi.insumo_id', 'i.id')
+      .select(['pi.id', 'pi.producto_id', 'pi.insumo_id', 'pi.cantidad as cantidad_usada', 'i.nombre as insumo_nombre', 'i.unidad_medida'])
+      .where('pi.producto_id', '=', productoId)
+      .where('i.empresa_id', '=', empresaId)
+      .orderBy('i.nombre', 'asc')
+      .execute();
 
-  db.all(query, [productoId], (err, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener receta:', err);
-      return res.status(500).json({ error: 'Error al obtener receta del producto' });
-    }
-
-    res.json(rows || []);
-  });
+    res.json(rows);
+  } catch (error) {
+    console.error('Error al obtener receta:', error);
+    res.status(500).json({ error: 'Error al obtener receta del producto' });
+  }
 });
 
 router.put('/recetas/productos/:productoId', async (req: Request, res: Response) => {
-  const { productoId } = req.params;
-  const { items } = req.body;
-
-  if (!Array.isArray(items)) {
-    return res.status(400).json({ error: 'items debe ser un array' });
-  }
-
-  const errores: string[] = [];
-  const recetas: { insumo_id: number; cantidad_usada: number }[] = [];
-
-  items.forEach((item: any, index: number) => {
-    const insumoId = Number(item.insumo_id);
-    const cantidad = Number(item.cantidad_usada);
-
-    if (!insumoId || Number.isNaN(insumoId)) {
-      errores.push(`Fila ${index + 1}: insumo_id inválido`);
-    }
-    if (!cantidad || Number.isNaN(cantidad) || cantidad <= 0) {
-      errores.push(`Fila ${index + 1}: cantidad_usada debe ser mayor a 0`);
-    }
-
-    if (!Number.isNaN(insumoId) && !Number.isNaN(cantidad) && cantidad > 0) {
-      recetas.push({ insumo_id: insumoId, cantidad_usada: cantidad });
-    }
-  });
-
-  if (errores.length > 0) {
-    return res.status(400).json({ error: errores.join(' | ') });
-  }
-
   try {
-    await runAsync('BEGIN TRANSACTION');
-    await runAsync('DELETE FROM producto_insumos WHERE producto_id = ?', [productoId]);
+    const { productoId } = req.params;
+    const { items } = req.body;
+    const { empresaId } = req.context;
 
-    for (const receta of recetas) {
-      await runAsync(
-        'INSERT INTO producto_insumos (producto_id, insumo_id, cantidad_usada) VALUES (?, ?, ?)',
-        [productoId, receta.insumo_id, receta.cantidad_usada]
-      );
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: 'items debe ser un array' });
     }
 
-    await runAsync('COMMIT');
+    const recetas = items.map((item: any) => ({
+      empresa_id: empresaId,
+      producto_id: productoId,
+      insumo_id: item.insumo_id,
+      cantidad: Number(item.cantidad_usada)
+    })).filter(r => r.insumo_id && r.cantidad > 0);
+
+    await db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('producto_insumos')
+        .where('producto_id', '=', productoId)
+        .where('empresa_id', '=', empresaId)
+        .execute();
+
+      if (recetas.length > 0) {
+        await trx.insertInto('producto_insumos')
+          .values(recetas)
+          .execute();
+      }
+    });
+
     res.json({ mensaje: 'Receta actualizada exitosamente' });
   } catch (error) {
     console.error('Error al actualizar receta:', error);
-    try {
-      await runAsync('ROLLBACK');
-    } catch {
-      // noop
-    }
     res.status(500).json({ error: 'Error al actualizar receta del producto' });
   }
 });
 
 // ===================== AJUSTES PERSONALIZACIONES =====================
 
-router.get('/recetas/personalizaciones/:itemId', (req: Request, res: Response) => {
-  const { itemId } = req.params;
+router.get('/recetas/personalizaciones/:itemId', async (req: Request, res: Response) => {
+  try {
+    const { itemId } = req.params;
+    const { empresaId } = req.context;
 
-  const query = `
-    SELECT pi.*, i.nombre as insumo_nombre, i.unidad_medida
-    FROM personalizacion_insumos pi
-    JOIN insumos i ON pi.insumo_id = i.id
-    WHERE pi.item_personalizacion_id = ?
-    ORDER BY i.nombre
-  `;
+    const rows = await db.selectFrom('personalizacion_insumos as pi')
+      .innerJoin('insumos as i', 'pi.insumo_id', 'i.id')
+      .select(['pi.item_personalizacion_id', 'pi.insumo_id', 'pi.cantidad as cantidad_ajuste', 'i.nombre as insumo_nombre', 'i.unidad_medida'])
+      .where('pi.item_personalizacion_id', '=', itemId)
+      .where('i.empresa_id', '=', empresaId)
+      .orderBy('i.nombre', 'asc')
+      .execute();
 
-  db.all(query, [itemId], (err, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener ajustes:', err);
-      return res.status(500).json({ error: 'Error al obtener ajustes de personalización' });
-    }
-
-    res.json(rows || []);
-  });
+    res.json(rows);
+  } catch (error) {
+    console.error('Error al obtener ajustes:', error);
+    res.status(500).json({ error: 'Error al obtener ajustes de personalización' });
+  }
 });
 
 router.put('/recetas/personalizaciones/:itemId', async (req: Request, res: Response) => {
-  const { itemId } = req.params;
-  const { items } = req.body;
-
-  if (!Array.isArray(items)) {
-    return res.status(400).json({ error: 'items debe ser un array' });
-  }
-
-  const errores: string[] = [];
-  const ajustes: { insumo_id: number; cantidad_ajuste: number }[] = [];
-
-  items.forEach((item: any, index: number) => {
-    const insumoId = Number(item.insumo_id);
-    const cantidad = Number(item.cantidad_ajuste);
-
-    if (!insumoId || Number.isNaN(insumoId)) {
-      errores.push(`Fila ${index + 1}: insumo_id inválido`);
-    }
-    if (!cantidad || Number.isNaN(cantidad) || cantidad === 0) {
-      errores.push(`Fila ${index + 1}: cantidad_ajuste debe ser diferente de 0`);
-    }
-
-    if (!Number.isNaN(insumoId) && !Number.isNaN(cantidad) && cantidad !== 0) {
-      ajustes.push({ insumo_id: insumoId, cantidad_ajuste: cantidad });
-    }
-  });
-
-  if (errores.length > 0) {
-    return res.status(400).json({ error: errores.join(' | ') });
-  }
-
   try {
-    await runAsync('BEGIN TRANSACTION');
-    await runAsync('DELETE FROM personalizacion_insumos WHERE item_personalizacion_id = ?', [itemId]);
+    const { itemId } = req.params;
+    const { items } = req.body;
+    const { empresaId } = req.context;
 
-    for (const ajuste of ajustes) {
-      await runAsync(
-        'INSERT INTO personalizacion_insumos (item_personalizacion_id, insumo_id, cantidad_ajuste) VALUES (?, ?, ?)',
-        [itemId, ajuste.insumo_id, ajuste.cantidad_ajuste]
-      );
+    if (!Array.isArray(items)) {
+      return res.status(400).json({ error: 'items debe ser un array' });
     }
 
-    await runAsync('COMMIT');
+    const ajustes = items.map((item: any) => ({
+      empresa_id: empresaId,
+      item_personalizacion_id: itemId,
+      insumo_id: item.insumo_id,
+      cantidad: Number(item.cantidad_ajuste)
+    })).filter(a => a.insumo_id && a.cantidad !== 0);
+
+    await db.transaction().execute(async (trx) => {
+      await trx.deleteFrom('personalizacion_insumos')
+        .where('item_personalizacion_id', '=', itemId)
+        .where('empresa_id', '=', empresaId)
+        .execute();
+
+      if (ajustes.length > 0) {
+        await trx.insertInto('personalizacion_insumos')
+          .values(ajustes)
+          .execute();
+      }
+    });
+
     res.json({ mensaje: 'Ajustes actualizados exitosamente' });
   } catch (error) {
     console.error('Error al actualizar ajustes:', error);
-    try {
-      await runAsync('ROLLBACK');
-    } catch {
-      // noop
-    }
     res.status(500).json({ error: 'Error al actualizar ajustes de personalización' });
   }
 });
@@ -588,18 +577,25 @@ router.put('/recetas/personalizaciones/:itemId', async (req: Request, res: Respo
 
 router.get('/insumos/export', async (req: Request, res: Response) => {
   try {
-    const insumos = await allAsync('SELECT * FROM insumos ORDER BY nombre');
-    const data = insumos.map(i => ({
-      id: i.id,
-      nombre: i.nombre,
-      unidad_medida: i.unidad_medida,
-      stock_actual: i.stock_actual,
-      stock_minimo: i.stock_minimo,
-      stock_critico: i.stock_critico,
-      costo_unitario: i.costo_unitario
-    }));
+    const { empresaId } = req.context;
+    const insumos = await db.selectFrom('insumos as i')
+      .leftJoin('insumo_categorias as ic', 'i.categoria_id', 'ic.id')
+      .select([
+        'i.codigo',
+        'i.nombre',
+        'i.unidad_medida',
+        'i.stock_actual',
+        'i.stock_minimo',
+        'i.stock_critico',
+        'i.costo_unitario',
+        'ic.nombre as categoria',
+        'i.activo'
+      ])
+      .where('i.empresa_id', '=', empresaId)
+      .orderBy('i.codigo', 'asc')
+      .execute();
 
-    const worksheet = XLSX.utils.json_to_sheet(data, { header: ['id', 'nombre', 'unidad_medida', 'stock_actual', 'stock_minimo', 'stock_critico', 'costo_unitario'] });
+    const worksheet = XLSX.utils.json_to_sheet(insumos);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Insumos');
 
@@ -615,12 +611,14 @@ router.get('/insumos/export', async (req: Request, res: Response) => {
 });
 
 router.post('/insumos/import', async (req: Request, res: Response) => {
-  const { fileBase64 } = req.body;
-  if (!fileBase64) {
-    return res.status(400).json({ error: 'fileBase64 es requerido' });
-  }
-
   try {
+    const { empresaId } = req.context;
+    const { fileBase64 } = req.body;
+    
+    if (!fileBase64) {
+      return res.status(400).json({ error: 'fileBase64 es requerido' });
+    }
+
     const buffer = Buffer.from(fileBase64, 'base64');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
     const sheetName = workbook.SheetNames[0];
@@ -631,108 +629,162 @@ router.post('/insumos/import', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'El archivo no contiene datos' });
     }
 
-    const errores: string[] = [];
-    const datosProcesados: any[] = [];
+    // Cargar categorías existentes para mapeo por nombre
+    const categorias = await db.selectFrom('insumo_categorias')
+      .select(['id', 'nombre'])
+      .where('empresa_id', '=', empresaId)
+      .execute();
+    const catMap = new Map(categorias.map(c => [c.nombre.toLowerCase(), c.id]));
 
-    rows.forEach((row, index) => {
-      const validacion = validarInsumo({
-        nombre: row.nombre,
-        unidad_medida: row.unidad_medida,
-        stock_actual: row.stock_actual,
-        stock_minimo: row.stock_minimo,
-        stock_critico: row.stock_critico
-      });
+    // Detectar códigos duplicados dentro del mismo Excel
+    const codigosEnExcel = rows.map(r => r.codigo?.toString().trim()).filter(Boolean);
+    const duplicadosExcel = codigosEnExcel.filter((c, i) => codigosEnExcel.indexOf(c) !== i);
 
-      if (validacion.errores.length > 0) {
-        errores.push(`Fila ${index + 2}: ${validacion.errores.join(', ')}`);
-        return;
+    const errores: { fila: number; mensaje: string }[] = [];
+    let creados = 0;
+    let actualizados = 0;
+
+    await db.transaction().execute(async (trx) => {
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx];
+        const fila = idx + 2; // +2 por header + 0-index
+
+        // Validar nombre obligatorio
+        if (!row.nombre || !String(row.nombre).trim()) {
+          errores.push({ fila, mensaje: 'Nombre es obligatorio' });
+          continue;
+        }
+
+        const validacion = validarInsumo({
+          nombre: row.nombre,
+          unidad_medida: row.unidad_medida,
+          stock_actual: row.stock_actual,
+          stock_minimo: row.stock_minimo,
+          stock_critico: row.stock_critico
+        });
+
+        if (validacion.errores.length > 0) {
+          errores.push({ fila, mensaje: validacion.errores.join('; ') });
+          continue;
+        }
+
+        const nombre = String(row.nombre).trim();
+        const codigoRaw = row.codigo?.toString().trim() || '';
+
+        // Verificar código duplicado dentro del Excel
+        if (codigoRaw && duplicadosExcel.includes(codigoRaw)) {
+          errores.push({ fila, mensaje: `Código "${codigoRaw}" duplicado en el archivo` });
+          continue;
+        }
+        
+        // Resolver categoría por nombre
+        let categoriaId: string | null = null;
+        if (row.categoria) {
+          categoriaId = catMap.get(String(row.categoria).toLowerCase()) || null;
+          if (!categoriaId) {
+            errores.push({ fila, mensaje: `Categoría "${row.categoria}" no encontrada` });
+            continue;
+          }
+        }
+
+        // Buscar registro existente por (empresa_id + codigo) o (empresa_id + nombre)
+        let existente: any = null;
+        if (codigoRaw) {
+          existente = await trx.selectFrom('insumos')
+            .select(['id', 'codigo'])
+            .where('empresa_id', '=', empresaId)
+            .where('codigo', '=', codigoRaw)
+            .executeTakeFirst();
+        }
+        if (!existente) {
+          existente = await trx.selectFrom('insumos')
+            .select(['id', 'codigo'])
+            .where('empresa_id', '=', empresaId)
+            .where('nombre', '=', nombre)
+            .executeTakeFirst();
+        }
+
+        if (existente) {
+          await trx.updateTable('insumos')
+            .set({
+              nombre,
+              unidad_medida: String(row.unidad_medida).trim(),
+              stock_actual: validacion.stockActual as any,
+              stock_minimo: validacion.stockMinimo as any,
+              stock_critico: validacion.stockCritico as any,
+              costo_unitario: normalizarNumero(row.costo_unitario) as any,
+              categoria_id: categoriaId,
+              activo: row.activo !== false && row.activo !== 0 && row.activo !== 'false',
+              updated_at: new Date() as any
+            })
+            .where('id', '=', existente.id)
+            .execute();
+          actualizados++;
+        } else {
+          const nuevoCodigo = codigoRaw || await generarSiguienteCodigo('insumos', 'INS', empresaId, trx);
+          await trx.insertInto('insumos')
+            .values({
+              empresa_id: empresaId,
+              codigo: nuevoCodigo,
+              nombre,
+              unidad_medida: String(row.unidad_medida).trim(),
+              stock_actual: validacion.stockActual as any,
+              stock_minimo: validacion.stockMinimo as any,
+              stock_critico: validacion.stockCritico as any,
+              costo_unitario: normalizarNumero(row.costo_unitario) as any,
+              categoria_id: categoriaId,
+              activo: row.activo !== false && row.activo !== 0 && row.activo !== 'false'
+            })
+            .execute();
+          creados++;
+        }
       }
-
-      datosProcesados.push({
-        nombre: String(row.nombre).trim(),
-        unidad_medida: String(row.unidad_medida).trim(),
-        stock_actual: validacion.stockActual,
-        stock_minimo: validacion.stockMinimo,
-        stock_critico: validacion.stockCritico,
-        costo_unitario: normalizarNumero(row.costo_unitario)
-      });
     });
 
-    if (errores.length > 0) {
-      return res.status(400).json({ error: errores.join(' | ') });
-    }
-
-    await runAsync('BEGIN TRANSACTION');
-
-    for (const insumo of datosProcesados) {
-      const existente = await getAsync('SELECT id FROM insumos WHERE nombre = ?', [insumo.nombre]);
-      if (existente) {
-        await runAsync(
-          `UPDATE insumos
-           SET unidad_medida = ?, stock_actual = ?, stock_minimo = ?, stock_critico = ?, costo_unitario = ?, updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [
-            insumo.unidad_medida,
-            insumo.stock_actual,
-            insumo.stock_minimo,
-            insumo.stock_critico,
-            insumo.costo_unitario,
-            existente.id
-          ]
-        );
-      } else {
-        await runAsync(
-          `INSERT INTO insumos (nombre, unidad_medida, stock_actual, stock_minimo, stock_critico, costo_unitario)
-           VALUES (?, ?, ?, ?, ?, ?)`,
-          [
-            insumo.nombre,
-            insumo.unidad_medida,
-            insumo.stock_actual,
-            insumo.stock_minimo,
-            insumo.stock_critico,
-            insumo.costo_unitario
-          ]
-        );
-      }
-    }
-
-    await runAsync('COMMIT');
-    res.json({ mensaje: 'Insumos importados exitosamente', total: datosProcesados.length });
+    res.json({ 
+      mensaje: `Importación completada: ${creados} creados, ${actualizados} actualizados`,
+      creados,
+      actualizados,
+      errores: errores.length > 0 ? errores : undefined
+    });
   } catch (error) {
     console.error('Error al importar insumos:', error);
-    try {
-      await runAsync('ROLLBACK');
-    } catch {
-      // noop
-    }
     res.status(500).json({ error: 'Error al importar insumos' });
   }
 });
 
 router.get('/recetas/export', async (req: Request, res: Response) => {
   try {
-    const recetas = await allAsync(`
-      SELECT pi.producto_id, p.nombre as producto_nombre, pi.insumo_id, i.nombre as insumo_nombre, pi.cantidad_usada
-      FROM producto_insumos pi
-      JOIN productos p ON pi.producto_id = p.id
-      JOIN insumos i ON pi.insumo_id = i.id
-      ORDER BY p.nombre, i.nombre
-    `);
+    const { empresaId } = req.context;
+    
+    const recetas = await db.selectFrom('producto_insumos as pi')
+      .innerJoin('productos as p', 'pi.producto_id', 'p.id')
+      .innerJoin('insumos as i', 'pi.insumo_id', 'i.id')
+      .select([
+        'p.codigo as producto_codigo', 'p.nombre as producto_nombre', 
+        'i.codigo as insumo_codigo', 'i.nombre as insumo_nombre', 
+        'pi.cantidad as cantidad_usada'
+      ])
+      .where('p.empresa_id', '=', empresaId)
+      .orderBy('p.nombre')
+      .orderBy('i.nombre')
+      .execute();
 
-    const ajustes = await allAsync(`
-      SELECT pi.item_personalizacion_id, ip.nombre as item_nombre, ip.categoria_id, pi.insumo_id, i.nombre as insumo_nombre, pi.cantidad_ajuste
-      FROM personalizacion_insumos pi
-      JOIN items_personalizacion ip ON pi.item_personalizacion_id = ip.id
-      JOIN insumos i ON pi.insumo_id = i.id
-      ORDER BY ip.nombre, i.nombre
-    `);
+    const ajustes = await db.selectFrom('personalizacion_insumos as pi')
+      .innerJoin('items_personalizacion as ip', 'pi.item_personalizacion_id', 'ip.id')
+      .innerJoin('insumos as i', 'pi.insumo_id', 'i.id')
+      .select([
+        'ip.codigo as item_codigo', 'ip.nombre as item_nombre', 
+        'i.codigo as insumo_codigo', 'i.nombre as insumo_nombre', 
+        'pi.cantidad as cantidad_ajuste'
+      ])
+      .where('ip.empresa_id', '=', empresaId)
+      .orderBy('ip.nombre')
+      .orderBy('i.nombre')
+      .execute();
 
-    const recetasSheet = XLSX.utils.json_to_sheet(recetas, {
-      header: ['producto_id', 'producto_nombre', 'insumo_id', 'insumo_nombre', 'cantidad_usada']
-    });
-    const ajustesSheet = XLSX.utils.json_to_sheet(ajustes, {
-      header: ['item_personalizacion_id', 'item_nombre', 'categoria_id', 'insumo_id', 'insumo_nombre', 'cantidad_ajuste']
-    });
+    const recetasSheet = XLSX.utils.json_to_sheet(recetas);
+    const ajustesSheet = XLSX.utils.json_to_sheet(ajustes);
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, recetasSheet, 'RecetasProductos');
@@ -750,128 +802,156 @@ router.get('/recetas/export', async (req: Request, res: Response) => {
 });
 
 router.post('/recetas/import', async (req: Request, res: Response) => {
-  const { fileBase64 } = req.body;
-  if (!fileBase64) {
-    return res.status(400).json({ error: 'fileBase64 es requerido' });
-  }
-
   try {
+    const { empresaId } = req.context;
+    const { fileBase64 } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: 'fileBase64 es requerido' });
+
     const buffer = Buffer.from(fileBase64, 'base64');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
 
     const recetasSheet = workbook.Sheets['RecetasProductos'];
     const ajustesSheet = workbook.Sheets['AjustesPersonalizaciones'];
 
-    const recetasRows: any[] = recetasSheet ? XLSX.utils.sheet_to_json(recetasSheet, { defval: null }) : [];
-    const ajustesRows: any[] = ajustesSheet ? XLSX.utils.sheet_to_json(ajustesSheet, { defval: null }) : [];
+    const recetasRows: any[] = recetasSheet ? XLSX.utils.sheet_to_json(recetasSheet) : [];
+    const ajustesRows: any[] = ajustesSheet ? XLSX.utils.sheet_to_json(ajustesSheet) : [];
 
-    const errores: string[] = [];
-    const recetasPorProducto = new Map<number, { insumo_id: number; cantidad_usada: number }[]>();
-    const ajustesPorItem = new Map<number, { insumo_id: number; cantidad_ajuste: number }[]>();
+    const errores: { fila: number; hoja: string; mensaje: string }[] = [];
 
-    for (const [index, row] of recetasRows.entries()) {
-      const productoId = normalizarNumero(row.producto_id);
-      const insumoId = normalizarNumero(row.insumo_id);
-      const cantidad = normalizarNumero(row.cantidad_usada);
+    // Cargar lookup de códigos → IDs para esta empresa
+    const productosDB = await db.selectFrom('productos').select(['id', 'codigo', 'nombre']).where('empresa_id', '=', empresaId).execute();
+    const insumosDB = await db.selectFrom('insumos').select(['id', 'codigo', 'nombre']).where('empresa_id', '=', empresaId).execute();
+    const itemsDB = await db.selectFrom('items_personalizacion').select(['id', 'codigo', 'nombre']).where('empresa_id', '=', empresaId).execute();
 
-      if (!productoId || !insumoId || !cantidad || cantidad <= 0) {
-        errores.push(`RecetasProductos fila ${index + 2}: producto_id, insumo_id y cantidad_usada son obligatorios`);
-        continue;
+    const prodMap = new Map(productosDB.map(p => [p.codigo, p.id]));
+    const prodNameMap = new Map(productosDB.map(p => [p.nombre.toLowerCase(), p.id]));
+    const insMap = new Map(insumosDB.map(i => [i.codigo, i.id]));
+    const insNameMap = new Map(insumosDB.map(i => [i.nombre.toLowerCase(), i.id]));
+    const itemMap = new Map(itemsDB.map(i => [i.codigo, i.id]));
+    const itemNameMap = new Map(itemsDB.map(i => [i.nombre.toLowerCase(), i.id]));
+
+    const resolverProductoId = (row: any): string | null => {
+      if (row.producto_codigo) return prodMap.get(row.producto_codigo) || null;
+      if (row.producto_nombre) return prodNameMap.get(row.producto_nombre.toLowerCase()) || null;
+      // Fallback legacy: si viene producto_id directamente
+      if (row.producto_id && productosDB.some(p => p.id === row.producto_id)) return row.producto_id;
+      return null;
+    };
+
+    const resolverInsumoId = (row: any): string | null => {
+      if (row.insumo_codigo) return insMap.get(row.insumo_codigo) || null;
+      if (row.insumo_nombre) return insNameMap.get(row.insumo_nombre.toLowerCase()) || null;
+      if (row.insumo_id && insumosDB.some(i => i.id === row.insumo_id)) return row.insumo_id;
+      return null;
+    };
+
+    const resolverItemId = (row: any): string | null => {
+      if (row.item_codigo) return itemMap.get(row.item_codigo) || null;
+      if (row.item_nombre) return itemNameMap.get(row.item_nombre.toLowerCase()) || null;
+      if (row.item_personalizacion_id && itemsDB.some(i => i.id === row.item_personalizacion_id)) return row.item_personalizacion_id;
+      return null;
+    };
+
+    await db.transaction().execute(async (trx) => {
+      // Procesar recetas de productos
+      const productosConRecetas = new Set<string>();
+      for (let idx = 0; idx < recetasRows.length; idx++) {
+        const row = recetasRows[idx];
+        const prodId = resolverProductoId(row);
+        if (!prodId) {
+          errores.push({ fila: idx + 2, hoja: 'RecetasProductos', mensaje: `Producto "${row.producto_codigo || row.producto_nombre || '?'}" no encontrado` });
+          continue;
+        }
+        const insId = resolverInsumoId(row);
+        if (!insId) {
+          errores.push({ fila: idx + 2, hoja: 'RecetasProductos', mensaje: `Insumo "${row.insumo_codigo || row.insumo_nombre || '?'}" no encontrado` });
+          continue;
+        }
+        // Limpiar recetas antiguas de este producto (solo una vez)
+        if (!productosConRecetas.has(prodId)) {
+          await trx.deleteFrom('producto_insumos')
+            .where('producto_id', '=', prodId)
+            .where('empresa_id', '=', empresaId)
+            .execute();
+          productosConRecetas.add(prodId);
+        }
+        await trx.insertInto('producto_insumos')
+          .values({
+            empresa_id: empresaId,
+            producto_id: prodId,
+            insumo_id: insId,
+            cantidad: Number(row.cantidad_usada) as any
+          })
+          .execute();
       }
 
-      if (!recetasPorProducto.has(productoId)) {
-        recetasPorProducto.set(productoId, []);
+      // Procesar ajustes de personalizaciones
+      const itemsConAjustes = new Set<string>();
+      for (let idx = 0; idx < ajustesRows.length; idx++) {
+        const row = ajustesRows[idx];
+        const itemId = resolverItemId(row);
+        if (!itemId) {
+          errores.push({ fila: idx + 2, hoja: 'AjustesPersonalizaciones', mensaje: `Item "${row.item_codigo || row.item_nombre || '?'}" no encontrado` });
+          continue;
+        }
+        const insId = resolverInsumoId(row);
+        if (!insId) {
+          errores.push({ fila: idx + 2, hoja: 'AjustesPersonalizaciones', mensaje: `Insumo "${row.insumo_codigo || row.insumo_nombre || '?'}" no encontrado` });
+          continue;
+        }
+        if (!itemsConAjustes.has(itemId)) {
+          await trx.deleteFrom('personalizacion_insumos')
+            .where('item_personalizacion_id', '=', itemId)
+            .where('empresa_id', '=', empresaId)
+            .execute();
+          itemsConAjustes.add(itemId);
+        }
+        await trx.insertInto('personalizacion_insumos')
+          .values({
+            empresa_id: empresaId,
+            item_personalizacion_id: itemId,
+            insumo_id: insId,
+            cantidad: Number(row.cantidad_ajuste) as any
+          })
+          .execute();
       }
+    });
 
-      recetasPorProducto.get(productoId)!.push({ insumo_id: insumoId, cantidad_usada: cantidad });
-    }
-
-    for (const [index, row] of ajustesRows.entries()) {
-      const itemId = normalizarNumero(row.item_personalizacion_id);
-      const insumoId = normalizarNumero(row.insumo_id);
-      const cantidad = normalizarNumero(row.cantidad_ajuste);
-
-      if (!itemId || !insumoId || !cantidad || cantidad === 0) {
-        errores.push(`AjustesPersonalizaciones fila ${index + 2}: item_personalizacion_id, insumo_id y cantidad_ajuste son obligatorios`);
-        continue;
-      }
-
-      if (!ajustesPorItem.has(itemId)) {
-        ajustesPorItem.set(itemId, []);
-      }
-
-      ajustesPorItem.get(itemId)!.push({ insumo_id: insumoId, cantidad_ajuste: cantidad });
-    }
-
-    if (errores.length > 0) {
-      return res.status(400).json({ error: errores.join(' | ') });
-    }
-
-    await runAsync('BEGIN TRANSACTION');
-
-    for (const [productoId, recetas] of recetasPorProducto.entries()) {
-      await runAsync('DELETE FROM producto_insumos WHERE producto_id = ?', [productoId]);
-      for (const receta of recetas) {
-        await runAsync(
-          'INSERT INTO producto_insumos (producto_id, insumo_id, cantidad_usada) VALUES (?, ?, ?)',
-          [productoId, receta.insumo_id, receta.cantidad_usada]
-        );
-      }
-    }
-
-    for (const [itemId, ajustes] of ajustesPorItem.entries()) {
-      await runAsync('DELETE FROM personalizacion_insumos WHERE item_personalizacion_id = ?', [itemId]);
-      for (const ajuste of ajustes) {
-        await runAsync(
-          'INSERT INTO personalizacion_insumos (item_personalizacion_id, insumo_id, cantidad_ajuste) VALUES (?, ?, ?)',
-          [itemId, ajuste.insumo_id, ajuste.cantidad_ajuste]
-        );
-      }
-    }
-
-    await runAsync('COMMIT');
-
-    res.json({
+    res.json({ 
       mensaje: 'Recetas importadas exitosamente',
-      productos_actualizados: recetasPorProducto.size,
-      personalizaciones_actualizadas: ajustesPorItem.size
+      errores: errores.length > 0 ? errores : undefined
     });
   } catch (error) {
     console.error('Error al importar recetas:', error);
-    try {
-      await runAsync('ROLLBACK');
-    } catch {
-      // noop
-    }
     res.status(500).json({ error: 'Error al importar recetas' });
   }
 });
 
 router.get('/productos/export', async (req: Request, res: Response) => {
   try {
-    const productos = await allAsync('SELECT * FROM productos ORDER BY categoria, nombre');
-    const data = productos.map(p => ({
-      id: p.id,
-      nombre: p.nombre,
-      descripcion: p.descripcion,
-      precio: p.precio,
-      categoria: p.categoria,
-      disponible: p.disponible,
-      tiene_personalizacion: p.tiene_personalizacion,
-      personalizaciones_habilitadas: p.personalizaciones_habilitadas,
-      usa_inventario: p.usa_inventario,
-      usa_insumos: p.usa_insumos,
-      cantidad_inicial: p.cantidad_inicial,
-      cantidad_actual: p.cantidad_actual
-    }));
+    const { empresaId } = req.context;
+    const productos = await db.selectFrom('productos as p')
+      .leftJoin('categorias_productos as c', 'p.categoria_id', 'c.id')
+      .select([
+        'p.codigo',
+        'c.nombre as categoria',
+        'p.nombre',
+        'p.descripcion',
+        'p.precio',
+        'p.disponible',
+        'p.tiene_personalizacion',
+        'p.personalizaciones_habilitadas',
+        'p.usa_inventario',
+        'p.usa_insumos',
+        'p.cantidad_inicial',
+        'p.cantidad_actual',
+        'p.stock'
+      ])
+      .where('p.empresa_id', '=', empresaId)
+      .orderBy('p.codigo', 'asc')
+      .execute();
 
-    const worksheet = XLSX.utils.json_to_sheet(data, {
-      header: [
-        'id', 'nombre', 'descripcion', 'precio', 'categoria', 'disponible',
-        'tiene_personalizacion', 'personalizaciones_habilitadas',
-        'usa_inventario', 'usa_insumos', 'cantidad_inicial', 'cantidad_actual'
-      ]
-    });
+    const worksheet = XLSX.utils.json_to_sheet(productos);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, 'Productos');
 
@@ -887,116 +967,116 @@ router.get('/productos/export', async (req: Request, res: Response) => {
 });
 
 router.post('/productos/import', async (req: Request, res: Response) => {
-  const { fileBase64 } = req.body;
-  if (!fileBase64) {
-    return res.status(400).json({ error: 'fileBase64 es requerido' });
-  }
-
   try {
+    const { empresaId } = req.context;
+    const { fileBase64 } = req.body;
+    if (!fileBase64) return res.status(400).json({ error: 'fileBase64 es requerido' });
+
     const buffer = Buffer.from(fileBase64, 'base64');
     const workbook = XLSX.read(buffer, { type: 'buffer' });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const rows: any[] = XLSX.utils.sheet_to_json(worksheet, { defval: null });
+    const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows: any[] = XLSX.utils.sheet_to_json(worksheet);
 
-    if (rows.length === 0) {
-      return res.status(400).json({ error: 'El archivo no contiene datos' });
-    }
+    // Obtener categorías existentes para mapear nombres a IDs
+    const categorias = await db.selectFrom('categorias_productos')
+      .where('empresa_id', '=', empresaId)
+      .select(['id', 'nombre'])
+      .execute();
+    const catMap = new Map(categorias.map(c => [c.nombre.toLowerCase(), c.id]));
 
-    const errores: string[] = [];
-    const productosProcesados: any[] = [];
+    // Detectar códigos duplicados en el Excel
+    const codigosEnExcel = rows.map(r => r.codigo?.toString().trim()).filter(Boolean);
+    const duplicadosExcel = codigosEnExcel.filter((c, i) => codigosEnExcel.indexOf(c) !== i);
 
-    rows.forEach((row, index) => {
-      if (!row.nombre || !row.precio || !row.categoria) {
-        errores.push(`Fila ${index + 2}: nombre, precio y categoria son obligatorios`);
-        return;
+    const errores: { fila: number; mensaje: string }[] = [];
+    let creados = 0;
+    let actualizados = 0;
+
+    await db.transaction().execute(async (trx) => {
+      for (let idx = 0; idx < rows.length; idx++) {
+        const row = rows[idx];
+        const fila = idx + 2;
+
+        if (!row.nombre || !String(row.nombre).trim()) {
+          errores.push({ fila, mensaje: 'Nombre es obligatorio' });
+          continue;
+        }
+
+        const codigoRaw = row.codigo?.toString().trim() || '';
+
+        if (codigoRaw && duplicadosExcel.includes(codigoRaw)) {
+          errores.push({ fila, mensaje: `Código "${codigoRaw}" duplicado en el archivo` });
+          continue;
+        }
+
+        // Resolver categoría por nombre
+        let catId: string | null = null;
+        if (row.categoria) {
+          catId = catMap.get(row.categoria.toString().toLowerCase()) || null;
+          if (!catId) {
+            errores.push({ fila, mensaje: `Categoría "${row.categoria}" no encontrada` });
+            continue;
+          }
+        }
+
+        const data: any = {
+          nombre: String(row.nombre).trim(),
+          descripcion: row.descripcion || null,
+          precio: normalizarNumero(row.precio) as any,
+          categoria_id: catId,
+          disponible: row.disponible === true || row.disponible === 1 || row.disponible === 'true' || row.disponible === 'VERDADERO',
+          tiene_personalizacion: row.tiene_personalizacion === true || row.tiene_personalizacion === 1 || row.tiene_personalizacion === 'true' || row.tiene_personalizacion === 'VERDADERO',
+          personalizaciones_habilitadas: row.personalizaciones_habilitadas ? String(row.personalizaciones_habilitadas) : null,
+          usa_inventario: row.usa_inventario === true || row.usa_inventario === 1 || row.usa_inventario === 'true' || row.usa_inventario === 'VERDADERO',
+          usa_insumos: row.usa_insumos === true || row.usa_insumos === 1 || row.usa_insumos === 'true' || row.usa_insumos === 'VERDADERO',
+          cantidad_inicial: normalizarNumero(row.cantidad_inicial),
+          cantidad_actual: normalizarNumero(row.cantidad_actual),
+          stock: normalizarNumero(row.stock || row.cantidad_actual),
+          updated_at: new Date() as any
+        };
+
+        // Buscar existente por (empresa_id + codigo) o (empresa_id + nombre)
+        let existente: any = null;
+        if (codigoRaw) {
+          existente = await trx.selectFrom('productos')
+            .select(['id', 'codigo'])
+            .where('empresa_id', '=', empresaId)
+            .where('codigo', '=', codigoRaw)
+            .executeTakeFirst();
+        }
+        if (!existente) {
+          existente = await trx.selectFrom('productos')
+            .select(['id', 'codigo'])
+            .where('empresa_id', '=', empresaId)
+            .where('nombre', '=', String(row.nombre).trim())
+            .executeTakeFirst();
+        }
+
+        if (existente) {
+          await trx.updateTable('productos')
+            .set(data)
+            .where('id', '=', existente.id)
+            .where('empresa_id', '=', empresaId)
+            .execute();
+          actualizados++;
+        } else {
+          const nuevoCodigo = codigoRaw || await generarSiguienteCodigo('productos', 'PROD', empresaId, trx);
+          await trx.insertInto('productos')
+            .values({ ...data, empresa_id: empresaId, codigo: nuevoCodigo })
+            .execute();
+          creados++;
+        }
       }
-
-      const precio = normalizarNumero(row.precio);
-      if (precio === null || precio < 0) {
-        errores.push(`Fila ${index + 2}: precio inválido`);
-        return;
-      }
-
-      productosProcesados.push({
-        id: row.id ? Number(row.id) : null,
-        nombre: String(row.nombre).trim(),
-        descripcion: row.descripcion ? String(row.descripcion) : null,
-        precio,
-        categoria: String(row.categoria).trim(),
-        disponible: row.disponible ? 1 : 0,
-        tiene_personalizacion: row.tiene_personalizacion ? 1 : 0,
-        personalizaciones_habilitadas: row.personalizaciones_habilitadas || null,
-        usa_inventario: row.usa_inventario ? 1 : 0,
-        usa_insumos: row.usa_insumos ? 1 : 0,
-        cantidad_inicial: normalizarNumero(row.cantidad_inicial),
-        cantidad_actual: normalizarNumero(row.cantidad_actual)
-      });
     });
 
-    if (errores.length > 0) {
-      return res.status(400).json({ error: errores.join(' | ') });
-    }
-
-    await runAsync('BEGIN TRANSACTION');
-
-    for (const producto of productosProcesados) {
-      if (producto.id) {
-        await runAsync(
-          `UPDATE productos
-           SET nombre = ?, descripcion = ?, precio = ?, categoria = ?, disponible = ?,
-               tiene_personalizacion = ?, personalizaciones_habilitadas = ?,
-               usa_inventario = ?, usa_insumos = ?, cantidad_inicial = ?, cantidad_actual = ?,
-               updated_at = CURRENT_TIMESTAMP
-           WHERE id = ?`,
-          [
-            producto.nombre,
-            producto.descripcion,
-            producto.precio,
-            producto.categoria,
-            producto.disponible,
-            producto.tiene_personalizacion,
-            producto.personalizaciones_habilitadas,
-            producto.usa_inventario,
-            producto.usa_insumos,
-            producto.cantidad_inicial,
-            producto.cantidad_actual,
-            producto.id
-          ]
-        );
-      } else {
-        await runAsync(
-          `INSERT INTO productos (
-             nombre, descripcion, precio, categoria, disponible,
-             tiene_personalizacion, personalizaciones_habilitadas,
-             usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual
-           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [
-            producto.nombre,
-            producto.descripcion,
-            producto.precio,
-            producto.categoria,
-            producto.disponible,
-            producto.tiene_personalizacion,
-            producto.personalizaciones_habilitadas,
-            producto.usa_inventario,
-            producto.usa_insumos,
-            producto.cantidad_inicial,
-            producto.cantidad_actual
-          ]
-        );
-      }
-    }
-
-    await runAsync('COMMIT');
-    res.json({ mensaje: 'Productos importados exitosamente', total: productosProcesados.length });
+    res.json({ 
+      mensaje: `Importación completada: ${creados} creados, ${actualizados} actualizados`,
+      creados,
+      actualizados,
+      errores: errores.length > 0 ? errores : undefined
+    });
   } catch (error) {
     console.error('Error al importar productos:', error);
-    try {
-      await runAsync('ROLLBACK');
-    } catch {
-      // noop
-    }
     res.status(500).json({ error: 'Error al importar productos' });
   }
 });

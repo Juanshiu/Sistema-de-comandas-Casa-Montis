@@ -1,971 +1,228 @@
 import express from 'express';
-import { db } from '../database/init';
-import { verificarAutenticacion as verifyToken, verificarPermiso as checkPermission } from '../middleware/authMiddleware';
-import { ConfiguracionNomina, Empleado, NominaDetalle, PagoNomina, HistorialNomina } from '../models';
 import { NominaService } from '../services/NominaService';
-import fs from 'fs';
-import path from 'path';
+import { verificarAutenticacion } from '../middleware/authMiddleware';
 
 const router = express.Router();
+const service = new NominaService();
 
-/**
- * GET /api/nomina/configuracion
- * Obtener configuración actual vigente
- */
-router.get('/configuracion', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const sql = `SELECT * FROM configuracion_nomina WHERE vigente = 1 ORDER BY id DESC LIMIT 1`;
-  
-  db.get(sql, [], (err, row) => {
-    if (err) {
-      console.error('Error al obtener configuración de nómina:', err);
-      return res.status(500).json({ error: 'Error al obtener configuración' });
-    }
-    
-    if (!row) {
-        // Si no existe configuración vigente, devolver un default vacío
-        // Esto permite que el frontend muestre el formulario sin error 404
-        return res.json({
-          anio: new Date().getFullYear(),
-          salario_minimo: 0,
-          auxilio_transporte: 0,
-          uvt: 0,
-          porc_salud_empleado: 0,
-          porc_pension_empleado: 0,
-          fondo_solidaridad_limite: 0,
-          porc_salud_empleador: 0,
-          porc_pension_empleador: 0,
-          porc_caja_comp: 0,
-          porc_sena: 0,
-          porc_icbf: 0,
-          porc_cesantias: 0,
-          porc_intereses_cesantias: 0,
-          porc_prima: 0,
-          porc_vacaciones: 0,
-          porc_recargo_dominical: 75,
-          porc_recargo_festivo: 75,
-          porc_extra_diurna_dominical: 100,
-          horas_mensuales: 240,
-          vigente: false
-        });
-    }
-    
-    res.json(row);
-  });
-});
+router.use(verificarAutenticacion);
 
-/**
- * PUT /api/nomina/configuracion
- * Actualizar configuración (Crear nueva versión vigente)
- */
-router.put('/configuracion', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const config = req.body as Partial<ConfiguracionNomina>;
-  
-  // 1. Desactivar la configuración anterior
-  db.run(`UPDATE configuracion_nomina SET vigente = 0 WHERE vigente = 1`, [], (err) => {
-      if(err) {
-           console.error('Error desactivando config anterior:', err);
-           return res.status(500).json({ error: 'Error actualizando configuración' });
-      }
-
-      // 2. Insertar nueva configuración
-      const sql = `
-        INSERT INTO configuracion_nomina (
-          anio, salario_minimo, auxilio_transporte, uvt,
-          porc_salud_empleado, porc_pension_empleado, fondo_solidaridad_limite,
-          porc_salud_empleador, porc_pension_empleador, porc_caja_comp, porc_sena, porc_icbf,
-          porc_cesantias, porc_intereses_cesantias, porc_prima, porc_vacaciones,
-          porc_recargo_dominical, porc_recargo_festivo, porc_extra_diurna_dominical, horas_mensuales,
-          vigente
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1)
-      `;
-      
-      const params = [
-        config.anio || new Date().getFullYear(),
-        config.salario_minimo, config.auxilio_transporte, config.uvt,
-        config.porc_salud_empleado, config.porc_pension_empleado, config.fondo_solidaridad_limite,
-        config.porc_salud_empleador, config.porc_pension_empleador, config.porc_caja_comp, config.porc_sena, config.porc_icbf,
-        config.porc_cesantias, config.porc_intereses_cesantias, config.porc_prima, config.porc_vacaciones,
-        config.porc_recargo_dominical || 75, config.porc_recargo_festivo || 75, config.porc_extra_diurna_dominical || 100, config.horas_mensuales || 240
-      ];
-      
-      db.run(sql, params, function(err) {
-        if (err) {
-          console.error('Error al crear nueva configuración de nómina:', err);
-          return res.status(500).json({ error: 'Error al guardar configuración' });
-        }
-        
-        db.get(`SELECT * FROM configuracion_nomina WHERE id = ?`, [this.lastID], (err, row) => {
-             if(err) return res.json({ message: "Configuración guardada", id: this.lastID });
-             res.json(row);
-        });
-      });
-  });
-});
-
-/**
- * POST /api/nomina/calcular
- * Calcular pre-nómina para un empleado (o todos)
- */
-router.post('/calcular', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const { empleado_id, dias_trabajados } = req.body;
-
+// --- CONFIGURACI�N ---
+router.get('/configuracion', async (req, res) => {
     try {
-        // 1. Obtener Configuración Vigente
-        const config: ConfiguracionNomina = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM configuracion_nomina WHERE vigente = 1", (err, row: any) => {
-                if(err) reject(err); else resolve(row);
-            });
-        });
+        const config = await service.obtenerConfiguracion(req.context.empresaId);
+        res.json(config);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        if (!config) return res.status(400).json({ error: 'No hay configuración de nómina vigente' });
+router.put('/configuracion', async (req, res) => {
+    try {
+        const config = await service.guardarConfiguracion(req.context.empresaId, req.body);
+        res.json(config);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        // 2. Obtener Empleado
-        const empleado: Empleado = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM empleados WHERE id = ?", [empleado_id], (err, row: any) => {
-                if(err) reject(err); else resolve(row);
-            });
-        });
+// --- EMPLEADOS ---
+router.get('/empleados', async (req, res) => {
+    try {
+        const empleados = await service.listarEmpleados(req.context.empresaId);
+        res.json(empleados);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        if (!empleado) return res.status(404).json({ error: 'Empleado no encontrado' });
+router.post('/empleados', async (req, res) => {
+    try {
+        const nuevo = await service.crearEmpleado(req.context.empresaId, req.body);
+        res.status(201).json(nuevo);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        const { 
-            dias_trabajados, 
-            horas_diurnas,
-            horas_dominicales_diurnas, 
-            horas_festivas_diurnas, 
-            horas_extra_diurna_dominical, 
-            comisiones, 
-            otras_deducciones,
-            periodo_mes,
-            periodo_anio,
-            usuario_nombre 
-        } = req.body;
+// --- GENERACIÓN ---
+router.post('/calcular', async (req, res) => {
+    try {
+        console.log('📊 Calcular nómina - Body:', req.body);
+        const resultado = await service.calcularNominaEmpleado(req.context.empresaId, req.body);
+        res.json(resultado);
+    } catch (error: any) {
+        console.error('❌ Error en /calcular:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        // 3. Calcular
-        const nominaCalculada = await NominaService.calcularNominaEmpleado(
-            empleado, 
-            dias_trabajados || 30, 
-            config,
-            {
-                horas_diurnas,
-                horas_dominicales_diurnas,
-                horas_festivas_diurnas,
-                horas_extra_diurna_dominical,
-                comisiones,
-                otras_deducciones,
-                periodo_mes,
-                periodo_anio,
-                usuario_nombre
-            }
+router.post('/generar', async (req, res) => {
+    try {
+        const { mes, anio } = req.body;
+        const resultados = await service.generarNominaMes(req.context.empresaId, mes, anio);
+        res.json(resultados);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- GUARDAR DETALLE DE NÓMINA ---
+router.post('/detalle/guardar', async (req, res) => {
+    try {
+        console.log('💾 Guardar nómina - Body:', req.body);
+        const resultado = await service.guardarNominaDetalle(req.context.empresaId, req.body);
+        res.json(resultado);
+    } catch (error: any) {
+        console.error('❌ Error en /detalle/guardar:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- HISTORIAL DE NÓMINA --- (debe estar ANTES de /:id)
+router.get('/historial', async (req, res) => {
+    try {
+        const { empleado_id, periodo_mes, periodo_anio } = req.query;
+        if (!empleado_id) {
+            return res.status(400).json({ error: 'empleado_id es requerido' });
+        }
+        const resultado = await service.obtenerHistorialNomina(
+            req.context.empresaId,
+            empleado_id as string,
+            periodo_mes as string | undefined,
+            periodo_anio ? parseInt(periodo_anio as string) : undefined
         );
-        
-        res.json(nominaCalculada);
-
+        res.json(resultado);
     } catch (error: any) {
-        console.error('Error calculando nómina:', error);
-        res.status(500).json({ error: error.message || 'Error interno' });
+        console.error('❌ Error en /historial:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-/**
- * POST /api/nomina/liquidacion/calcular
- * Calcular liquidación de un empleado
- */
-router.post('/liquidacion/calcular', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const { empleado_id, fecha_retiro, motivo_retiro, base_liquidacion_manual } = req.body;
-
+// --- ELIMINAR HISTORIAL DE NÓMINA ---
+router.delete('/historial', async (req, res) => {
     try {
-        // 1. Obtener Configuración
-        const config: ConfiguracionNomina = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM configuracion_nomina WHERE vigente = 1", (err, row: any) => {
-                if(err) reject(err); else resolve(row);
-            });
-        });
+        const { tipo, periodo_mes, periodo_anio, fecha_inicio, fecha_fin } = req.body;
+        const { empresaId } = req.context;
 
-        if (!config) return res.status(400).json({ error: 'No hay configuración de nómina vigente' });
+        if (!tipo || (tipo !== 'periodo' && tipo !== 'fecha')) {
+            return res.status(400).json({ error: 'Tipo de eliminación inválido' });
+        }
 
-        // 2. Obtener Empleado
-        const empleado: Empleado = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM empleados WHERE id = ?", [empleado_id], (err, row: any) => {
-                if(err) reject(err); else resolve(row);
-            });
-        });
+        let deletedCount = 0;
 
-        if (!empleado) return res.status(404).json({ error: 'Empleado no encontrado' });
-
-        // 3. Calcular
-        const liquidacion = await NominaService.calcularLiquidacion(
-            empleado, 
-            fecha_retiro || new Date(), 
-            config, 
-            motivo_retiro || 'RENUNCIA_VOLUNTARIA',
-            {
-                baseLiquidacionManual: base_liquidacion_manual,
-                diasVacacionesPendientes: req.body.dias_vacaciones,
-                diasPrimaPendientes: req.body.dias_prima,
-                diasCesantiasPendientes: req.body.dias_cesantias,
-                salarioEsFijo: req.body.salario_fijo !== false,
-                promedio12Meses: req.body.promedio_12_meses,
-                incluirAuxilioTransporte: req.body.incluir_auxilio_transporte,
-                diasSueldoPendientes: req.body.dias_sueldo_pendientes
+        if (tipo === 'periodo') {
+            if (!periodo_mes || !periodo_anio) {
+                return res.status(400).json({ error: 'periodo_mes y periodo_anio son requeridos' });
             }
-        );
-
-        // 4. Guardar Auditoría (Trazabilidad obligatoria)
-        const usuario_nombre = (req as any).user?.usuario || 'Sistema';
-
-        db.run(`
-            INSERT INTO historial_liquidaciones (
-                empleado_id, fecha_liquidacion, fecha_inicio_contrato, fecha_fin_contrato,
-                tipo_contrato, tipo_terminacion, salario_fijo, base_calculo,
-                base_calculo_detalle, dias_laborados, cesantias, intereses_cesantias,
-                prima_servicios, vacaciones, indemnizacion, total_liquidacion,
-                usuario_genero, version_normativa
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        `, [
-            empleado.id, 
-            new Date().toISOString(),
-            liquidacion.fecha_inicio_contrato instanceof Date ? liquidacion.fecha_inicio_contrato.toISOString().split('T')[0] : liquidacion.fecha_inicio_contrato,
-            liquidacion.fecha_fin_contrato instanceof Date ? liquidacion.fecha_fin_contrato.toISOString().split('T')[0] : liquidacion.fecha_fin_contrato,
-            empleado.tipo_contrato,
-            motivo_retiro || 'RENUNCIA_VOLUNTARIA',
-            empleado.salario_integral ? 0 : 1,
-            liquidacion.bases.base_prestaciones,
-            JSON.stringify(liquidacion.detalles || {}),
-            liquidacion.dias_laborados_total,
-            liquidacion.detalles.cesantias.valor,
-            liquidacion.detalles.intereses.valor,
-            liquidacion.detalles.prima.valor,
-            liquidacion.detalles.vacaciones.valor,
-            liquidacion.detalles.indemnizacion.valor,
-            liquidacion.total_liquidacion,
-            usuario_nombre,
-            liquidacion.version_normativa
-        ], (err) => {
-            if (err) {
-                console.error('Error al guardar historial de liquidación:', err);
-            }
-            // Adjuntar datos de usuario para el PDF posterior
-            (liquidacion as any).usuario_genero = usuario_nombre;
-            res.json(liquidacion);
-        });
-
-    } catch (error: any) {
-        console.error('Error calculando liquidación:', error);
-        res.status(500).json({ error: error.message || 'Error interno' });
-    }
-});
-
-/**
- * POST /api/nomina/generar-pdf-preview
- * Generar preview de colilla PDF sin guardar
- */
-router.post('/generar-pdf-preview', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const { nomina_detalle } = req.body;
-    
-    try {
-        // Mock config for now or fetch
-        const config: ConfiguracionNomina = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM configuracion_nomina WHERE vigente = 1", (err, row: any) => {
-                if(err) reject(err); else resolve(row);
-            });
-        });
-
-        // Necesitamos el objeto empleado completo dentro de nomina_detalle
-        if(nomina_detalle.empleado_id && !nomina_detalle.empleado) {
-             const empleado: Empleado = await new Promise((resolve, reject) => {
-                db.get("SELECT * FROM empleados WHERE id = ?", [nomina_detalle.empleado_id], (err, row: any) => {
-                    if(err) reject(err); else resolve(row);
-                });
-            });
-            nomina_detalle.empleado = empleado;
-        }
-
-        const pdfBuffer = await NominaService.generarPDFNomina(nomina_detalle, config);
-        
-        res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader('Content-Disposition', 'attachment; filename=preview_nomina.pdf');
-        res.send(pdfBuffer);
-
-    } catch (error: any) {
-        console.error('Error generando PDF:', error);
-        res.status(500).json({ error: 'Error generando PDF' });
-    }
-});
-
-/**
- * POST /api/nomina/detalle/guardar
- * Calcula y guarda una nómina mensual (versionada) para un empleado
- */
-router.post('/detalle/guardar', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const { empleado_id } = req.body;
-
-    try {
-        const config: ConfiguracionNomina = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM configuracion_nomina WHERE vigente = 1", (err, row: any) => {
-                if (err) reject(err); else resolve(row);
-            });
-        });
-
-        if (!config) return res.status(400).json({ error: 'No hay configuración de nómina vigente' });
-
-        const empleado: Empleado = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM empleados WHERE id = ?", [empleado_id], (err, row: any) => {
-                if (err) reject(err); else resolve(row);
-            });
-        });
-
-        if (!empleado) return res.status(404).json({ error: 'Empleado no encontrado' });
-
-        const {
-            dias_trabajados,
-            horas_diurnas,
-            horas_dominicales_diurnas,
-            horas_festivas_diurnas,
-            horas_extra_diurna_dominical,
-            comisiones,
-            otras_deducciones,
-            periodo_mes,
-            periodo_anio
-        } = req.body;
-
-        const usuario_nombre = (req as any).user?.usuario || req.body.usuario_nombre || 'Sistema';
-
-        const nominaCalculada = await NominaService.calcularNominaEmpleado(
-            empleado,
-            dias_trabajados || 30,
-            config,
-            {
-                horas_diurnas,
-                horas_dominicales_diurnas,
-                horas_festivas_diurnas,
-                horas_extra_diurna_dominical,
-                comisiones,
-                otras_deducciones,
-                periodo_mes,
-                periodo_anio,
-                usuario_nombre
-            }
-        );
-
-        // --- VALIDACIÓN DE CAMBIOS (VERSIONADO) ---
-        const latestNomina: any = await new Promise((resolve) => {
-            db.get(
-                `SELECT * FROM nomina_detalles 
-                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
-                 ORDER BY version DESC LIMIT 1`,
-                [empleado.id, periodo_mes, periodo_anio],
-                (err, row) => resolve(row || null)
-            );
-        });
-
-        if (latestNomina) {
-            // Comparar valores clave (con margen de error para flotantes)
-            // Usamos || 0 porque NominaService devuelve Partial<NominaDetalle>
-            const isSameCalculation = 
-                Math.abs((latestNomina.total_devengado || 0) - (nominaCalculada.total_devengado || 0)) < 0.01 &&
-                Math.abs((latestNomina.total_deducciones || 0) - (nominaCalculada.total_deducciones || 0)) < 0.01 &&
-                Math.abs((latestNomina.neto_pagado || 0) - (nominaCalculada.neto_pagado || 0)) < 0.01 &&
-                latestNomina.dias_trabajados === nominaCalculada.dias_trabajados;
-
-            if (isSameCalculation) {
-                // Si el cálculo es idéntico, retornamos la versión existente (sin generar PDF nuevo ni versión nueva)
-                const pagos: any[] = await new Promise((resolve, reject) => {
-                    db.all(
-                        `SELECT * FROM pagos_nomina 
-                         WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
-                         ORDER BY fecha ASC`,
-                        [empleado.id, periodo_mes, periodo_anio],
-                        (err, rows: any[]) => {
-                            if (err) reject(err);
-                            else resolve(rows);
-                        }
-                    );
-                });
-
-                const totalPagado = pagos.reduce((acc, p) => acc + p.valor, 0);
-                const saldoPendiente = (latestNomina.neto_pagado || 0) - totalPagado;
-
-                // Asegurar que el objeto tenga el empleado poblado
-                latestNomina.empleado = empleado;
-
-                return res.json({
-                    detalle: latestNomina,
-                    pagos,
-                    saldo_pendiente: saldoPendiente,
-                    info: 'No hubo cambios en el cálculo, se mantiene la versión actual.'
-                });
-            }
-        }
-
-        const maxVersion: number = await new Promise((resolve) => {
-            db.get(
-                `SELECT MAX(version) as maxVersion 
-                 FROM nomina_detalles 
-                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ?`,
-                [empleado.id, periodo_mes, periodo_anio],
-                (err, row: any) => {
-                    if (err || !row || !row.maxVersion) return resolve(0);
-                    resolve(row.maxVersion || 0);
-                }
-            );
-        });
-
-        const newVersion = (maxVersion || 0) + 1;
-
-        await new Promise<void>((resolve) => {
-            db.run(
-                `UPDATE nomina_detalles 
-                 SET estado = 'AJUSTADA' 
-                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? AND estado = 'ABIERTA'`,
-                [empleado.id, periodo_mes, periodo_anio],
-                () => resolve()
-            );
-        });
-
-        const insertDetallePromise: Promise<number> = new Promise((resolve, reject) => {
-            db.run(
-                `
-                INSERT INTO nomina_detalles (
-                  nomina_id,
-                  empleado_id,
-                  dias_trabajados,
-                  sueldo_basico,
-                  auxilio_transporte,
-                  horas_diurnas,
-                  valor_diurnas,
-                  horas_extras,
-                  recargos,
-                  comisiones,
-                  otros_devengados,
-                  horas_dominicales_diurnas,
-                  horas_festivas_diurnas,
-                  horas_extra_diurna_dominical,
-                  valor_dominicales_diurnas,
-                  valor_festivas_diurnas,
-                  valor_extra_diurna_dominical,
-                  total_devengado,
-                  salud_empleado,
-                  pension_empleado,
-                  fondo_solidaridad,
-                  prestamos,
-                  otras_deducciones,
-                  total_deducciones,
-                  neto_pagado,
-                  valores_empresa,
-                  version,
-                  estado,
-                  periodo_mes,
-                  periodo_anio,
-                  fecha_generacion,
-                  usuario_nombre,
-                  pdf_version,
-                  pdf_path
-                ) VALUES (
-                  0, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-                )
-              `,
-                [
-                    empleado.id,
-                    nominaCalculada.dias_trabajados,
-                    nominaCalculada.sueldo_basico,
-                    nominaCalculada.auxilio_transporte,
-                    nominaCalculada.horas_diurnas || 0,
-                    nominaCalculada.valor_diurnas || 0,
-                    nominaCalculada.horas_extras || 0,
-                    nominaCalculada.recargos || 0,
-                    nominaCalculada.comisiones || 0,
-                    nominaCalculada.otros_devengados || 0,
-                    nominaCalculada.horas_dominicales_diurnas || 0,
-                    nominaCalculada.horas_festivas_diurnas || 0,
-                    nominaCalculada.horas_extra_diurna_dominical || 0,
-                    nominaCalculada.valor_dominicales_diurnas || 0,
-                    nominaCalculada.valor_festivas_diurnas || 0,
-                    nominaCalculada.valor_extra_diurna_dominical || 0,
-                    nominaCalculada.total_devengado,
-                    nominaCalculada.salud_empleado,
-                    nominaCalculada.pension_empleado,
-                    nominaCalculada.fondo_solidaridad || 0,
-                    nominaCalculada.prestamos || 0,
-                    nominaCalculada.otras_deducciones || 0,
-                    nominaCalculada.total_deducciones,
-                    nominaCalculada.neto_pagado,
-                    nominaCalculada.valores_empresa || null,
-                    newVersion,
-                    'ABIERTA',
-                    periodo_mes,
-                    periodo_anio,
-                    new Date().toISOString(),
-                    usuario_nombre,
-                    1,
-                    null
-                ],
-                function (err) {
-                    if (err) reject(err);
-                    else resolve(this.lastID);
-                }
-            );
-        });
-
-        const nomina_detalle_id = await insertDetallePromise;
-
-        await new Promise<void>((resolve, reject) => {
-            db.run(
-                `
-              INSERT INTO historial_nomina (
-                nomina_detalle_id, version, fecha, cambio_realizado, usuario_nombre, payload
-              ) VALUES (?, ?, ?, ?, ?, ?)
-            `,
-                [
-                    nomina_detalle_id,
-                    newVersion,
-                    new Date().toISOString(),
-                    newVersion === 1 ? 'Creación de nómina mensual' : 'Re-cálculo de nómina (posible adelanto/cambio)',
-                    usuario_nombre,
-                    JSON.stringify(nominaCalculada)
-                ],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-
-        const nominaDetalleCompleta: NominaDetalle = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT * FROM nomina_detalles WHERE id = ?`,
-                [nomina_detalle_id],
-                (err, row: any) => {
-                    if (err) reject(err);
-                    else resolve(row);
-                }
-            );
-        });
-
-        (nominaDetalleCompleta as any).empleado = empleado;
-
-        const pdfBuffer = await NominaService.generarPDFNomina(nominaDetalleCompleta, config);
-
-        const baseDir = path.join(__dirname, '../../storage/nomina_pdfs');
-        if (!fs.existsSync(baseDir)) {
-            fs.mkdirSync(baseDir, { recursive: true });
-        }
-
-        const safeMes = (periodo_mes || '').toString().toUpperCase().replace(/\s+/g, '');
-        let fileName = `nomina_${empleado.id}_${periodo_anio}_${safeMes}_v${newVersion}.pdf`;
-        let filePath = path.join(baseDir, fileName);
-
-        // REGLA: No sobrescribir PDFs existentes. Si por alguna razón existe, agregar un timestamp único.
-        if (fs.existsSync(filePath)) {
-            const timestamp = new Date().getTime();
-            fileName = `nomina_${empleado.id}_${periodo_anio}_${safeMes}_v${newVersion}_${timestamp}.pdf`;
-            filePath = path.join(baseDir, fileName);
-        }
-
-        fs.writeFileSync(filePath, pdfBuffer);
-
-        await new Promise<void>((resolve, reject) => {
-            db.run(
-                `UPDATE nomina_detalles SET pdf_version = ?, pdf_path = ? WHERE id = ?`,
-                [newVersion, filePath, nomina_detalle_id],
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-
-        const pagos: PagoNomina[] = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT * FROM pagos_nomina 
-                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
-                 ORDER BY fecha ASC`,
-                [empleado.id, periodo_mes, periodo_anio],
-                (err, rows: any[]) => {
-                    if (err) reject(err);
-                    else resolve(rows as PagoNomina[]);
-                }
-            );
-        });
-
-        const totalPagado = pagos.reduce((acc, p) => acc + p.valor, 0);
-        const saldoPendiente = (nominaDetalleCompleta.neto_pagado || 0) - totalPagado;
-
-        res.json({
-            detalle: nominaDetalleCompleta,
-            pagos,
-            saldo_pendiente: saldoPendiente
-        });
-    } catch (error: any) {
-        console.error('Error guardando nómina:', error);
-        res.status(500).json({ error: error.message || 'Error interno' });
-    }
-});
-
-/**
- * POST /api/nomina/detalle/:id/pagos
- * Registrar un pago (quincena/ajuste) asociado a una nómina calculada
- */
-router.post('/detalle/:id/pagos', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const nomina_detalle_id = parseInt(req.params.id, 10);
-    const { valor, tipo, fecha, observaciones } = req.body;
-
-    if (!valor || valor <= 0) {
-        return res.status(400).json({ error: 'El valor del pago debe ser mayor a 0' });
-    }
-
-    const tipoPago = tipo || 'QUINCENA';
-    const fechaPago = fecha ? new Date(fecha).toISOString() : new Date().toISOString();
-    const usuario_nombre = (req as any).user?.usuario || 'Sistema';
-
-    try {
-        const nominaDetalle: NominaDetalle | undefined = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT * FROM nomina_detalles WHERE id = ?`,
-                [nomina_detalle_id],
-                (err, row: any) => {
-                    if (err) reject(err);
-                    else resolve(row || undefined);
-                }
-            );
-        });
-
-        if (!nominaDetalle) return res.status(404).json({ error: 'Nómina no encontrada' });
-
-        // REGLA: No permitir pagos si no es la versión activa (ABIERTA)
-        if (nominaDetalle.estado !== 'ABIERTA') {
-            return res.status(400).json({ 
-                error: 'No se pueden registrar pagos en una versión histórica o cerrada. Por favor use la versión activa.' 
-            });
-        }
-
-        const pagoId: number = await new Promise((resolve, reject) => {
-            db.run(
-                `
-              INSERT INTO pagos_nomina (
-                nomina_detalle_id, empleado_id, periodo_mes, periodo_anio, fecha, tipo, valor, usuario_nombre, observaciones
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            `,
-                [
-                    nomina_detalle_id, 
-                    nominaDetalle.empleado_id, 
-                    nominaDetalle.periodo_mes, 
-                    nominaDetalle.periodo_anio, 
-                    fechaPago, 
-                    tipoPago, 
-                    valor, 
-                    usuario_nombre, 
-                    observaciones || null
-                ],
-                function (err) {
-                    if (err) reject(err);
-                    else resolve(this.lastID);
-                }
-            );
-        });
-
-        // El saldo se calcula sobre la versión activa menos TODOS los pagos del periodo
-        const pagos: PagoNomina[] = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT * FROM pagos_nomina 
-                 WHERE empleado_id = ? AND periodo_mes = ? AND periodo_anio = ? 
-                 ORDER BY fecha ASC`,
-                [nominaDetalle.empleado_id, nominaDetalle.periodo_mes, nominaDetalle.periodo_anio],
-                (err, rows: any[]) => {
-                    if (err) reject(err);
-                    else resolve(rows as PagoNomina[]);
-                }
-            );
-        });
-
-        const totalPagado = pagos.reduce((acc, p) => acc + p.valor, 0);
-        const saldoPendiente = (nominaDetalle.neto_pagado || 0) - totalPagado;
-
-        if (saldoPendiente <= 0) {
-            await new Promise<void>((resolve, reject) => {
-                db.run(
-                    `UPDATE nomina_detalles SET estado = 'PAGADA' WHERE id = ?`,
-                    [nomina_detalle_id],
-                    (err) => {
-                        if (err) reject(err);
-                        else resolve();
-                    }
-                );
-            });
-        }
-
-        res.json({
-            pago_id: pagoId,
-            pagos,
-            saldo_pendiente: saldoPendiente
-        });
-    } catch (error: any) {
-        console.error('Error registrando pago de nómina:', error);
-        res.status(500).json({ error: error.message || 'Error interno' });
-    }
-});
-
-/**
- * GET /api/nomina/historial
- * Historial ordenado y auditable de nómina por empleado/periodo
- */
-router.get('/historial', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const empleado_id = parseInt(req.query.empleado_id as string, 10);
-    const periodo_mes = (req.query.periodo_mes as string) || null;
-    const periodo_anio = req.query.periodo_anio ? parseInt(req.query.periodo_anio as string, 10) : null;
-
-    if (!empleado_id) {
-        return res.status(400).json({ error: 'empleado_id es requerido' });
-    }
-
-    try {
-        const params: any[] = [empleado_id];
-        let where = 'WHERE empleado_id = ?';
-
-        if (periodo_mes) {
-            where += ' AND periodo_mes = ?';
-            params.push(periodo_mes);
-        }
-
-        if (periodo_anio) {
-            where += ' AND periodo_anio = ?';
-            params.push(periodo_anio);
-        }
-
-        const nominas: NominaDetalle[] = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT * FROM nomina_detalles ${where} ORDER BY periodo_anio DESC, periodo_mes DESC, version DESC`,
-                params,
-                (err, rows: any[]) => {
-                    if (err) reject(err);
-                    else resolve(rows as NominaDetalle[]);
-                }
-            );
-        });
-
-        if (nominas.length === 0) {
-            return res.json({ nominas: [], pagos: [], historial: [] });
-        }
-
-        const ids = nominas.map((n) => n.id);
-        const placeholders = ids.map(() => '?').join(',');
-
-        const pagos: PagoNomina[] = await new Promise((resolve, reject) => {
-            let pagosWhere = 'WHERE empleado_id = ?';
-            const pagosParams: any[] = [empleado_id];
             
-            if (periodo_mes) {
-                pagosWhere += ' AND periodo_mes = ?';
-                pagosParams.push(periodo_mes);
-            }
-            if (periodo_anio) {
-                pagosWhere += ' AND periodo_anio = ?';
-                pagosParams.push(periodo_anio);
-            }
-
-            db.all(
-                `SELECT * FROM pagos_nomina ${pagosWhere} ORDER BY fecha ASC`,
-                pagosParams,
-                (err, rows: any[]) => {
-                    if (err) reject(err);
-                    else resolve(rows as PagoNomina[]);
-                }
+            // Eliminar por periodo específico
+            const result = await service.eliminarHistorialPorPeriodo(
+                empresaId,
+                periodo_mes,
+                periodo_anio
             );
-        });
-
-        const historial: HistorialNomina[] = await new Promise((resolve, reject) => {
-            db.all(
-                `SELECT * FROM historial_nomina WHERE nomina_detalle_id IN (${placeholders}) ORDER BY fecha ASC`,
-                ids,
-                (err, rows: any[]) => {
-                    if (err) reject(err);
-                    else resolve(rows as HistorialNomina[]);
-                }
+            deletedCount = result.deletedCount;
+        } else {
+            if (!fecha_inicio || !fecha_fin) {
+                return res.status(400).json({ error: 'fecha_inicio y fecha_fin son requeridas' });
+            }
+            
+            // Eliminar por rango de fechas
+            const result = await service.eliminarHistorialPorFechas(
+                empresaId,
+                fecha_inicio,
+                fecha_fin
             );
-        });
+            deletedCount = result.deletedCount;
+        }
 
-        res.json({ nominas, pagos, historial });
+        res.json({
+            success: true,
+            message: `Historial de nómina eliminado correctamente`,
+            deletedCount
+        });
     } catch (error: any) {
-        console.error('Error obteniendo historial de nómina:', error);
-        res.status(500).json({ error: error.message || 'Error interno' });
+        console.error('❌ Error al eliminar historial de nómina:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-/**
- * GET /api/nomina/detalle/:id/pdf
- * Descargar el PDF versionado asociado a una nómina guardada
- */
-router.get('/detalle/:id/pdf', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const nomina_detalle_id = parseInt(req.params.id, 10);
-
+// --- GENERAR PDF PREVIEW ---
+router.post('/generar-pdf-preview', async (req, res) => {
     try {
-        const detalle: NominaDetalle | undefined = await new Promise((resolve, reject) => {
-            db.get(
-                `SELECT * FROM nomina_detalles WHERE id = ?`,
-                [nomina_detalle_id],
-                (err, row: any) => {
-                    if (err) reject(err);
-                    else resolve(row || undefined);
-                }
-            );
-        });
-
-        if (!detalle || !detalle.pdf_path) {
-            return res.status(404).json({ error: 'PDF de nómina no encontrado' });
-        }
-
-        if (!fs.existsSync(detalle.pdf_path)) {
-            return res.status(404).json({ error: 'Archivo PDF no disponible en disco' });
-        }
-
+        const { nomina_detalle } = req.body;
+        const pdfBuffer = await service.generarPDFPreview(req.context.empresaId, nomina_detalle);
         res.setHeader('Content-Type', 'application/pdf');
-        res.setHeader(
-            'Content-Disposition',
-            `attachment; filename=nomina_${detalle.empleado_id}_${detalle.periodo_anio}_${detalle.periodo_mes}_v${detalle.version || 1}.pdf`
-        );
-        const stream = fs.createReadStream(detalle.pdf_path);
-        stream.pipe(res);
+        res.setHeader('Content-Disposition', 'attachment; filename=nomina_preview.pdf');
+        res.send(pdfBuffer);
     } catch (error: any) {
-        console.error('Error descargando PDF de nómina:', error);
-        res.status(500).json({ error: error.message || 'Error interno' });
+        console.error('❌ Error en /generar-pdf-preview:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-/**
- * POST /api/nomina/liquidacion/pdf-preview
- * Generar preview de liquidación en PDF
- */
-router.post('/liquidacion/pdf-preview', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const { liquidacion } = req.body;
-    
+// --- LIQUIDACIÓN ---
+router.post('/liquidacion/calcular', async (req, res) => {
     try {
-        if (!liquidacion || !liquidacion.empleado_id) {
-            return res.status(400).json({ error: 'Datos de liquidación incompletos' });
-        }
+        console.log('📊 Calcular liquidación - Body:', req.body);
+        const resultado = await service.calcularLiquidacion(req.context.empresaId, req.body);
+        res.json(resultado);
+    } catch (error: any) {
+        console.error('❌ Error en /liquidacion/calcular:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
 
-        // Obtener Empleado
-        const empleado: Empleado = await new Promise((resolve, reject) => {
-            db.get("SELECT * FROM empleados WHERE id = ?", [liquidacion.empleado_id], (err, row: any) => {
-                if(err) reject(err); else resolve(row);
-            });
-        });
-
-        if (!empleado) return res.status(404).json({ error: 'Empleado no encontrado' });
-
-        const pdfBuffer = await NominaService.generarPDFLiquidacion(liquidacion, empleado);
-        
+router.post('/liquidacion/pdf-preview', async (req, res) => {
+    try {
+        const { liquidacion } = req.body;
+        const pdfBuffer = await service.generarPDFLiquidacion(req.context.empresaId, liquidacion);
         res.setHeader('Content-Type', 'application/pdf');
         res.setHeader('Content-Disposition', 'attachment; filename=liquidacion.pdf');
         res.send(pdfBuffer);
-
     } catch (error: any) {
-        console.error('Error generando PDF de liquidación:', error);
-        res.status(500).json({ error: 'Error generando PDF' });
+        console.error('❌ Error en /liquidacion/pdf-preview:', error);
+        res.status(500).json({ error: error.message });
     }
 });
 
-/**
- * DELETE /api/nomina/historial
- * Eliminar historial de nómina por periodo o fecha (Masivo)
- */
-router.delete('/historial', verifyToken, checkPermission('nomina.gestion'), async (req, res) => {
-    const { tipo, periodo_mes, periodo_anio, fecha_inicio, fecha_fin } = req.body;
+// --- RUTAS CON PARÁMETROS (deben estar AL FINAL) ---
 
-    if (!tipo || (tipo !== 'periodo' && tipo !== 'fecha')) {
-        return res.status(400).json({ error: 'Tipo de eliminación inválido. Debe ser "periodo" o "fecha".' });
-    }
-
+// --- REGISTRAR PAGO DE NÓMINA ---
+router.post('/detalle/:id/pagos', async (req, res) => {
     try {
-        let nominasIds: number[] = [];
-
-        // 1. Identificar nóminas a eliminar
-        if (tipo === 'periodo') {
-            if (!periodo_mes || !periodo_anio) {
-                return res.status(400).json({ error: 'Mes y año son requeridos para eliminación por periodo.' });
-            }
-
-            nominasIds = await new Promise((resolve, reject) => {
-                db.all(
-                    `SELECT id FROM nomina_detalles WHERE UPPER(periodo_mes) = UPPER(?) AND periodo_anio = ?`,
-                    [periodo_mes, periodo_anio],
-                    (err, rows: any[]) => {
-                        if (err) reject(err);
-                        else resolve(rows.map(r => r.id));
-                    }
-                );
-            });
-
-        } else if (tipo === 'fecha') {
-            if (!fecha_inicio || !fecha_fin) {
-                return res.status(400).json({ error: 'Fecha inicio y fin son requeridas para eliminación por rango.' });
-            }
-
-            const start = new Date(fecha_inicio).toISOString();
-            // Asegurar que fecha_fin incluya todo el día
-            const end = new Date(new Date(fecha_fin).setHours(23, 59, 59, 999)).toISOString();
-
-            nominasIds = await new Promise((resolve, reject) => {
-                db.all(
-                    `SELECT id FROM nomina_detalles WHERE fecha_generacion BETWEEN ? AND ?`,
-                    [start, end],
-                    (err, rows: any[]) => {
-                        if (err) reject(err);
-                        else resolve(rows.map(r => r.id));
-                    }
-                );
-            });
-        }
-
-        if (nominasIds.length === 0) {
-            return res.json({ message: 'No se encontraron registros para eliminar.', deletedCount: 0 });
-        }
-
-        const placeholders = nominasIds.map(() => '?').join(',');
-
-        // 2. Eliminar Pagos Asociados
-        await new Promise<void>((resolve, reject) => {
-            db.run(
-                `DELETE FROM pagos_nomina WHERE nomina_detalle_id IN (${placeholders})`,
-                nominasIds,
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-        
-        // 3. Eliminar Historial/Auditoría Asociada
-         await new Promise<void>((resolve, reject) => {
-            db.run(
-                `DELETE FROM historial_nomina WHERE nomina_detalle_id IN (${placeholders})`,
-                nominasIds,
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-
-        // 4. Eliminar Nóminas
-        await new Promise<void>((resolve, reject) => {
-            db.run(
-                `DELETE FROM nomina_detalles WHERE id IN (${placeholders})`,
-                nominasIds,
-                (err) => {
-                    if (err) reject(err);
-                    else resolve();
-                }
-            );
-        });
-
-        res.json({ 
-            message: 'Historial de nómina eliminado correctamente.', 
-            deletedCount: nominasIds.length 
-        });
-
+        const { id } = req.params;
+        const resultado = await service.registrarPago(req.context.empresaId, id, req.body);
+        res.json(resultado);
     } catch (error: any) {
-        console.error('Error eliminando historial de nómina:', error);
-        res.status(500).json({ error: error.message || 'Error interno al eliminar historial' });
+        console.error('❌ Error en /detalle/:id/pagos:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- DESCARGAR PDF DE NÓMINA ---
+router.get('/detalle/:id/pdf', async (req, res) => {
+    try {
+        const { id } = req.params;
+        const pdfBuffer = await service.generarPDFNomina(req.context.empresaId, id);
+        res.setHeader('Content-Type', 'application/pdf');
+        res.setHeader('Content-Disposition', `attachment; filename=nomina_${id}.pdf`);
+        res.send(pdfBuffer);
+    } catch (error: any) {
+        console.error('❌ Error en /detalle/:id/pdf:', error);
+        res.status(500).json({ error: error.message });
+    }
+});
+
+// --- OBTENER NÓMINA POR ID (debe estar al final por el parámetro dinámico) ---
+router.get('/:id', async (req, res) => {
+    try {
+        const nomina = await service.obtenerNominaCompleta(req.params.id, req.context.empresaId);
+        if (!nomina) return res.status(404).json({ error: 'Nómina no encontrada' });
+        res.json(nomina);
+    } catch (error: any) {
+        res.status(500).json({ error: error.message });
     }
 });
 

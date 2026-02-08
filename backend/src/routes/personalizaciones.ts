@@ -1,46 +1,12 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../database/init';
-import { v4 as uuidv4 } from 'uuid';
+import { db } from '../database/database';
+import { sql } from 'kysely';
+import { verificarAutenticacion } from '../middleware/authMiddleware';
 import * as XLSX from 'xlsx';
 
 const router = Router();
 
-// Helpers para base de datos async
-const runAsync = (sql: string, params: any[] = []): Promise<void> => {
-  return new Promise((resolve, reject) => {
-    db.run(sql, params, (err) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve();
-    });
-  });
-};
-
-const getAsync = (sql: string, params: any[] = []): Promise<any> => {
-  return new Promise((resolve, reject) => {
-    db.get(sql, params, (err, row) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(row);
-    });
-  });
-};
-
-const allAsync = (sql: string, params: any[] = []): Promise<any[]> => {
-  return new Promise((resolve, reject) => {
-    db.all(sql, params, (err, rows) => {
-      if (err) {
-        reject(err);
-        return;
-      }
-      resolve(rows || []);
-    });
-  });
-};
+router.use(verificarAutenticacion);
 
 const normalizarNumero = (val: any): number | null => {
   if (val === null || val === undefined || val === '') return null;
@@ -48,149 +14,165 @@ const normalizarNumero = (val: any): number | null => {
   return isNaN(num) ? null : num;
 };
 
+// Helper para generar siguiente código SKU
+const generarSiguienteCodigo = async (
+  tabla: 'categorias_personalizacion' | 'items_personalizacion',
+  prefijo: string,
+  empresaId: string
+): Promise<string> => {
+  const result = await sql`
+    SELECT codigo FROM ${sql.table(tabla)}
+    WHERE empresa_id = ${empresaId}
+      AND codigo LIKE ${prefijo + '-%'}
+    ORDER BY codigo DESC
+    LIMIT 1
+  `.execute(db);
+  let nextNum = 1;
+  if ((result.rows as any[]).length > 0) {
+    const last = (result.rows as any[])[0].codigo as string;
+    const num = parseInt(last.replace(prefijo + '-', ''), 10);
+    if (!isNaN(num)) nextNum = num + 1;
+  }
+  return `${prefijo}-${String(nextNum).padStart(3, '0')}`;
+};
+
 // ========== CATEGORÍAS DE PERSONALIZACIÓN ==========
 
 // Obtener todas las categorías de personalización
-router.get('/categorias', (req: Request, res: Response) => {
-  const query = 'SELECT * FROM categorias_personalizacion WHERE activo = 1 ORDER BY orden, nombre';
-  
-  db.all(query, [], (err: any, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener categorías de personalización:', err);
-      return res.status(500).json({ error: 'Error al obtener las categorías' });
-    }
-    
-    const categorias = rows.map(cat => ({
-      ...cat,
-      activo: Boolean(cat.activo)
-    }));
+router.get('/categorias', async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    const categorias = await db.selectFrom('categorias_personalizacion')
+      .selectAll()
+      .where('empresa_id', '=', empresaId)
+      .where('activo', '=', true)
+      .orderBy('orden', 'asc')
+      .orderBy('nombre', 'asc')
+      .execute();
     
     res.json(categorias);
-  });
+  } catch (error: any) {
+    console.error('Error al obtener categorías de personalización:', error);
+    res.status(500).json({ error: 'Error al obtener las categorías' });
+  }
 });
 
 // Crear nueva categoría de personalización
-router.post('/categorias', (req: Request, res: Response) => {
-  const { nombre, descripcion = '', orden = 0 } = req.body;
-  
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre es requerido' });
-  }
-  
-  const query = 'INSERT INTO categorias_personalizacion (nombre, descripcion, orden, activo) VALUES (?, ?, ?, 1)';
-  
-  db.run(query, [nombre, descripcion, orden], function(err: any) {
-    if (err) {
-      console.error('Error al crear categoría:', err);
-      if (err.code === 'SQLITE_CONSTRAINT') {
-        return res.status(400).json({ error: 'Ya existe una categoría con ese nombre' });
-      }
-      return res.status(500).json({ error: 'Error al crear la categoría' });
+router.post('/categorias', async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    const { nombre, descripcion = '', orden = 0, multi_seleccion = false, obligatorio = false } = req.body;
+    
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre es requerido' });
     }
     
-    db.get('SELECT * FROM categorias_personalizacion WHERE id = ?', [this.lastID], (err: any, row: any) => {
-      if (err) {
-        console.error('Error al obtener categoría creada:', err);
-        return res.status(500).json({ error: 'Error al obtener la categoría creada' });
-      }
+    const codigoAuto = await generarSiguienteCodigo('categorias_personalizacion', 'CPER', empresaId);
+
+    const nueva = await db.insertInto('categorias_personalizacion')
+      .values({
+        empresa_id: empresaId,
+        codigo: codigoAuto,
+        nombre: nombre.trim(),
+        multi_seleccion: !!multi_seleccion,
+        obligatorio: !!obligatorio,
+        orden: Number(orden),
+        activo: true
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
       
-      const categoria = {
-        ...row,
-        activo: Boolean(row.activo)
-      };
-      
-      res.status(201).json(categoria);
-    });
-  });
+    res.status(201).json(nueva);
+  } catch (error: any) {
+    console.error('Error al crear categoría:', error);
+    res.status(500).json({ error: 'Error al crear la categoría' });
+  }
 });
 
 // Actualizar categoría de personalización
-router.put('/categorias/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  const { nombre, descripcion, orden, activo } = req.body;
-  
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre es requerido' });
-  }
-  
-  const query = `
-    UPDATE categorias_personalizacion 
-    SET nombre = ?, descripcion = ?, orden = ?, activo = ?
-    WHERE id = ?
-  `;
-  
-  db.run(query, [nombre, descripcion || '', orden || 0, activo ? 1 : 0, id], function(err: any) {
-    if (err) {
-      console.error('Error al actualizar categoría:', err);
-      return res.status(500).json({ error: 'Error al actualizar la categoría' });
+router.put('/categorias/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { empresaId } = req.context;
+    const { nombre, descripcion, orden, activo, multi_seleccion, obligatorio } = req.body;
+    
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre es requerido' });
     }
     
-    if (this.changes === 0) {
+    const actualizada = await db.updateTable('categorias_personalizacion')
+      .set({
+        nombre: nombre.trim(),
+        descripcion: descripcion,
+        orden: orden !== undefined ? Number(orden) : undefined,
+        activo: activo !== undefined ? !!activo : undefined,
+        multi_seleccion: multi_seleccion !== undefined ? !!multi_seleccion : undefined,
+        obligatorio: obligatorio !== undefined ? !!obligatorio : undefined
+      })
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .returningAll()
+      .executeTakeFirst();
+      
+    if (!actualizada) {
       return res.status(404).json({ error: 'Categoría no encontrada' });
     }
     
-    db.get('SELECT * FROM categorias_personalizacion WHERE id = ?', [id], (err: any, row: any) => {
-      if (err) {
-        console.error('Error al obtener categoría actualizada:', err);
-        return res.status(500).json({ error: 'Error al obtener la categoría actualizada' });
-      }
-      
-      const categoria = {
-        ...row,
-        activo: Boolean(row.activo)
-      };
-      
-      res.json(categoria);
-    });
-  });
+    res.json(actualizada);
+  } catch (error: any) {
+    console.error('Error al actualizar categoría:', error);
+    res.status(500).json({ error: 'Error al actualizar la categoría' });
+  }
 });
 
 // Eliminar categoría de personalización
-router.delete('/categorias/:id', (req: Request, res: Response) => {
-  const { id } = req.params;
-  
-  // Eliminar físicamente la categoría
-  const query = 'DELETE FROM categorias_personalizacion WHERE id = ?';
-  
-  db.run(query, [id], function(err: any) {
-    if (err) {
-      console.error('Error al eliminar categoría:', err);
-      return res.status(500).json({ 
-        error: 'Error al eliminar la categoría',
-        detalles: err.message 
-      });
-    }
+router.delete('/categorias/:id', async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { empresaId } = req.context;
     
-    if (this.changes === 0) {
+    const result = await db.deleteFrom('categorias_personalizacion')
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+    
+    if (Number(result.numDeletedRows) === 0) {
       return res.status(404).json({ error: 'Categoría no encontrada' });
     }
     
-    console.log(`✅ Categoría ${id} eliminada exitosamente`);
     res.json({ mensaje: 'Categoría eliminada exitosamente' });
-  });
+  } catch (error: any) {
+    console.error('Error al eliminar categoría:', error);
+    res.status(500).json({ 
+      error: 'Error al eliminar la categoría',
+      detalles: error.message 
+    });
+  }
 });
 
 // ===== ENDPOINTS GENÉRICOS PARA ITEMS DE CUALQUIER CATEGORÍA =====
 
 // Obtener todos los items de una categoría
-router.get('/categorias/:categoriaId/items', (req: Request, res: Response) => {
-  const { categoriaId } = req.params;
-  
-  const query = 'SELECT * FROM items_personalizacion WHERE categoria_id = ? AND activo = 1 ORDER BY nombre';
-  
-  db.all(query, [categoriaId], (err: any, rows: any[]) => {
-    if (err) {
-      console.error('Error al obtener items de personalización:', err);
-      return res.status(500).json({ error: 'Error al obtener items' });
-    }
+router.get('/categorias/:categoriaId/items', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId } = req.params;
+    const { empresaId } = req.context;
+    
+    const rows = await db.selectFrom('items_personalizacion')
+      .selectAll()
+      .where('categoria_id', '=', categoriaId)
+      .where('empresa_id', '=', empresaId)
+      .where('activo', '=', true)
+      .orderBy('nombre', 'asc')
+      .execute();
     
     // Mapear items y calcular disponibilidad real
     const items = rows.map(item => {
-      const usaInventario = Boolean(item.usa_inventario);
-      let disponible = Boolean(item.disponible);
+      const usaInventario = !!item.usa_inventario;
+      let disponible = !!item.disponible;
       
       // Si usa inventario y cantidad_actual es 0, automáticamente no disponible
-      if (usaInventario && item.cantidad_actual !== null && item.cantidad_actual <= 0) {
+      if (usaInventario && item.cantidad_actual !== null && Number(item.cantidad_actual) <= 0) {
         disponible = false;
       }
       
@@ -201,269 +183,258 @@ router.get('/categorias/:categoriaId/items', (req: Request, res: Response) => {
       };
     });
     
-    res.json(items || []);
-  });
+    res.json(items);
+  } catch (error: any) {
+    console.error('Error al obtener items de personalización:', error);
+    res.status(500).json({ error: 'Error al obtener items' });
+  }
 });
 
 // Crear un nuevo item para una categoría
-router.post('/categorias/:categoriaId/items', (req: Request, res: Response) => {
-  const { categoriaId } = req.params;
-  const { nombre, descripcion, precio_adicional, usa_inventario, usa_insumos, cantidad_inicial } = req.body;
-  
-  if (!nombre) {
-    return res.status(400).json({ error: 'El nombre es obligatorio' });
-  }
-  
-  // Validar inventario si está habilitado
-  const usaInv = Boolean(usa_inventario);
-  if (usaInv && (cantidad_inicial === undefined || cantidad_inicial === null || cantidad_inicial < 0)) {
-    return res.status(400).json({ error: 'Debe especificar una cantidad inicial válida cuando usa inventario' });
-  }
-  
-  const query = `
-    INSERT INTO items_personalizacion (
-      categoria_id, nombre, descripcion, precio_adicional,
-      usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual
-    )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  
-  const cantidadIni = usaInv ? cantidad_inicial : null;
-  const cantidadAct = usaInv ? cantidad_inicial : null;
-  
-  db.run(query, [
-    categoriaId, 
-    nombre, 
-    descripcion || null, 
-    precio_adicional || 0,
-    usaInv ? 1 : 0,
-    usa_insumos ? 1 : 0,
-    cantidadIni,
-    cantidadAct
-  ], function(err: any) {
-    if (err) {
-      console.error('Error al crear item de personalización:', err);
-      if (err.message.includes('UNIQUE constraint')) {
-        return res.status(400).json({ 
-          error: 'Ya existe un item con ese nombre en esta categoría',
-          detalles: err.message 
-        });
-      }
-      return res.status(500).json({ error: 'Error al crear el item' });
+router.post('/categorias/:categoriaId/items', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId } = req.params;
+    const { empresaId } = req.context;
+    const { nombre, descripcion, precio_adicional, usa_inventario, usa_insumos, cantidad_inicial } = req.body;
+    
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre es obligatorio' });
     }
     
-    db.get('SELECT * FROM items_personalizacion WHERE id = ?', [this.lastID], (err: any, row: any) => {
-      if (err) {
-        return res.status(500).json({ error: 'Error al obtener el item creado' });
-      }
-      res.status(201).json(row);
-    });
-  });
+    // Validar inventario si está habilitado
+    const usaInv = !!usa_inventario;
+    if (usaInv && (cantidad_inicial === undefined || cantidad_inicial === null || Number(cantidad_inicial) < 0)) {
+      return res.status(400).json({ error: 'Debe especificar una cantidad inicial válida cuando usa inventario' });
+    }
+    
+    const cantidadIni = usaInv ? Number(cantidad_inicial) : null;
+    const cantidadAct = usaInv ? Number(cantidad_inicial) : null;
+    
+    const codigoAutoItem = await generarSiguienteCodigo('items_personalizacion', 'PER', empresaId);
+
+    const nuevo = await db.insertInto('items_personalizacion')
+      .values({
+        empresa_id: empresaId,
+        codigo: codigoAutoItem,
+        categoria_id: categoriaId,
+        nombre: nombre.trim(),
+        descripcion: descripcion || null,
+        precio_adicional: Number(precio_adicional) || 0,
+        usa_inventario: usaInv,
+        usa_insumos: !!usa_insumos,
+        cantidad_inicial: cantidadIni as any,
+        cantidad_actual: cantidadAct as any,
+        activo: true,
+        disponible: true
+      })
+      .returningAll()
+      .executeTakeFirstOrThrow();
+      
+    res.status(201).json(nuevo);
+  } catch (error: any) {
+    console.error('Error al crear item de personalización:', error);
+    res.status(500).json({ error: 'Error al crear el item' });
+  }
 });
 
 // Actualizar un item
-router.put('/categorias/:categoriaId/items/:itemId', (req: Request, res: Response) => {
-  const { categoriaId, itemId } = req.params;
-  const { nombre, descripcion, precio_adicional, usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual } = req.body;
-  
-  // Validar inventario si está habilitado
-  const usaInv = Boolean(usa_inventario);
-  if (usaInv && cantidad_inicial !== undefined && cantidad_inicial < 0) {
-    return res.status(400).json({ error: 'La cantidad inicial debe ser mayor o igual a 0' });
-  }
-  if (usaInv && cantidad_actual !== undefined && cantidad_actual < 0) {
-    return res.status(400).json({ error: 'La cantidad actual debe ser mayor o igual a 0' });
-  }
-  
-  const query = `
-    UPDATE items_personalizacion 
-    SET nombre = ?, descripcion = ?, precio_adicional = ?, 
-      usa_inventario = ?, usa_insumos = ?, cantidad_inicial = ?, cantidad_actual = ?,
-        updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND categoria_id = ?
-  `;
-  
-  // Si no usa inventario, guardar NULL en los campos de cantidad
-  const cantidadIni = usaInv ? (cantidad_inicial !== undefined ? cantidad_inicial : null) : null;
-  const cantidadAct = usaInv ? (cantidad_actual !== undefined ? cantidad_actual : null) : null;
-  
-  db.run(query, [
-    nombre, 
-    descripcion || null, 
-    precio_adicional || 0, 
-    usaInv ? 1 : 0,
-    usa_insumos ? 1 : 0,
-    cantidadIni,
-    cantidadAct,
-    itemId, 
-    categoriaId
-  ], function(err: any) {
-    if (err) {
-      console.error('Error al actualizar item:', err);
-      if (err.message.includes('UNIQUE constraint')) {
-        return res.status(400).json({ 
-          error: 'Ya existe un item con ese nombre en esta categoría',
-          detalles: err.message 
-        });
-      }
-      return res.status(500).json({ error: 'Error al actualizar el item' });
+router.put('/categorias/:categoriaId/items/:itemId', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId, itemId } = req.params;
+    const { empresaId } = req.context;
+    const { nombre, descripcion, precio_adicional, usa_inventario, usa_insumos, cantidad_inicial, cantidad_actual, activo, disponible } = req.body;
+    
+    if (!nombre) {
+      return res.status(400).json({ error: 'El nombre es obligatorio' });
     }
     
-    if (this.changes === 0) {
+    // Validar inventario si está habilitado
+    const usaInv = !!usa_inventario;
+    
+    const actualizada = await db.updateTable('items_personalizacion')
+      .set({
+        nombre: nombre.trim(),
+        descripcion: descripcion || null,
+        precio_adicional: precio_adicional !== undefined ? Number(precio_adicional) : undefined,
+        usa_inventario: usaInv,
+        usa_insumos: usa_insumos !== undefined ? !!usa_insumos : undefined,
+        cantidad_inicial: cantidad_inicial !== undefined ? Number(cantidad_inicial) : undefined,
+        cantidad_actual: cantidad_actual !== undefined ? Number(cantidad_actual) : undefined,
+        activo: activo !== undefined ? !!activo : undefined,
+        disponible: disponible !== undefined ? !!disponible : undefined,
+        updated_at: new Date() as any
+      })
+      .where('id', '=', itemId)
+      .where('categoria_id', '=', categoriaId)
+      .where('empresa_id', '=', empresaId)
+      .returningAll()
+      .executeTakeFirst();
+      
+    if (!actualizada) {
       return res.status(404).json({ error: 'Item no encontrado' });
     }
     
-    db.get('SELECT * FROM items_personalizacion WHERE id = ?', [itemId], (err: any, row: any) => {
-      if (err) {
-        return res.status(500).json({ error: 'Error al obtener el item actualizado' });
-      }
-      res.json(row);
-    });
-  });
+    res.json(actualizada);
+  } catch (error: any) {
+    console.error('Error al actualizar item:', error);
+    res.status(500).json({ error: 'Error al actualizar el item' });
+  }
 });
 
 // Eliminar un item
-router.delete('/categorias/:categoriaId/items/:itemId', (req: Request, res: Response) => {
-  const { categoriaId, itemId } = req.params;
-  
-  const query = 'DELETE FROM items_personalizacion WHERE id = ? AND categoria_id = ?';
-  
-  db.run(query, [itemId, categoriaId], function(err: any) {
-    if (err) {
-      console.error('Error al eliminar item:', err);
-      return res.status(500).json({ error: 'Error al eliminar el item' });
-    }
+router.delete('/categorias/:categoriaId/items/:itemId', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId, itemId } = req.params;
+    const { empresaId } = req.context;
     
-    if (this.changes === 0) {
+    const result = await db.deleteFrom('items_personalizacion')
+      .where('id', '=', itemId)
+      .where('categoria_id', '=', categoriaId)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+      
+    if (Number(result.numDeletedRows) === 0) {
       return res.status(404).json({ error: 'Item no encontrado' });
     }
     
     res.json({ mensaje: 'Item eliminado exitosamente' });
-  });
+  } catch (error: any) {
+    console.error('Error al eliminar item:', error);
+    res.status(500).json({ error: 'Error al eliminar el item' });
+  }
 });
 
 // Decrementar inventario de un item (usado al crear/editar comandas)
-router.patch('/categorias/:categoriaId/items/:itemId/decrementar', (req: Request, res: Response) => {
-  const { categoriaId, itemId } = req.params;
-  const { cantidad } = req.body;
-  
-  if (!cantidad || cantidad <= 0) {
-    return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
-  }
-  
-  // Verificar que el item use inventario
-  db.get('SELECT * FROM items_personalizacion WHERE id = ? AND categoria_id = ?', [itemId, categoriaId], (err: any, item: any) => {
-    if (err) {
-      console.error('Error al obtener item:', err);
-      return res.status(500).json({ error: 'Error al obtener el item' });
+router.patch('/categorias/:categoriaId/items/:itemId/decrementar', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId, itemId } = req.params;
+    const { empresaId } = req.context;
+    const { cantidad } = req.body;
+    
+    if (!cantidad || Number(cantidad) <= 0) {
+      return res.status(400).json({ error: 'La cantidad debe ser mayor a 0' });
     }
     
+    const item = await db.selectFrom('items_personalizacion')
+      .selectAll()
+      .where('id', '=', itemId)
+      .where('categoria_id', '=', categoriaId)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+      
     if (!item) {
       return res.status(404).json({ error: 'Item no encontrado' });
     }
     
     if (!item.usa_inventario) {
-      // Si no usa inventario, no hacer nada y retornar éxito
       return res.json({ mensaje: 'Item no usa inventario', item });
     }
     
-    // Verificar que haya suficiente inventario
-    if (item.cantidad_actual === null || item.cantidad_actual < cantidad) {
+    const cantActual = Number(item.cantidad_actual);
+    if (item.cantidad_actual === null || cantActual < Number(cantidad)) {
       return res.status(400).json({ 
         error: 'Inventario insuficiente',
-        disponible: item.cantidad_actual || 0,
+        disponible: cantActual || 0,
         solicitado: cantidad
       });
     }
     
-    // Decrementar inventario
-    const nuevaCantidad = item.cantidad_actual - cantidad;
+    const nuevaCantidad = cantActual - Number(cantidad);
     
-    const updateQuery = `
-      UPDATE items_personalizacion 
-      SET cantidad_actual = ?, updated_at = CURRENT_TIMESTAMP
-      WHERE id = ? AND categoria_id = ?
-    `;
-    
-    db.run(updateQuery, [nuevaCantidad, itemId, categoriaId], function(err: any) {
-      if (err) {
-        console.error('Error al decrementar inventario:', err);
-        return res.status(500).json({ error: 'Error al actualizar inventario' });
-      }
+    const actualizada = await db.updateTable('items_personalizacion')
+      .set({
+        cantidad_actual: nuevaCantidad,
+        disponible: nuevaCantidad > 0 ? true : false,
+        updated_at: new Date() as any
+      })
+      .where('id', '=', itemId)
+      .where('empresa_id', '=', empresaId)
+      .returningAll()
+      .executeTakeFirst();
       
-      // Si llegó a 0, también marcar como no disponible
-      if (nuevaCantidad <= 0) {
-        db.run(
-          'UPDATE items_personalizacion SET disponible = 0 WHERE id = ?',
-          [itemId],
-          (err: any) => {
-            if (err) {
-              console.error('Error al marcar como no disponible:', err);
-            }
-          }
-        );
-      }
-      
-      db.get('SELECT * FROM items_personalizacion WHERE id = ?', [itemId], (err: any, updatedItem: any) => {
-        if (err) {
-          return res.status(500).json({ error: 'Error al obtener item actualizado' });
-        }
-        
-        res.json({ 
-          mensaje: `Inventario decrementado. Cantidad actual: ${nuevaCantidad}`,
-          item: updatedItem,
-          cantidad_anterior: item.cantidad_actual,
-          cantidad_decrementada: cantidad,
-          cantidad_nueva: nuevaCantidad
-        });
-      });
+    res.json({ 
+      mensaje: `Inventario decrementado. Cantidad actual: ${nuevaCantidad}`,
+      item: actualizada,
+      cantidad_anterior: cantActual,
+      cantidad_decrementada: cantidad,
+      cantidad_nueva: nuevaCantidad
     });
-  });
+  } catch (error: any) {
+    console.error('Error al decrementar inventario:', error);
+    res.status(500).json({ error: 'Error al actualizar inventario' });
+  }
 });
 
 // Cambiar disponibilidad de un item
-router.patch('/categorias/:categoriaId/items/:itemId/disponibilidad', (req: Request, res: Response) => {
-  const { categoriaId, itemId } = req.params;
-  const { disponible } = req.body;
-  
-  if (disponible === undefined) {
-    return res.status(400).json({ error: 'El campo disponible es requerido' });
-  }
-  
-  const query = `
-    UPDATE items_personalizacion 
-    SET disponible = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND categoria_id = ?
-  `;
-  
-  db.run(query, [disponible ? 1 : 0, itemId, categoriaId], function(err: any) {
-    if (err) {
-      console.error('Error al actualizar disponibilidad:', err);
-      return res.status(500).json({ error: 'Error al actualizar disponibilidad' });
+router.patch('/categorias/:categoriaId/items/:itemId/disponibilidad', async (req: Request, res: Response) => {
+  try {
+    const { categoriaId, itemId } = req.params;
+    const { empresaId } = req.context;
+    const { disponible } = req.body;
+    
+    if (disponible === undefined) {
+      return res.status(400).json({ error: 'El campo disponible es requerido' });
     }
     
-    if (this.changes === 0) {
+    const actualizada = await db.updateTable('items_personalizacion')
+      .set({
+        disponible: !!disponible,
+        updated_at: new Date() as any
+      })
+      .where('id', '=', itemId)
+      .where('categoria_id', '=', categoriaId)
+      .where('empresa_id', '=', empresaId)
+      .returningAll()
+      .executeTakeFirst();
+      
+    if (!actualizada) {
       return res.status(404).json({ error: 'Item no encontrado' });
     }
     
-    db.get('SELECT * FROM items_personalizacion WHERE id = ?', [itemId], (err: any, row: any) => {
-      if (err) {
-        return res.status(500).json({ error: 'Error al obtener item actualizado' });
-      }
-      res.json({ 
-        mensaje: `Item ${disponible ? 'disponible' : 'no disponible'}`, 
-        item: row 
-      });
+    res.json({ 
+      mensaje: `Item ${disponible ? 'disponible' : 'no disponible'}`, 
+      item: actualizada 
     });
-  });
+  } catch (error: any) {
+    console.error('Error al actualizar disponibilidad:', error);
+    res.status(500).json({ error: 'Error al actualizar disponibilidad' });
+  }
 });
 
 // ========== IMPORTAR / EXPORTAR PERSONALIZACIONES ==========
 
 router.get('/export', async (req: Request, res: Response) => {
   try {
-    const categorias = await allAsync('SELECT * FROM categorias_personalizacion ORDER BY orden, nombre');
-    const items = await allAsync('SELECT * FROM items_personalizacion ORDER BY categoria_id, nombre');
+    const { empresaId } = req.context;
+    const categorias = await db.selectFrom('categorias_personalizacion')
+      .select(['codigo', 'nombre', 'descripcion', 'multi_seleccion', 'obligatorio', 'activo', 'orden'])
+      .where('empresa_id', '=', empresaId)
+      .orderBy('orden', 'asc')
+      .orderBy('nombre', 'asc')
+      .execute();
+      
+    const items = await db.selectFrom('items_personalizacion as ip')
+      .innerJoin('categorias_personalizacion as cp', 'ip.categoria_id', 'cp.id')
+      .select([
+        'ip.codigo',
+        'cp.codigo as categoria_codigo',
+        'cp.nombre as categoria_nombre',
+        'ip.nombre',
+        'ip.descripcion',
+        'ip.precio_extra',
+        'ip.precio_adicional',
+        'ip.activo',
+        'ip.disponible',
+        'ip.usa_inventario',
+        'ip.usa_insumos',
+        'ip.cantidad_inicial',
+        'ip.cantidad_actual',
+        'ip.cantidad_minima'
+      ])
+      .where('ip.empresa_id', '=', empresaId)
+      .orderBy('cp.nombre', 'asc')
+      .orderBy('ip.nombre', 'asc')
+      .execute();
 
     const wb = XLSX.utils.book_new();
     
@@ -486,6 +457,8 @@ router.get('/export', async (req: Request, res: Response) => {
 
 router.post('/import', async (req: Request, res: Response) => {
   const { fileBase64 } = req.body;
+  const { empresaId } = req.context;
+  
   if (!fileBase64) {
     return res.status(400).json({ error: 'Archivo no proporcionado' });
   }
@@ -504,80 +477,185 @@ router.post('/import', async (req: Request, res: Response) => {
     const categoriasRows: any[] = XLSX.utils.sheet_to_json(categoriasSheet);
     const itemsRows: any[] = itemsSheet ? XLSX.utils.sheet_to_json(itemsSheet) : [];
 
-    await runAsync('BEGIN TRANSACTION');
+    const errores: { fila: number; hoja: string; mensaje: string }[] = [];
+    let catCreadas = 0;
+    let catActualizadas = 0;
+    let itemsCreados = 0;
+    let itemsActualizados = 0;
 
-    // Mapeo para mantener consistencia de IDs de categorías si cambian en la base de datos
-    // En una importación destructiva/reemplazo total, esto es más simple.
-    // Aquí haremos un "Upsert" basado en el nombre de la categoría.
+    // Helper para generar siguiente código de categoría o item
+    const generarSiguienteCodigoLocal = async (
+      tabla: 'categorias_personalizacion' | 'items_personalizacion',
+      prefijo: string,
+      trx: any
+    ): Promise<string> => {
+      const result = await sql`
+        SELECT codigo FROM ${sql.table(tabla)}
+        WHERE empresa_id = ${empresaId}
+          AND codigo LIKE ${prefijo + '-%'}
+        ORDER BY codigo DESC
+        LIMIT 1
+      `.execute(trx);
+      let nextNum = 1;
+      if ((result.rows as any[]).length > 0) {
+        const last = (result.rows as any[])[0].codigo as string;
+        const num = parseInt(last.replace(prefijo + '-', ''), 10);
+        if (!isNaN(num)) nextNum = num + 1;
+      }
+      return `${prefijo}-${String(nextNum).padStart(3, '0')}`;
+    };
 
-    for (const catRow of categoriasRows) {
-      if (!catRow.nombre) continue;
+    await db.transaction().execute(async (trx) => {
+      // Mapa de codigo de categoría → id (se va construyendo)
+      const catCodigoMap = new Map<string, string>();
+      const catNombreMap = new Map<string, string>();
 
-      const existingCat = await getAsync('SELECT id FROM categorias_personalizacion WHERE nombre = ?', [catRow.nombre]);
-      let catId: number;
-
-      if (existingCat) {
-        catId = existingCat.id;
-        await runAsync(
-          'UPDATE categorias_personalizacion SET descripcion = ?, orden = ?, activo = ? WHERE id = ?',
-          [catRow.descripcion || '', catRow.orden || 0, catRow.activo === 0 ? 0 : 1, catId]
-        );
-      } else {
-        await runAsync(
-          'INSERT INTO categorias_personalizacion (nombre, descripcion, orden, activo) VALUES (?, ?, ?, ?)',
-          [catRow.nombre, catRow.descripcion || '', catRow.orden || 0, catRow.activo === 0 ? 0 : 1]
-        );
-        const newCat = await getAsync('SELECT id FROM categorias_personalizacion WHERE nombre = ?', [catRow.nombre]);
-        catId = newCat.id;
+      // Cargar existentes
+      const existentes = await trx.selectFrom('categorias_personalizacion')
+        .select(['id', 'codigo', 'nombre'])
+        .where('empresa_id', '=', empresaId)
+        .execute();
+      for (const c of existentes) {
+        catCodigoMap.set(c.codigo, c.id);
+        catNombreMap.set(c.nombre.toLowerCase(), c.id);
       }
 
-      // Ahora procesar los items para esta categoría
-      const itemsDeEstaCat = itemsRows.filter(i => {
-        // Puede venir por categoria_id (original) o por un campo categoria_nombre si lo añadimos al excel
-        // Por simplicidad en este caso, usaremos el ID original pero verificando si el nombre coincide.
-        return i.categoria_id === catRow.id;
-      });
+      for (let idx = 0; idx < categoriasRows.length; idx++) {
+        const catRow = categoriasRows[idx];
+        const fila = idx + 2;
 
-      for (const itemRow of itemsDeEstaCat) {
-        if (!itemRow.nombre) continue;
+        if (!catRow.nombre) {
+          errores.push({ fila, hoja: 'Categorias', mensaje: 'Nombre es obligatorio' });
+          continue;
+        }
 
-        const existingItem = await getAsync(
-          'SELECT id FROM items_personalizacion WHERE categoria_id = ? AND nombre = ?',
-          [catId, itemRow.nombre]
+        const codigoRaw = catRow.codigo?.toString().trim() || '';
+        let categoryId: string | undefined;
+
+        // Buscar existente por codigo o nombre
+        if (codigoRaw) {
+          categoryId = catCodigoMap.get(codigoRaw);
+        }
+        if (!categoryId) {
+          categoryId = catNombreMap.get(catRow.nombre.toLowerCase());
+        }
+
+        if (categoryId) {
+          await trx.updateTable('categorias_personalizacion')
+            .set({
+              nombre: catRow.nombre,
+              descripcion: catRow.descripcion || '',
+              orden: catRow.orden || 0,
+              activo: catRow.activo === false ? false : true,
+              multi_seleccion: !!catRow.multi_seleccion,
+              obligatorio: !!catRow.obligatorio
+            })
+            .where('id', '=', categoryId)
+            .execute();
+          catActualizadas++;
+        } else {
+          const nuevoCodigo = codigoRaw || await generarSiguienteCodigoLocal('categorias_personalizacion', 'CPER', trx);
+          const newCat = await trx.insertInto('categorias_personalizacion')
+            .values({
+              empresa_id: empresaId,
+              codigo: nuevoCodigo,
+              nombre: catRow.nombre,
+              descripcion: catRow.descripcion || '',
+              orden: catRow.orden || 0,
+              activo: catRow.activo === false ? false : true,
+              multi_seleccion: !!catRow.multi_seleccion,
+              obligatorio: !!catRow.obligatorio
+            })
+            .returning(['id', 'codigo'])
+            .executeTakeFirstOrThrow();
+          categoryId = newCat.id;
+          catCodigoMap.set(newCat.codigo, newCat.id);
+          catNombreMap.set(catRow.nombre.toLowerCase(), newCat.id);
+          catCreadas++;
+        }
+
+        // Items para esta categoría: resolver por categoria_codigo o categoria_nombre
+        const itemsDeEstaCat = itemsRows.filter(i => 
+          (i.categoria_codigo && i.categoria_codigo === (codigoRaw || catRow.codigo)) ||
+          (i.categoria_nombre && i.categoria_nombre.toLowerCase() === catRow.nombre.toLowerCase()) ||
+          (i.categoria_id === catRow.id)
         );
 
-        if (existingItem) {
-          await runAsync(
-            'UPDATE items_personalizacion SET descripcion = ?, precio_adicional = ?, activo = ?, disponible = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
-            [
-              itemRow.descripcion || '',
-              normalizarNumero(itemRow.precio_adicional) || 0,
-              itemRow.activo === 0 ? 0 : 1,
-              itemRow.disponible === 0 ? 0 : 1,
-              existingItem.id
-            ]
-          );
-        } else {
-          await runAsync(
-            'INSERT INTO items_personalizacion (categoria_id, nombre, descripcion, precio_adicional, activo, disponible) VALUES (?, ?, ?, ?, ?, ?)',
-            [
-              catId,
-              itemRow.nombre,
-              itemRow.descripcion || '',
-              normalizarNumero(itemRow.precio_adicional) || 0,
-              itemRow.activo === 0 ? 0 : 1,
-              itemRow.disponible === 0 ? 0 : 1
-            ]
-          );
+        for (const itemRow of itemsDeEstaCat) {
+          if (!itemRow.nombre) continue;
+
+          const itemCodigoRaw = itemRow.codigo?.toString().trim() || '';
+
+          // Buscar item existente por codigo o (categoria + nombre)
+          let existingItem: any = null;
+          if (itemCodigoRaw) {
+            existingItem = await trx.selectFrom('items_personalizacion')
+              .select('id')
+              .where('empresa_id', '=', empresaId)
+              .where('codigo', '=', itemCodigoRaw)
+              .executeTakeFirst();
+          }
+          if (!existingItem) {
+            existingItem = await trx.selectFrom('items_personalizacion')
+              .select('id')
+              .where('empresa_id', '=', empresaId)
+              .where('categoria_id', '=', categoryId!)
+              .where('nombre', '=', itemRow.nombre)
+              .executeTakeFirst();
+          }
+
+          if (existingItem) {
+            await trx.updateTable('items_personalizacion')
+              .set({
+                nombre: itemRow.nombre,
+                categoria_id: categoryId!,
+                descripcion: itemRow.descripcion || '',
+                precio_adicional: Number(itemRow.precio_adicional) || 0,
+                activo: itemRow.activo === false ? false : true,
+                disponible: itemRow.disponible === false ? false : true,
+                usa_inventario: !!itemRow.usa_inventario,
+                usa_insumos: !!itemRow.usa_insumos,
+                cantidad_inicial: Number(itemRow.cantidad_inicial) || null,
+                cantidad_actual: Number(itemRow.cantidad_actual) || null,
+                cantidad_minima: Number(itemRow.cantidad_minima) || null,
+                updated_at: new Date() as any
+              })
+              .where('id', '=', existingItem.id)
+              .execute();
+            itemsActualizados++;
+          } else {
+            const nuevoItemCodigo = itemCodigoRaw || await generarSiguienteCodigoLocal('items_personalizacion', 'PER', trx);
+            await trx.insertInto('items_personalizacion')
+              .values({
+                empresa_id: empresaId,
+                codigo: nuevoItemCodigo,
+                categoria_id: categoryId!,
+                nombre: itemRow.nombre,
+                descripcion: itemRow.descripcion || '',
+                precio_adicional: Number(itemRow.precio_adicional) || 0,
+                activo: itemRow.activo === false ? false : true,
+                disponible: itemRow.disponible === false ? false : true,
+                usa_inventario: !!itemRow.usa_inventario,
+                usa_insumos: !!itemRow.usa_insumos,
+                cantidad_inicial: Number(itemRow.cantidad_inicial) || 0,
+                cantidad_actual: Number(itemRow.cantidad_actual) || 0,
+                cantidad_minima: Number(itemRow.cantidad_minima) || null
+              })
+              .execute();
+            itemsCreados++;
+          }
         }
       }
-    }
+    });
 
-    await runAsync('COMMIT');
-    res.json({ mensaje: 'Personalizaciones importadas correctamente' });
+    res.json({ 
+      mensaje: `Personalizaciones importadas: ${catCreadas + catActualizadas} categorías, ${itemsCreados + itemsActualizados} items`,
+      categorias: { creadas: catCreadas, actualizadas: catActualizadas },
+      items: { creados: itemsCreados, actualizados: itemsActualizados },
+      errores: errores.length > 0 ? errores : undefined
+    });
   } catch (error) {
     console.error('Error al importar personalizaciones:', error);
-    try { await runAsync('ROLLBACK'); } catch (e) {}
     res.status(500).json({ error: 'Error al importar personalizaciones' });
   }
 });

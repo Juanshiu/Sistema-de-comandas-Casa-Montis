@@ -1,7 +1,6 @@
-import express from 'express';
-import { db } from '../database/init';
+import express, { Request, Response } from 'express';
+import { db } from '../database/database';
 import { verificarAutenticacion as verifyToken, verificarPermiso as checkPermission } from '../middleware/authMiddleware';
-import { Empleado } from '../models';
 
 const router = express.Router();
 
@@ -9,173 +8,198 @@ const router = express.Router();
  * GET /api/empleados
  * Listar todos los empleados
  */
-router.get('/', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const sql = `SELECT * FROM empleados ORDER BY apellidos, nombres`;
-  
-  db.all(sql, [], (err, rows) => {
-    if (err) {
-      console.error('Error al obtener empleados:', err);
-      return res.status(500).json({ error: 'Error al obtener empleados' });
-    }
+router.get('/', verifyToken, checkPermission('nomina.gestion'), async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    const rows = await db.selectFrom('empleados')
+      .selectAll()
+      .where('empresa_id', '=', empresaId)
+      .orderBy('apellidos', 'asc')
+      .orderBy('nombres', 'asc')
+      .execute();
     res.json(rows);
-  });
+  } catch (error: any) {
+    console.error('Error al obtener empleados:', error);
+    res.status(500).json({ error: 'Error al obtener empleados', details: error.message });
+  }
 });
 
 /**
  * GET /api/empleados/activos
  * Listar solo empleados activos
  */
-router.get('/activos', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const sql = `SELECT * FROM empleados WHERE estado = 'ACTIVO' ORDER BY apellidos, nombres`;
-  
-  db.all(sql, [], (err, rows) => {
-    if (err) {
-      console.error('Error al obtener empleados activos:', err);
-      return res.status(500).json({ error: 'Error al obtener empleados activos' });
-    }
+router.get('/activos', verifyToken, checkPermission('nomina.gestion'), async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    const rows = await db.selectFrom('empleados')
+      .selectAll()
+      .where('empresa_id', '=', empresaId)
+      .where('estado', '=', 'ACTIVO')
+      .orderBy('apellidos', 'asc')
+      .orderBy('nombres', 'asc')
+      .execute();
     res.json(rows);
-  });
+  } catch (error: any) {
+    console.error('Error al obtener empleados activos:', error);
+    res.status(500).json({ error: 'Error al obtener empleados activos', details: error.message });
+  }
 });
 
 /**
  * GET /api/empleados/:id
  * Obtener un empleado por ID
  */
-router.get('/:id', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const { id } = req.params;
-  const sql = `SELECT * FROM empleados WHERE id = ?`;
-  
-  db.get(sql, [id], (err, row) => {
-    if (err) {
-      console.error('Error al obtener empleado:', err);
-      return res.status(500).json({ error: 'Error al obtener empleado' });
-    }
+router.get('/:id', verifyToken, checkPermission('nomina.gestion'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { empresaId } = req.context;
+    const row = await db.selectFrom('empleados')
+      .selectAll()
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+    
     if (!row) {
       return res.status(404).json({ error: 'Empleado no encontrado' });
     }
     res.json(row);
-  });
+  } catch (error: any) {
+    console.error('Error al obtener empleado:', error);
+    res.status(500).json({ error: 'Error al obtener empleado', details: error.message });
+  }
 });
 
 /**
  * POST /api/empleados
  * Crear nuevo empleado
  */
-router.post('/', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const empleado = req.body as Partial<Empleado>;
-  
-  const sql = `
-    INSERT INTO empleados (
-      tipo_documento, numero_documento, nombres, apellidos, direccion, municipio, celular, email,
-      cargo, tipo_contrato, fecha_inicio, fecha_fin,
-      tipo_trabajador, subtipo_trabajador, alto_riesgo, salario_integral,
-      frecuencia_pago, salario_base, auxilio_transporte,
-      metodo_pago, banco, tipo_cuenta, numero_cuenta,
-      estado
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `;
-  
-  const params = [
-    empleado.tipo_documento, empleado.numero_documento, empleado.nombres, empleado.apellidos, empleado.direccion, empleado.municipio, empleado.celular, empleado.email,
-    empleado.cargo, empleado.tipo_contrato, empleado.fecha_inicio, empleado.fecha_fin,
-    empleado.tipo_trabajador || 'DEPENDIENTE', empleado.subtipo_trabajador, empleado.alto_riesgo ? 1 : 0, empleado.salario_integral ? 1 : 0,
-    empleado.frecuencia_pago || 'MENSUAL', empleado.salario_base, empleado.auxilio_transporte !== false ? 1 : 0,
-    empleado.metodo_pago, empleado.banco, empleado.tipo_cuenta, empleado.numero_cuenta,
-    empleado.estado || 'ACTIVO'
-  ];
-  
-  db.run(sql, params, function(err) {
-    if (err) {
-      console.error('Error al crear empleado:', err);
-      if (err.message.includes('UNIQUE constraint')) {
-        return res.status(400).json({ error: 'El número de documento ya está registrado' });
-      }
-      return res.status(500).json({ error: 'Error al crear empleado' });
-    }
+router.post('/', verifyToken, checkPermission('nomina.gestion'), async (req: Request, res: Response) => {
+  try {
+    const { empresaId } = req.context;
+    const empleado = req.body;
     
-    // Devolver el empleado creado
-    db.get(`SELECT * FROM empleados WHERE id = ?`, [this.lastID], (err, row) => {
-      if (err) return res.status(201).json({ id: this.lastID, ...empleado });
-      res.status(201).json(row);
-    });
-  });
+    const result = await db.insertInto('empleados')
+      .values({
+        empresa_id: empresaId,
+        tipo_documento: empleado.tipo_documento,
+        numero_documento: empleado.numero_documento,
+        nombres: empleado.nombres,
+        apellidos: empleado.apellidos,
+        direccion: empleado.direccion,
+        municipio: empleado.municipio,
+        celular: empleado.celular,
+        email: empleado.email,
+        cargo: empleado.cargo,
+        tipo_contrato: empleado.tipo_contrato,
+        fecha_inicio: empleado.fecha_inicio ? new Date(empleado.fecha_inicio) : null,
+        fecha_fin: empleado.fecha_fin ? new Date(empleado.fecha_fin) : null,
+        tipo_trabajador: empleado.tipo_trabajador || 'DEPENDIENTE',
+        subtipo_trabajador: empleado.subtipo_trabajador,
+        alto_riesgo: !!empleado.alto_riesgo,
+        salario_integral: !!empleado.salario_integral,
+        frecuencia_pago: empleado.frecuencia_pago || 'MENSUAL',
+        salario_base: empleado.salario_base,
+        auxilio_transporte: empleado.auxilio_transporte !== false,
+        metodo_pago: empleado.metodo_pago,
+        banco: empleado.banco,
+        tipo_cuenta: empleado.tipo_cuenta,
+        numero_cuenta: empleado.numero_cuenta,
+        estado: empleado.estado || 'ACTIVO'
+      })
+      .returningAll()
+      .executeTakeFirst();
+
+    res.status(201).json(result);
+  } catch (error: any) {
+    console.error('Error al crear empleado:', error);
+    if (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate key value')) {
+      return res.status(400).json({ error: 'El número de documento ya está registrado para esta empresa' });
+    }
+    res.status(500).json({ error: 'Error al crear empleado', details: error.message });
+  }
 });
 
 /**
  * PUT /api/empleados/:id
  * Actualizar empleado
  */
-router.put('/:id', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const { id } = req.params;
-  const empleado = req.body as Partial<Empleado>;
-  
-  const sql = `
-    UPDATE empleados SET
-      tipo_documento = ?, numero_documento = ?, nombres = ?, apellidos = ?, direccion = ?, municipio = ?, celular = ?, email = ?,
-      cargo = ?, tipo_contrato = ?, fecha_inicio = ?, fecha_fin = ?,
-      tipo_trabajador = ?, subtipo_trabajador = ?, alto_riesgo = ?, salario_integral = ?,
-      frecuencia_pago = ?, salario_base = ?, auxilio_transporte = ?,
-      metodo_pago = ?, banco = ?, tipo_cuenta = ?, numero_cuenta = ?,
-      estado = ?, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ?
-  `;
-  
-  const params = [
-    empleado.tipo_documento, empleado.numero_documento, empleado.nombres, empleado.apellidos, empleado.direccion, empleado.municipio, empleado.celular, empleado.email,
-    empleado.cargo, empleado.tipo_contrato, empleado.fecha_inicio, empleado.fecha_fin,
-    empleado.tipo_trabajador, empleado.subtipo_trabajador, empleado.alto_riesgo ? 1 : 0, empleado.salario_integral ? 1 : 0,
-    empleado.frecuencia_pago, empleado.salario_base, empleado.auxilio_transporte !== false ? 1 : 0,
-    empleado.metodo_pago, empleado.banco, empleado.tipo_cuenta, empleado.numero_cuenta,
-    empleado.estado,
-    id
-  ];
-  
-  db.run(sql, params, function(err) {
-    if (err) {
-      console.error('Error al actualizar empleado:', err);
-      if (err.message.includes('UNIQUE constraint')) {
-        return res.status(400).json({ error: 'El número de documento ya está registrado' });
-      }
-      return res.status(500).json({ error: 'Error al actualizar empleado' });
-    }
+router.put('/:id', verifyToken, checkPermission('nomina.gestion'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { empresaId } = req.context;
+    const empleado = req.body;
     
-    if (this.changes === 0) {
+    const result = await db.updateTable('empleados')
+      .set({
+        tipo_documento: empleado.tipo_documento,
+        numero_documento: empleado.numero_documento,
+        nombres: empleado.nombres,
+        apellidos: empleado.apellidos,
+        direccion: empleado.direccion,
+        municipio: empleado.municipio,
+        celular: empleado.celular,
+        email: empleado.email,
+        cargo: empleado.cargo,
+        tipo_contrato: empleado.tipo_contrato,
+        fecha_inicio: empleado.fecha_inicio ? new Date(empleado.fecha_inicio) : null,
+        fecha_fin: empleado.fecha_fin ? new Date(empleado.fecha_fin) : null,
+        tipo_trabajador: empleado.tipo_trabajador,
+        subtipo_trabajador: empleado.subtipo_trabajador,
+        alto_riesgo: !!empleado.alto_riesgo,
+        salario_integral: !!empleado.salario_integral,
+        frecuencia_pago: empleado.frecuencia_pago,
+        salario_base: empleado.salario_base,
+        auxilio_transporte: empleado.auxilio_transporte !== false,
+        metodo_pago: empleado.metodo_pago,
+        banco: empleado.banco,
+        tipo_cuenta: empleado.tipo_cuenta,
+        numero_cuenta: empleado.numero_cuenta,
+        estado: empleado.estado,
+        updated_at: new Date() as any
+      })
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .returningAll()
+      .executeTakeFirst();
+
+    if (!result) {
       return res.status(404).json({ error: 'Empleado no encontrado' });
     }
     
-    // Devolver el empleado actualizado
-    db.get(`SELECT * FROM empleados WHERE id = ?`, [id], (err, row) => {
-      if (err) return res.json({ id, ...empleado });
-      res.json(row);
-    });
-  });
+    res.json(result);
+  } catch (error: any) {
+    console.error('Error al actualizar empleado:', error);
+    if (error.message.includes('UNIQUE constraint') || error.message.includes('duplicate key value')) {
+      return res.status(400).json({ error: 'El número de documento ya está registrado para esta empresa' });
+    }
+    res.status(500).json({ error: 'Error al actualizar empleado', details: error.message });
+  }
 });
 
 /**
  * DELETE /api/empleados/:id
  * Eliminar (dar de baja) un empleado
  */
-router.delete('/:id', verifyToken, checkPermission('nomina.gestion'), (req, res) => {
-  const { id } = req.params;
-  
-  // Podríamos hacer un borrado lógico (cambiar estado a INACTIVO) o físico.
-  // El usuario pidió "eliminar", así que haremos borrado físico para limpiar la lista.
-  // Pero lo más seguro en nómina es borrado lógico si ya tiene registros asociados.
-  // Sin embargo, para cumplir con el pedido directo de "eliminar":
-  const sql = `DELETE FROM empleados WHERE id = ?`;
-  
-  db.run(sql, [id], function(err) {
-    if (err) {
-      console.error('Error al eliminar empleado:', err);
-      return res.status(500).json({ error: 'Error al eliminar empleado' });
-    }
+router.delete('/:id', verifyToken, checkPermission('nomina.gestion'), async (req: Request, res: Response) => {
+  try {
+    const { id } = req.params;
+    const { empresaId } = req.context;
     
-    if (this.changes === 0) {
+    const result = await db.deleteFrom('empleados')
+      .where('id', '=', id)
+      .where('empresa_id', '=', empresaId)
+      .executeTakeFirst();
+    
+    if (Number(result.numDeletedRows) === 0) {
       return res.status(404).json({ error: 'Empleado no encontrado' });
     }
     
     res.json({ message: 'Empleado eliminado correctamente' });
-  });
+  } catch (error: any) {
+    console.error('Error al eliminar empleado:', error);
+    res.status(500).json({ error: 'Error al eliminar empleado', details: error.message });
+  }
 });
 
 export default router;
+
