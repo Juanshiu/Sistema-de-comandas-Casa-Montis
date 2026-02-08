@@ -3,17 +3,21 @@ import {
   Comanda, Mesa, Producto, Factura, EstadoComanda, ReporteVentas, ItemComanda, 
   ComandaHistorial, PaginatedResponse, Empleado, ConfiguracionNomina, 
   NominaDetalle, Liquidacion, ConfiguracionFacturacion, PagoNomina, 
-  HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico,
+  HistorialNomina, ContratoDetails, GenerarContratoResponse, ContratoHistorico, PlantillaDefaultResponse, PlantillaContrato,
   Insumo, RecetaProductoInsumo, AjustePersonalizacionInsumo, ConfiguracionSistema, InsumoHistorial,
   Proveedor, InsumoCategoria
 } from '@/types';
 
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api';
+const FALLBACK_URL = 'http://localhost:3001/api';
 
 const api = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 30000, // Aumentado temporalmente para debug
 });
+
+// Variable para rastrear si ya se intentó con el fallback
+let usingFallback = false;
 
 // Interceptor para agregar el token de autenticación a cada solicitud
 api.interceptors.request.use(
@@ -32,6 +36,40 @@ api.interceptors.request.use(
   }
 );
 
+// Interceptor de respuesta para manejar errores de conexión
+api.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const originalRequest = error.config;
+
+    // Si hay error de red/timeout y no se ha intentado con fallback
+    if (
+      (error.code === 'ECONNABORTED' || 
+       error.code === 'ERR_NETWORK' || 
+       error.code === 'ERR_CONNECTION_TIMED_OUT' ||
+       error.message?.includes('Network Error') ||
+       error.message?.includes('timeout')) &&
+      !usingFallback &&
+      !originalRequest._retry &&
+      API_BASE_URL !== FALLBACK_URL
+    ) {
+      console.warn(`⚠️ No se pudo conectar a ${API_BASE_URL}, intentando con ${FALLBACK_URL}...`);
+      
+      originalRequest._retry = true;
+      usingFallback = true;
+      
+      // Cambiar la baseURL para futuras peticiones
+      api.defaults.baseURL = FALLBACK_URL;
+      originalRequest.baseURL = FALLBACK_URL;
+      
+      // Reintentar la petición con localhost
+      return api(originalRequest);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 export const apiService = {
   // Mesas
   async getMesas(): Promise<Mesa[]> {
@@ -39,26 +77,32 @@ export const apiService = {
     return response.data;
   },
 
-  async createMesa(mesa: { numero: string; capacidad: number; salon_id?: number }): Promise<Mesa> {
+  async createMesa(mesa: { numero: string; capacidad: number; salon_id?: string }): Promise<Mesa> {
     const response = await api.post('/mesas', mesa);
     return response.data;
   },
 
-  async updateMesa(id: number, mesa: { numero: string; capacidad: number; salon_id?: number }): Promise<Mesa> {
+  async updateMesa(id: string, mesa: { numero: string; capacidad: number; salon_id?: string }): Promise<Mesa> {
     const response = await api.put(`/mesas/${id}`, mesa);
     return response.data;
   },
 
-  async deleteMesa(id: number): Promise<void> {
+  // Onboarding
+  async registrarEmpresa(datos: any): Promise<any> {
+    const response = await api.post('/onboarding/empresa', datos);
+    return response.data;
+  },
+
+  async deleteMesa(id: string): Promise<void> {
     await api.delete(`/mesas/${id}`);
   },
 
-  async updateMesaEstado(mesaId: number, ocupada: boolean): Promise<Mesa> {
+  async updateMesaEstado(mesaId: string, ocupada: boolean): Promise<Mesa> {
     const response = await api.patch(`/mesas/${mesaId}`, { ocupada });
     return response.data;
   },
 
-  async liberarMesa(mesaId: number): Promise<Mesa> {
+  async liberarMesa(mesaId: string): Promise<Mesa> {
     const response = await api.patch(`/mesas/${mesaId}/liberar`);
     return response.data;
   },
@@ -74,16 +118,16 @@ export const apiService = {
     return response.data;
   },
 
-  async updateSalon(id: number, salon: { nombre: string; descripcion?: string; activo: boolean }): Promise<any> {
+  async updateSalon(id: string, salon: { nombre: string; descripcion?: string; activo: boolean }): Promise<any> {
     const response = await api.put(`/salones/${id}`, salon);
     return response.data;
   },
 
-  async deleteSalon(id: number): Promise<void> {
+  async deleteSalon(id: string): Promise<void> {
     await api.delete(`/salones/${id}`);
   },
 
-  async getMesasBySalon(salonId: number): Promise<Mesa[]> {
+  async getMesasBySalon(salonId: string): Promise<Mesa[]> {
     const response = await api.get(`/salones/${salonId}/mesas`);
     return response.data;
   },
@@ -104,16 +148,16 @@ export const apiService = {
     return response.data;
   },
 
-  async updateCategoriaProducto(id: number, categoria: { nombre: string; descripcion?: string; activo?: boolean }): Promise<any> {
+  async updateCategoriaProducto(id: string, categoria: { nombre: string; descripcion?: string; activo?: boolean }): Promise<any> {
     const response = await api.put(`/categorias/${id}`, categoria);
     return response.data;
   },
 
-  async deleteCategoriaProducto(id: number): Promise<void> {
+  async deleteCategoriaProducto(id: string): Promise<void> {
     await api.delete(`/categorias/${id}`);
   },
 
-  async getConteoProductosCategoria(id: number): Promise<{ count: number }> {
+  async getConteoProductosCategoria(id: string): Promise<{ count: number }> {
     const response = await api.get(`/categorias/${id}/productos/count`);
     return response.data;
   },
@@ -144,12 +188,12 @@ export const apiService = {
     return response.data;
   },
 
-  async updateProducto(id: number, producto: Partial<Producto>): Promise<Producto> {
+  async updateProducto(id: string, producto: Partial<Producto>): Promise<Producto> {
     const response = await api.put(`/productos/${id}`, producto);
     return response.data;
   },
 
-  async deleteProducto(id: number): Promise<void> {
+  async deleteProducto(id: string): Promise<void> {
     await api.delete(`/productos/${id}`);
   },
 
@@ -164,6 +208,21 @@ export const apiService = {
     return response.data;
   },
 
+  // Límites de Licencia
+  async getLimitesLicencia(): Promise<{
+    max_usuarios: number;
+    max_mesas: number;
+    plan: string;
+    estado: string;
+    usuarios_actuales: number;
+    mesas_actuales: number;
+    puede_crear_usuarios: boolean;
+    puede_crear_mesas: boolean;
+  }> {
+    const response = await api.get('/sistema/limites-licencia');
+    return response.data;
+  },
+
   // Inventario Avanzado - Insumos
   async getInsumos(): Promise<Insumo[]> {
     const response = await api.get('/inventario-avanzado/insumos');
@@ -175,16 +234,16 @@ export const apiService = {
     return response.data;
   },
 
-  async updateInsumo(id: number, insumo: Partial<Insumo>): Promise<Insumo> {
+  async updateInsumo(id: string, insumo: Partial<Insumo>): Promise<Insumo> {
     const response = await api.put(`/inventario-avanzado/insumos/${id}`, insumo);
     return response.data;
   },
 
-  async deleteInsumo(id: number): Promise<void> {
+  async deleteInsumo(id: string): Promise<void> {
     await api.delete(`/inventario-avanzado/insumos/${id}`);
   },
 
-  async ajustarInsumo(id: number, data: { cantidad: number; motivo?: string; proveedor_id?: number }): Promise<Insumo> {
+  async ajustarInsumo(id: string, data: { cantidad: number; motivo?: string; proveedor_id?: string }): Promise<Insumo> {
     const response = await api.post(`/inventario-avanzado/insumos/${id}/ajuste`, data);
     return response.data;
   },
@@ -200,16 +259,16 @@ export const apiService = {
     return response.data;
   },
 
-  async updateProveedor(id: number, proveedor: Partial<Proveedor>): Promise<any> {
+  async updateProveedor(id: string, proveedor: Partial<Proveedor>): Promise<any> {
     const response = await api.put(`/proveedores/${id}`, proveedor);
     return response.data;
   },
 
-  async deleteProveedor(id: number): Promise<void> {
+  async deleteProveedor(id: string): Promise<void> {
     await api.delete(`/proveedores/${id}`);
   },
 
-  async getInsumoHistorial(insumoId?: number, limit?: number, fechaInicio?: string, fechaFin?: string): Promise<InsumoHistorial[]> {
+  async getInsumoHistorial(insumoId?: string, limit?: number, fechaInicio?: string, fechaFin?: string): Promise<InsumoHistorial[]> {
     const params: any = {};
     if (insumoId) params.insumo_id = insumoId;
     if (limit) params.limit = limit;
@@ -219,33 +278,33 @@ export const apiService = {
     return response.data;
   },
 
-  async getRiesgoProductos(): Promise<{ producto_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO' }[]> {
+  async getRiesgoProductos(): Promise<{ producto_id: string; estado: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO' }[]> {
     const response = await api.get('/inventario-avanzado/riesgo/productos');
     return response.data;
   },
 
-  async getRiesgoPersonalizaciones(): Promise<{ item_personalizacion_id: number; estado: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO' }[]> {
+  async getRiesgoPersonalizaciones(): Promise<{ item_personalizacion_id: string; estado: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO' }[]> {
     const response = await api.get('/inventario-avanzado/riesgo/personalizaciones');
     return response.data;
   },
 
   // Inventario Avanzado - Recetas
-  async getRecetaProducto(productoId: number): Promise<RecetaProductoInsumo[]> {
+  async getRecetaProducto(productoId: string): Promise<RecetaProductoInsumo[]> {
     const response = await api.get(`/inventario-avanzado/recetas/productos/${productoId}`);
     return response.data;
   },
 
-  async updateRecetaProducto(productoId: number, items: RecetaProductoInsumo[]): Promise<any> {
+  async updateRecetaProducto(productoId: string, items: RecetaProductoInsumo[]): Promise<any> {
     const response = await api.put(`/inventario-avanzado/recetas/productos/${productoId}`, { items });
     return response.data;
   },
 
-  async getAjustesPersonalizacion(itemId: number): Promise<AjustePersonalizacionInsumo[]> {
+  async getAjustesPersonalizacion(itemId: string): Promise<AjustePersonalizacionInsumo[]> {
     const response = await api.get(`/inventario-avanzado/recetas/personalizaciones/${itemId}`);
     return response.data;
   },
 
-  async updateAjustesPersonalizacion(itemId: number, items: AjustePersonalizacionInsumo[]): Promise<any> {
+  async updateAjustesPersonalizacion(itemId: string, items: AjustePersonalizacionInsumo[]): Promise<any> {
     const response = await api.put(`/inventario-avanzado/recetas/personalizaciones/${itemId}`, { items });
     return response.data;
   },
@@ -301,12 +360,12 @@ export const apiService = {
     return response.data;
   },
 
-  async updateInsumoCategoria(id: number, categoria: Partial<InsumoCategoria>): Promise<InsumoCategoria> {
+  async updateInsumoCategoria(id: string, categoria: Partial<InsumoCategoria>): Promise<InsumoCategoria> {
     const response = await api.put(`/insumo-categorias/${id}`, categoria);
     return response.data;
   },
 
-  async deleteInsumoCategoria(id: number): Promise<void> {
+  async deleteInsumoCategoria(id: string): Promise<void> {
     await api.delete(`/insumo-categorias/${id}`);
   },
 
@@ -332,7 +391,7 @@ export const apiService = {
     return response.data;
   },
 
-  async getComandasByMesa(mesaId: number): Promise<Comanda[]> {
+  async getComandasByMesa(mesaId: string): Promise<Comanda[]> {
     const response = await api.get(`/comandas/mesa/${mesaId}`);
     return response.data;
   },
@@ -415,36 +474,36 @@ export const apiService = {
     return response.data;
   },
 
-  async updateCategoriaPersonalizacion(id: number, categoria: any): Promise<any> {
+  async updateCategoriaPersonalizacion(id: string, categoria: any): Promise<any> {
     const response = await api.put(`/personalizaciones/categorias/${id}`, categoria);
     return response.data;
   },
 
-  async deleteCategoriaPersonalizacion(id: number): Promise<void> {
+  async deleteCategoriaPersonalizacion(id: string): Promise<void> {
     await api.delete(`/personalizaciones/categorias/${id}`);
   },
 
   // Items de personalización genéricos (funciona con cualquier categoría)
-  async getItemsPersonalizacion(categoriaId: number): Promise<any[]> {
+  async getItemsPersonalizacion(categoriaId: string): Promise<any[]> {
     const response = await api.get(`/personalizaciones/categorias/${categoriaId}/items`);
     return response.data;
   },
 
-  async createItemPersonalizacion(categoriaId: number, item: any): Promise<any> {
+  async createItemPersonalizacion(categoriaId: string, item: any): Promise<any> {
     const response = await api.post(`/personalizaciones/categorias/${categoriaId}/items`, item);
     return response.data;
   },
 
-  async updateItemPersonalizacion(categoriaId: number, itemId: number, item: any): Promise<any> {
+  async updateItemPersonalizacion(categoriaId: string, itemId: string, item: any): Promise<any> {
     const response = await api.put(`/personalizaciones/categorias/${categoriaId}/items/${itemId}`, item);
     return response.data;
   },
 
-  async deleteItemPersonalizacion(categoriaId: number, itemId: number): Promise<void> {
+  async deleteItemPersonalizacion(categoriaId: string, itemId: string): Promise<void> {
     await api.delete(`/personalizaciones/categorias/${categoriaId}/items/${itemId}`);
   },
 
-  async updateDisponibilidadItem(categoriaId: number, itemId: number, disponible: boolean): Promise<any> {
+  async updateDisponibilidadItem(categoriaId: string, itemId: string, disponible: boolean): Promise<any> {
     const response = await api.patch(`/personalizaciones/categorias/${categoriaId}/items/${itemId}/disponibilidad`, { disponible });
     return response.data;
   },
@@ -484,28 +543,58 @@ export const apiService = {
     return response.data;
   },
 
-  async updateEmpleado(id: number, empleado: Partial<Empleado>): Promise<Empleado> {
+  async updateEmpleado(id: string, empleado: Partial<Empleado>): Promise<Empleado> {
     const response = await api.put(`/empleados/${id}`, empleado);
     return response.data;
   },
 
-  async deleteEmpleado(id: number): Promise<void> {
+  async deleteEmpleado(id: string): Promise<void> {
     await api.delete(`/empleados/${id}`);
   },
 
   // Recursos Humanos - Contratos
-  async generarContrato(empleado_id: number, contrato_details: ContratoDetails): Promise<GenerarContratoResponse> {
-    const response = await api.post('/contratos/generar', { empleado_id, contrato_details });
+  async generarContrato(empleado_id: string, contrato_details: ContratoDetails, contrato_template?: string): Promise<GenerarContratoResponse> {
+    const response = await api.post('/contratos/generar', { empleado_id, contrato_details, contrato_template });
     return response.data;
   },
 
-  async getContratosHistorial(empleado_id: number): Promise<ContratoHistorico[]> {
+  async getPlantillaDefault(): Promise<PlantillaDefaultResponse> {
+    const response = await api.get('/contratos/plantilla-default');
+    return response.data;
+  },
+
+  async getContratosHistorial(empleado_id: string): Promise<ContratoHistorico[]> {
     const response = await api.get(`/contratos/historial/${empleado_id}`);
     return response.data;
   },
 
-  async deleteContrato(id: number): Promise<void> {
+  async deleteContrato(id: string): Promise<void> {
     await api.delete(`/contratos/${id}`);
+  },
+
+  // Recursos Humanos - Plantillas de Contrato (Multi-tenant)
+  async getPlantillas(): Promise<PlantillaContrato[]> {
+    const response = await api.get('/contratos/plantillas');
+    return response.data;
+  },
+
+  async crearPlantilla(nombre: string, contenido: string, es_default?: boolean): Promise<{ success: boolean; plantilla: PlantillaContrato }> {
+    const response = await api.post('/contratos/plantillas', { nombre, contenido, es_default });
+    return response.data;
+  },
+
+  async actualizarPlantilla(id: string, datos: { nombre?: string; contenido?: string }): Promise<{ success: boolean; plantilla: PlantillaContrato }> {
+    const response = await api.put(`/contratos/plantillas/${id}`, datos);
+    return response.data;
+  },
+
+  async eliminarPlantilla(id: string): Promise<void> {
+    await api.delete(`/contratos/plantillas/${id}`);
+  },
+
+  async setPlantillaDefault(id: string): Promise<{ success: boolean; message: string }> {
+    const response = await api.put(`/contratos/plantillas/${id}/set-default`);
+    return response.data;
   },
 
   // ==================== CONFIGURACIÓN NÓMINA ====================
@@ -521,7 +610,7 @@ export const apiService = {
 
   // ==================== CÁLCULO Y GESTIÓN DE NÓMINA ====================
   async calcularNomina(
-    empleadoId: number,
+    empleadoId: string,
     diasTrabajados: number,
     extraData?: {
       horas_diurnas?: number;
@@ -544,7 +633,7 @@ export const apiService = {
   },
 
   async guardarNominaDetalle(data: {
-    empleado_id: number;
+    empleado_id: string;
     dias_trabajados: number;
     horas_diurnas?: number;
     horas_dominicales_diurnas?: number;
@@ -561,11 +650,11 @@ export const apiService = {
   },
 
   async getHistorialNomina(
-    empleadoId: number,
+    empleadoId: string,
     filtros?: { periodo_mes?: string; periodo_anio?: number }
   ): Promise<{ nominas: NominaDetalle[]; pagos: PagoNomina[]; historial: HistorialNomina[] }> {
     const params = new URLSearchParams({
-      empleado_id: empleadoId.toString(),
+      empleado_id: empleadoId,
       ...(filtros?.periodo_mes && { periodo_mes: filtros.periodo_mes }),
       ...(filtros?.periodo_anio && { periodo_anio: filtros.periodo_anio.toString() })
     });
@@ -585,7 +674,7 @@ export const apiService = {
   },
 
   async registrarPagoNomina(
-    nominaDetalleId: number,
+    nominaDetalleId: string,
     data: {
       valor: number;
       fecha?: string;
@@ -597,7 +686,7 @@ export const apiService = {
     return response.data;
   },
 
-  async descargarPDFNomina(nominaDetalleId: number): Promise<Blob> {
+  async descargarPDFNomina(nominaDetalleId: string): Promise<Blob> {
     const response = await api.get(`/nomina/detalle/${nominaDetalleId}/pdf`, {
       responseType: 'blob'
     });
@@ -615,7 +704,7 @@ export const apiService = {
 
   // ==================== LIQUIDACIÓN ====================
   async calcularLiquidacion(
-    empleadoId: number,
+    empleadoId: string,
     fechaRetiro: Date | string,
     motivoRetiro: string,
     params?: {

@@ -1,15 +1,15 @@
 
 export interface Mesa {
-  id: number;
+  id: string;
   numero: string;
   capacidad: number;
   salon: string;
-  salon_id?: number;
+  salon_id?: string;
   ocupada: boolean;
 }
 
 export interface Salon {
-  id: number;
+  id: string;
   nombre: string;
   descripcion?: string;
   activo: boolean;
@@ -18,7 +18,8 @@ export interface Salon {
 }
 
 export interface Producto {
-  id: number;
+  id: string;
+  codigo?: string;
   nombre: string;
   precio: number;
   categoria: string; // Cambiado de CategoriaProducto a string para permitir categorías dinámicas
@@ -33,14 +34,15 @@ export interface Producto {
 }
 
 export interface Insumo {
-  id: number;
+  id: string;
+  codigo?: string;
   nombre: string;
   unidad_medida: 'g' | 'kg' | 'ml' | 'unidad' | string;
   stock_actual: number;
   stock_minimo: number;
   stock_critico: number;
   costo_unitario?: number | null;
-  categoria_id?: number | null;
+  categoria_id?: string | null;
   categoria_nombre?: string | null;
   activo?: boolean;
   estado?: 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO';
@@ -49,7 +51,7 @@ export interface Insumo {
 }
 
 export interface InsumoCategoria {
-  id: number;
+  id: string;
   nombre: string;
   descripcion?: string;
   activo?: boolean;
@@ -58,23 +60,23 @@ export interface InsumoCategoria {
 }
 
 export interface RecetaProductoInsumo {
-  producto_id: number;
-  insumo_id: number;
+  producto_id: string;
+  insumo_id: string;
   cantidad_usada: number;
   insumo_nombre?: string;
   unidad_medida?: string;
 }
 
 export interface AjustePersonalizacionInsumo {
-  item_personalizacion_id: number;
-  insumo_id: number;
+  item_personalizacion_id: string;
+  insumo_id: string;
   cantidad_ajuste: number;
   insumo_nombre?: string;
   unidad_medida?: string;
 }
 
 export interface ConfiguracionSistema {
-  id?: number;
+  id?: string;
   inventario_avanzado: boolean;
   critico_modo?: 'CRITICO' | 'BAJO' | 'NUNCA';
   created_at?: string;
@@ -82,24 +84,24 @@ export interface ConfiguracionSistema {
 }
 
 export interface InsumoHistorial {
-  id: number;
+  id: string;
   fecha_hora: string;
-  insumo_id: number;
+  insumo_id: string;
   insumo_nombre?: string;
   cantidad: number;
   unidad_medida: string;
-  producto_id?: number | null;
+  producto_id?: string | null;
   producto_nombre?: string | null;
   comanda_id?: string | null;
   tipo_evento: string;
   motivo?: string | null;
-  usuario_id?: number | null;
-  proveedor_id?: number | null;
+  usuario_id?: string | null;
+  proveedor_id?: string | null;
   proveedor_nombre?: string | null;
 }
 
 export interface Proveedor {
-  id: number;
+  id: string;
   nombre: string;
   documento?: string;
   telefono?: string;
@@ -144,15 +146,15 @@ export interface ItemComanda {
 }
 
 export interface ItemPersonalizacion {
-  id: number;
-  categoria_id: number;
+  id: string;
+  categoria_id: string;
   nombre: string;
   descripcion?: string;
   precio_adicional: number;
   activo: boolean;
-  disponible?: number | boolean;
-  usa_inventario?: boolean | number;
-  usa_insumos?: boolean | number;
+  disponible?: string | boolean;
+  usa_inventario?: boolean | string;
+  usa_insumos?: boolean | string;
   cantidad_inicial?: number | null;
   cantidad_actual?: number | null;
 }
@@ -165,7 +167,7 @@ export interface PersonalizacionItem {
 }
 
 export interface CategoriaPersonalizacion {
-  id: number;
+  id: string;
   nombre: string;
   descripcion?: string;
   activo: boolean;
@@ -218,7 +220,7 @@ export interface ComandaHistorial {
 export type EstadoComanda = 'pendiente' | 'preparando' | 'lista' | 'entregada' | 'pagada' | 'cancelada' | 'facturada' | 'abierta' | 'en_preparacion';
 
 export interface Factura {
-  id: number;
+  id: string;
   numero_factura: string;
   comanda_id: string;
   subtotal: number;
@@ -233,20 +235,53 @@ export interface Factura {
   fecha_emision: string;
 }
 
+export interface MetodoPagoReporte {
+  metodo: string;
+  total: number;
+  cantidad: number;
+  porcentaje: number;
+  comision_estimada?: number;
+}
+
+export interface ProductoVendido {
+  producto: {
+    id: string;
+    nombre: string;
+    categoria?: string;
+  };
+  cantidad_vendida: number;
+  total_vendido: number;
+}
+
+export interface VentaPorHora {
+  hora: number;
+  ventas: number;
+  comandas: number;
+  es_pico?: boolean;
+  es_muerta?: boolean;
+}
+
+export interface ComparativaVentas {
+  ventas: number;
+  ventas_porcentaje: number;
+  comandas: number;
+  comandas_porcentaje: number;
+}
+
 export interface ReporteVentas {
   fecha: string;
   total_ventas: number;
   cantidad_comandas: number;
-  ventas_por_metodo: {
-    efectivo: number;
-    tarjeta: number;
-    transferencia: number;
+  promedio_por_comanda: number;
+  metodos_pago: MetodoPagoReporte[];
+  productos_mas_vendidos: ProductoVendido[];
+  ventas_por_hora: VentaPorHora[];
+  comparativas?: {
+    vs_dia_anterior: ComparativaVentas;
+    vs_semana_anterior: ComparativaVentas;
+    vs_promedio_semanal: ComparativaVentas;
   };
-  productos_mas_vendidos: {
-    nombre: string;
-    cantidad: number;
-    total: number;
-  }[];
+  alertas?: string[];
 }
 
 export interface PaginatedResponse<T> {
@@ -258,7 +293,7 @@ export interface PaginatedResponse<T> {
 }
 
 export interface Empleado {
-  id: number;
+  id: string;
   tipo_documento: string;
   numero_documento: string;
   nombres: string;
@@ -286,49 +321,80 @@ export interface Empleado {
 }
 
 export interface ConfiguracionNomina {
+  id?: number;
+  empresa_id?: string;
+  anio?: number;
   salario_minimo: number;
   auxilio_transporte: number;
   uvt: number;
-  horas_laborales_mes: number;
-  porcentaje_salud_empleado: number;
-  porcentaje_pension_empleado: number;
-  porcentaje_salud_empleador: number;
-  porcentaje_pension_empleador: number;
-  porcentaje_riesgos_1: number;
-  porcentaje_sena: number;
-  porcentaje_icbf: number;
-  porcentaje_caja: number;
-  recargo_nocturno: number;
-  recargo_dominical: number;
-  recargo_festivo: number;
-  recargo_diurno: number; // Added recargo_diurno
+  horas_mensuales: number;
+  // Porcentajes empleado
+  porc_salud_empleado: number;
+  porc_pension_empleado: number;
+  fondo_solidaridad_limite?: number;
+  // Porcentajes empleador
+  porc_salud_empleador: number;
+  porc_pension_empleador: number;
+  porc_caja_comp: number;
+  porc_sena: number;
+  porc_icbf: number;
+  // Prestaciones
+  porc_cesantias?: number;
+  porc_intereses_cesantias?: number;
+  porc_prima?: number;
+  porc_vacaciones?: number;
+  // Recargos
+  porc_recargo_dominical: number;
+  porc_recargo_festivo: number;
+  porc_recargo_diurno: number;
+  porc_extra_diurna_dominical: number;
+  vigente?: boolean;
 }
 
 export interface NominaDetalle {
-  id?: number;
-  empleado_id: number;
+  id?: string;
+  empleado_id: string;
   periodo_mes: string;
   periodo_anio: number;
   dias_trabajados: number;
   sueldo_basico: number;
   auxilio_transporte: number;
+  // Horas extras
   horas_extras_diurnas: number;
   horas_extras_nocturnas: number;
-  horas_extras_festivas: number;
+  horas_diurnas?: number;
+  horas_dominicales_diurnas?: number;
+  horas_festivas_diurnas?: number;
+  horas_extra_diurna_dominical?: number;
+  // Valores calculados
+  valor_diurnas?: number;
+  valor_dominicales_diurnas?: number;
+  valor_festivas_diurnas?: number;
+  valor_extra_diurna_dominical?: number;
   recargo_nocturno: number;
+  comisiones?: number;
+  otros_devengados?: number;
   total_devengado: number;
+  // Deducciones
   salud: number;
+  salud_empleado?: number;
   pension: number;
+  pension_empleado?: number;
   fondo_solidaridad: number;
   retencion_fuente: number;
   otras_deducciones: number;
   total_deducciones: number;
   neto_pagado: number;
+  // Metadata
   fecha_generacion?: string;
   estado?: string;
+  version?: number;
   empleado_nombre?: string;
   empleado_documento?: string;
-  horas_diurnas?: number; // Added horas_diurnas
+  usuario_nombre?: string;
+  pagos_registrados?: PagoNomina[];
+  pdf_path?: string;
+  pdf_version?: number;
 }
 
 export interface Liquidacion {
@@ -381,8 +447,8 @@ export interface ConfiguracionFacturacion {
 
 export interface PagoNomina {
   id?: number;
-  nomina_detalle_id: number;
-  empleado_id: number;
+  nomina_detalle_id: string;
+  empleado_id: string;
   periodo_mes: string;
   periodo_anio: number;
   fecha: string;
@@ -394,12 +460,16 @@ export interface PagoNomina {
 
 export interface HistorialNomina {
   id: number;
+  nomina_detalle_id?: string;
   periodo_mes: string;
   periodo_anio: number;
-  total_empleados: number;
-  total_pagado: number;
-  fecha_generacion: string;
-  usuario: string;
+  total_empleados?: number;
+  total_pagado?: number;
+  fecha_generacion?: string;
+  fecha?: string;
+  version?: number;
+  cambio_realizado?: string;
+  usuario?: string;
 }
 
 export interface ContratoDetails {
@@ -424,9 +494,38 @@ export interface GenerarContratoResponse {
   file_name: string;
 }
 
+export interface VariableContrato {
+  variable: string;
+  descripcion: string;
+}
+
+export interface VariablesDisponibles {
+  empresa: VariableContrato[];
+  empleado: VariableContrato[];
+  contrato: VariableContrato[];
+}
+
+export interface PlantillaDefaultResponse {
+  plantilla: string;
+  variables: VariablesDisponibles;
+  origen: 'empresa' | 'archivo';
+  plantillaId: string | null;
+  nombrePlantilla: string | null;
+}
+
+export interface PlantillaContrato {
+  id: string;
+  empresa_id: string;
+  nombre: string;
+  contenido: string;
+  es_default: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface ContratoHistorico {
-  id: number;
-  empleado_id: number;
+  id: string;
+  empleado_id: string;
   tipo_contrato: string;
   fecha_inicio: string;
   fecha_fin?: string;
@@ -436,7 +535,56 @@ export interface ContratoHistorico {
   file_name: string;
   file_path: string;
   contrato_details: ContratoDetails;
-  usuario_id?: number;
+  contrato_template?: string;
+  usuario_id?: string;
   usuario_nombre?: string;
   created_at: string;
+}
+
+export interface LoginRequest {
+  empresaEmail: string;  // Email del administrador de la empresa (identifica el tenant)
+  usuarioEmail: string;  // Email del empleado que quiere ingresar
+  password: string;      // Contraseña del empleado
+}
+
+export interface LoginResponse {
+  token: string;
+  usuario: UsuarioSesion;
+  permisos: string[];
+}
+
+export interface UsuarioSesion {
+  id: string;
+  nombre_completo: string;
+  usuario: string;
+  email: string;
+  rol_nombre: string;
+  empresa_id: string;
+  es_superusuario?: boolean;
+}
+
+export interface Usuario {
+  id: string;
+  usuario: string;
+  email?: string;
+  nombre_completo: string;
+  rol_id: string;
+  pin?: string;
+  telefono?: string;
+  activo: boolean;
+  ultimo_login?: string;
+  created_at?: string;
+  updated_at?: string;
+  rol_nombre?: string;
+}
+
+export interface Rol {
+  id: string;
+  nombre: string;
+  descripcion?: string;
+  es_superusuario?: boolean;
+  activo?: boolean;
+  created_at?: string;
+  cantidad_usuarios?: number;
+  permisos?: { permiso: string; nombre?: string }[];
 }
