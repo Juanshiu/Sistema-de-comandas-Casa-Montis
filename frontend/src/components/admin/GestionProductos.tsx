@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { Producto, CategoriaProducto } from '@/types';
 import { apiService } from '@/services/api';
-import { Plus, Edit2, Trash2, Save, X } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, RefreshCw } from 'lucide-react';
 import { 
   getInventoryStatus, 
   getInventoryStatusMessage, 
@@ -31,10 +31,10 @@ export default function GestionProductos() {
   const [filtroCategoria, setFiltroCategoria] = useState<string | 'todas'>('todas');
   const [categoriasDisponibles, setCategoriasDisponibles] = useState<string[]>([]);
   const [categoriasPersonalizacion, setCategoriasPersonalizacion] = useState<any[]>([]);
-  const [riesgosProductos, setRiesgosProductos] = useState<Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
+  const [riesgosProductos, setRiesgosProductos] = useState<Record<string, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'>>({});
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [editandoId, setEditandoId] = useState<number | null>(null);
+  const [editandoId, setEditandoId] = useState<string | null>(null);
   const [creandoNuevo, setCreandoNuevo] = useState(false);
   const [formulario, setFormulario] = useState<ProductoForm>({
     nombre: '',
@@ -55,6 +55,17 @@ export default function GestionProductos() {
     cargarCategorias();
     cargarCategoriasPersonalizacion();
     cargarRiesgosProductos();
+  }, []);
+
+  // Recargar datos cuando la ventana recupera el foco (para actualizar inventario)
+  useEffect(() => {
+    const handleFocus = () => {
+      cargarProductos();
+      cargarRiesgosProductos();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
   }, []);
 
   useEffect(() => {
@@ -104,7 +115,7 @@ export default function GestionProductos() {
   const cargarRiesgosProductos = async () => {
     try {
       const response = await apiService.getRiesgoProductos();
-      const mapa: Record<number, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
+      const mapa: Record<string, 'OK' | 'BAJO' | 'CRITICO' | 'AGOTADO'> = {};
       response.forEach((item: any) => {
         mapa[item.producto_id] = item.estado;
       });
@@ -269,14 +280,27 @@ export default function GestionProductos() {
       {/* Header con botón crear */}
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-secondary-800">Gestión de Productos</h2>
-        <button
-          onClick={iniciarCreacion}
-          className="btn-primary flex items-center"
-          disabled={creandoNuevo || editandoId !== null}
-        >
-          <Plus size={16} className="mr-2" />
-          Nuevo Producto
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              cargarProductos();
+              cargarRiesgosProductos();
+            }}
+            className="btn-secondary flex items-center"
+            title="Actualizar inventario"
+          >
+            <RefreshCw size={16} className="mr-2" />
+            Actualizar
+          </button>
+          <button
+            onClick={iniciarCreacion}
+            className="btn-primary flex items-center"
+            disabled={creandoNuevo || editandoId !== null}
+          >
+            <Plus size={16} className="mr-2" />
+            Nuevo Producto
+          </button>
+        </div>
       </div>
 
       {/* Filtro por categoría */}
@@ -614,6 +638,9 @@ export default function GestionProductos() {
               <thead className="bg-secondary-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
+                    Código
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
                     Producto
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-secondary-500 uppercase tracking-wider">
@@ -642,13 +669,16 @@ export default function GestionProductos() {
               <tbody className="bg-white divide-y divide-secondary-200">
                 {productosFiltrados.map((producto) => (
                   <tr key={producto.id}>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <div>
-                        <div className="text-sm font-medium text-secondary-900">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-500 font-mono">
+                      {producto.codigo || '—'}
+                    </td>
+                    <td className="px-6 py-4">
+                      <div className="max-w-xs">
+                        <div className="text-sm font-medium text-secondary-900 break-words">
                           {producto.nombre}
                         </div>
                         {producto.descripcion && (
-                          <div className="text-sm text-secondary-500">
+                          <div className="text-sm text-secondary-500 break-words">
                             {producto.descripcion}
                           </div>
                         )}
@@ -656,7 +686,9 @@ export default function GestionProductos() {
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className="inline-flex px-2 py-1 text-xs font-semibold rounded-full bg-blue-100 text-blue-800">
-                        {producto.categoria.charAt(0).toUpperCase() + producto.categoria.slice(1).replace(/_/g, ' ')}
+                        {producto.categoria 
+                          ? producto.categoria.charAt(0).toUpperCase() + producto.categoria.slice(1).replace(/_/g, ' ')
+                          : 'Sin categoría'}
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-secondary-900">

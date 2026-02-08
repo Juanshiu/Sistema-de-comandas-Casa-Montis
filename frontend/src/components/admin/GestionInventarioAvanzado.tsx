@@ -7,6 +7,25 @@ import { AjustePersonalizacionInsumo, Insumo, Producto, RecetaProductoInsumo, Ca
 
 const unidades = ['g', 'kg', 'ml', 'unidad'];
 
+// Helper para formatear fecha y hora en zona horaria local (DD/MM/YYYY HH:MM a.m./p.m.)
+const formatearFechaHora = (fechaStr: string | null | undefined): string => {
+  if (!fechaStr) return '';
+  try {
+    const fecha = new Date(fechaStr);
+    const dia = fecha.getDate().toString().padStart(2, '0');
+    const mes = (fecha.getMonth() + 1).toString().padStart(2, '0');
+    const anio = fecha.getFullYear();
+    let hora = fecha.getHours();
+    const minutos = fecha.getMinutes().toString().padStart(2, '0');
+    const ampm = hora >= 12 ? 'p. m.' : 'a. m.';
+    hora = hora % 12;
+    hora = hora ? hora : 12; // La hora 0 debe ser 12
+    return `${dia}/${mes}/${anio} ${hora}:${minutos} ${ampm}`;
+  } catch {
+    return fechaStr;
+  }
+};
+
 interface InsumoForm {
   nombre: string;
   unidad_medida: string;
@@ -118,6 +137,7 @@ export default function GestionInventarioAvanzado() {
   };
 
   const [importando, setImportando] = useState(false);
+  const [importResult, setImportResult] = useState<{ mensaje?: string; creados?: number; actualizados?: number; errores?: { fila: number; mensaje?: string; hoja?: string }[] } | null>(null);
 
   const mostrarExito = (mensaje: string) => {
     setMensajeExito(mensaje);
@@ -578,23 +598,31 @@ export default function GestionInventarioAvanzado() {
   const manejarImportacion = async (file: File | null, tipo: 'insumos' | 'recetas' | 'productos' | 'personalizaciones') => {
     if (!file) return;
     setImportando(true);
+    setImportResult(null);
     try {
       const base64 = await leerArchivoBase64(file);
+      let result: any;
       if (tipo === 'insumos') {
-        await apiService.importarInsumos(base64);
+        result = await apiService.importarInsumos(base64);
       } else if (tipo === 'recetas') {
-        await apiService.importarRecetas(base64);
+        result = await apiService.importarRecetas(base64);
       } else if (tipo === 'personalizaciones') {
-        await apiService.importarPersonalizaciones(base64);
+        result = await apiService.importarPersonalizaciones(base64);
       } else {
-        await apiService.importarProductosExcel(base64);
+        result = await apiService.importarProductosExcel(base64);
       }
-      mostrarExito('Importación completada');
+      
+      const msg = result?.mensaje || 'Importación completada';
+      mostrarExito(msg);
+      setImportResult(result);
+      
       await cargarInsumos();
       await cargarProductos();
       await cargarCategoriasPersonalizacion();
     } catch (error: any) {
-      alert(error?.response?.data?.error || 'Error en importación');
+      const errMsg = error?.response?.data?.error || 'Error en importación';
+      alert(errMsg);
+      setImportResult(null);
     } finally {
       setImportando(false);
     }
@@ -731,7 +759,7 @@ export default function GestionInventarioAvanzado() {
                       <select
                         className="input-field w-full"
                         value={insumoForm.categoria_id || ''}
-                        onChange={(e) => setInsumoForm(prev => ({ ...prev, categoria_id: e.target.value ? Number(e.target.value) : null }))}
+                        onChange={(e) => setInsumoForm(prev => ({ ...prev, categoria_id: e.target.value || null }))}
                       >
                         <option value="">Sin categoría</option>
                         {insumoCategorias.map(cat => (
@@ -826,6 +854,7 @@ export default function GestionInventarioAvanzado() {
             <table className="min-w-full divide-y divide-secondary-200">
               <thead className="bg-secondary-50">
                 <tr>
+                  <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Código</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Nombre</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Categoría</th>
                   <th className="px-4 py-2 text-left text-xs font-semibold text-secondary-600 uppercase">Unidad</th>
@@ -838,6 +867,7 @@ export default function GestionInventarioAvanzado() {
               <tbody className="bg-white divide-y divide-secondary-100">
                 {insumosFiltrados.map((insumo) => (
                   <tr key={insumo.id}>
+                    <td className="px-4 py-2 text-sm text-secondary-500 font-mono">{insumo.codigo || '—'}</td>
                     <td className="px-4 py-2 text-sm text-secondary-900 font-medium">{insumo.nombre}</td>
                     <td className="px-4 py-2 text-sm">
                       {insumo.categoria_nombre ? (
@@ -884,7 +914,7 @@ export default function GestionInventarioAvanzado() {
                 ))}
                 {insumosFiltrados.length === 0 && (
                   <tr>
-                    <td colSpan={7} className="px-4 py-8 text-sm text-secondary-500 text-center">
+                    <td colSpan={8} className="px-4 py-8 text-sm text-secondary-500 text-center">
                       <div className="flex flex-col items-center gap-2">
                         <Search size={32} className="text-secondary-200" />
                         <p>{(filtroNombre || filtroCategoria !== 'todos') ? 'No se encontraron insumos con esos filtros' : 'No hay insumos registrados'}</p>
@@ -918,7 +948,7 @@ export default function GestionInventarioAvanzado() {
                   <select
                     className="input-field w-full h-11"
                     value={productoSeleccionadoId ?? ''}
-                    onChange={(e) => setProductoSeleccionadoId(e.target.value ? Number(e.target.value) : null)}
+                    onChange={(e) => setProductoSeleccionadoId(e.target.value || null)}
                   >
                     <option value="">Selecciona un producto...</option>
                     {productos.map(producto => (
@@ -1063,7 +1093,7 @@ export default function GestionInventarioAvanzado() {
                   <select
                     className="input-field w-full h-11"
                     value={categoriaPersonalizacionId ?? ''}
-                    onChange={(e) => setCategoriaPersonalizacionId(e.target.value ? Number(e.target.value) : null)}
+                    onChange={(e) => setCategoriaPersonalizacionId(e.target.value || null)}
                   >
                     <option value="">Selecciona categoría...</option>
                     {categoriasPersonalizacion.map(cat => (
@@ -1077,7 +1107,7 @@ export default function GestionInventarioAvanzado() {
                     className="input-field w-full h-11"
                     disabled={!categoriaPersonalizacionId}
                     value={itemPersonalizacionId ?? ''}
-                    onChange={(e) => setItemPersonalizacionId(e.target.value ? Number(e.target.value) : null)}
+                    onChange={(e) => setItemPersonalizacionId(e.target.value || null)}
                   >
                     <option value="">Selecciona item...</option>
                     {itemsPersonalizacion.map(item => (
@@ -1216,7 +1246,7 @@ export default function GestionInventarioAvanzado() {
               <select
                 className="input-field"
                 value={ajusteInsumoId ?? ''}
-                onChange={(e) => setAjusteInsumoId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setAjusteInsumoId(e.target.value || null)}
               >
                 <option value="">Selecciona un insumo</option>
                 {insumos.map((insumo) => (
@@ -1229,7 +1259,7 @@ export default function GestionInventarioAvanzado() {
               <select
                 className="input-field"
                 value={ajusteProveedorId || ''}
-                onChange={(e) => setAjusteProveedorId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setAjusteProveedorId(e.target.value || null)}
               >
                 <option value="">Ninguno</option>
                 {proveedores.map(p => (
@@ -1344,7 +1374,7 @@ export default function GestionInventarioAvanzado() {
               <select
                 className="input-field w-full h-11"
                 value={historialInsumoId ?? ''}
-                onChange={(e) => setHistorialInsumoId(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => setHistorialInsumoId(e.target.value || null)}
               >
                 <option value="">Todos los insumos</option>
                 {insumos.map((insumo) => (
@@ -1415,7 +1445,7 @@ export default function GestionInventarioAvanzado() {
               <tbody className="bg-white divide-y divide-secondary-100">
                 {historial.map((item) => (
                   <tr key={item.id}>
-                    <td className="px-4 py-2 text-sm text-secondary-700">{item.fecha_hora}</td>
+                    <td className="px-4 py-2 text-sm text-secondary-700">{formatearFechaHora(item.fecha_hora)}</td>
                     <td className="px-4 py-2 text-sm text-secondary-900">{item.insumo_nombre || item.insumo_id}</td>
                     <td className="px-4 py-2 text-sm text-secondary-600 font-medium">
                       {item.proveedor_nombre || '-'}
@@ -1977,9 +2007,34 @@ export default function GestionInventarioAvanzado() {
           <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700 flex items-start gap-3">
             <UploadCloud size={20} className="mt-0.5 flex-shrink-0" />
             <div>
-              <p><strong>Recomendación:</strong> Exporta primero el archivo actual para tener la plantilla con el formato correcto y los IDs existentes. Esto evitará duplicados al re-importar.</p>
+              <p><strong>Recomendación:</strong> Exporta primero el archivo actual para tener la plantilla con el formato correcto y los códigos existentes. Al re-importar, el sistema usará los códigos (ej: PROD-001, INS-001) para actualizar registros existentes o crear nuevos.</p>
             </div>
           </div>
+          {importResult && (
+            <div className="p-4 bg-white border border-secondary-200 rounded-lg text-sm space-y-2">
+              <h4 className="font-semibold text-secondary-900">Resultado de importación</h4>
+              <div className="flex gap-4 text-secondary-700">
+                {importResult.creados !== undefined && (
+                  <span className="text-green-600">✓ Creados: {importResult.creados}</span>
+                )}
+                {importResult.actualizados !== undefined && (
+                  <span className="text-blue-600">↻ Actualizados: {importResult.actualizados}</span>
+                )}
+                {importResult.errores && importResult.errores.length > 0 && (
+                  <span className="text-red-600">✗ Errores: {importResult.errores.length}</span>
+                )}
+              </div>
+              {importResult.errores && importResult.errores.length > 0 && (
+                <div className="mt-2 max-h-40 overflow-y-auto border border-red-200 rounded p-2 bg-red-50">
+                  {importResult.errores.map((err, i) => (
+                    <p key={i} className="text-xs text-red-700">
+                      {err.hoja ? `[${err.hoja}] ` : ''}Fila {err.fila}: {err.mensaje || 'Error desconocido'}
+                    </p>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>

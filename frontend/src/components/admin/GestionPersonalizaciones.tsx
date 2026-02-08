@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { apiService } from '@/services/api';
-import { Plus, Edit2, Trash2, Save, X, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Edit2, Trash2, Save, X, CheckCircle2, XCircle, RefreshCw } from 'lucide-react';
 
 type TipoPersonalizacion = 'categorias' | 'caldos' | 'principios' | 'proteinas' | 'bebidas';
 
@@ -54,6 +54,17 @@ export default function GestionPersonalizaciones() {
   useEffect(() => {
     cargarItems();
   }, [tipoActivo]);
+
+  // Recargar datos cuando la ventana recupera el foco (para actualizar inventario)
+  useEffect(() => {
+    const handleFocus = () => {
+      cargarItems();
+      cargarRiesgosPersonalizaciones();
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, [tipoActivo]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const cargarCategorias = async () => {
     try {
@@ -208,7 +219,7 @@ export default function GestionPersonalizaciones() {
       if (creandoNuevo) {
         await apiService.createItemPersonalizacion(tipoEncontrado.categoriaId, itemData);
       } else if (editandoId) {
-        await apiService.updateItemPersonalizacion(tipoEncontrado.categoriaId, Number(editandoId), itemData);
+        await apiService.updateItemPersonalizacion(tipoEncontrado.categoriaId, editandoId, itemData);
       }
 
       await cargarItems();
@@ -230,7 +241,7 @@ export default function GestionPersonalizaciones() {
         setError('No se pudo identificar la categoría');
         return;
       }
-      await apiService.deleteItemPersonalizacion(tipoEncontrado.categoriaId, Number(id));
+      await apiService.deleteItemPersonalizacion(tipoEncontrado.categoriaId, id);
       await cargarItems();
     } catch (err: any) {
       setError(err.response?.data?.error || 'Error al eliminar el item');
@@ -301,7 +312,7 @@ export default function GestionPersonalizaciones() {
       if (creandoNuevo) {
         await apiService.createCategoriaPersonalizacion(formularioCategoria);
       } else if (editandoId) {
-        await apiService.updateCategoriaPersonalizacion(Number(editandoId), {
+        await apiService.updateCategoriaPersonalizacion(editandoId, {
           ...formularioCategoria,
           activo: true
         });
@@ -439,14 +450,27 @@ export default function GestionPersonalizaciones() {
         <h3 className="text-lg font-semibold text-secondary-800">
           {tipoActual?.label} ({tipoActivo === 'categorias' ? categorias.length : items.length})
         </h3>
-        <button
-          onClick={tipoActivo === 'categorias' ? iniciarCreacionCategoria : iniciarCreacion}
-          className="btn-primary flex items-center"
-          disabled={creandoNuevo || editandoId !== null}
-        >
-          <Plus size={16} className="mr-2" />
-          Agregar {tipoActivo === 'categorias' ? 'Categoría' : tipoActual?.label.slice(0, -1)}
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => {
+              cargarItems();
+              cargarRiesgosPersonalizaciones();
+            }}
+            className="btn-secondary flex items-center"
+            title="Actualizar inventario"
+          >
+            <RefreshCw size={16} className="mr-2" />
+            Actualizar
+          </button>
+          <button
+            onClick={tipoActivo === 'categorias' ? iniciarCreacionCategoria : iniciarCreacion}
+            className="btn-primary flex items-center"
+            disabled={creandoNuevo || editandoId !== null}
+          >
+            <Plus size={16} className="mr-2" />
+            {tipoActivo === 'categorias' ? 'Agregar Categoría' : `Agregar ${tipoActual?.label?.slice(0, -1) || 'Item'}`}
+          </button>
+        </div>
       </div>
 
       {/* Formulario de creación/edición */}
