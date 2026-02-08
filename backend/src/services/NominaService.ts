@@ -1,693 +1,897 @@
-import { db } from '../database/init';
-import { Empleado, ConfiguracionNomina, NominaDetalle } from '../models';
+import { NominaRepository } from '../repositories/nominaRepository';
+import { EmpresaRepository } from '../repositories/empresaRepository';
+import { ConfigFacturacionRepository } from '../repositories/configFacturacionRepository';
+import { ConfiguracionNominaTable, EmpleadosTable, NominasTable, NominaDetallesTable } from '../database/types';
+import { Insertable } from 'kysely';
 import PDFDocument from 'pdfkit';
 import fs from 'fs';
 import path from 'path';
 
 export class NominaService {
-    
-    /**
-     * Calcula la nómina para un empleado en un periodo
-     */
-    static async calcularNominaEmpleado(
-        empleado: Empleado, 
-        diasTrabajados: number, 
-        config: ConfiguracionNomina,
-        extraData: {
-            horas_dominicales_diurnas?: number;
-            horas_festivas_diurnas?: number;
-            horas_extra_diurna_dominical?: number;
-            otras_deducciones?: number; // Para adelantos/préstamos
-            comisiones?: number;
-            horas_diurnas?: number;
-            periodo_mes?: string;
-            periodo_anio?: number;
-            usuario_nombre?: string;
-        } = {}
-    ): Promise<Partial<NominaDetalle>> {
+    private repo = new NominaRepository();
+    private empresaRepo = new EmpresaRepository();
+    private configFactRepo = new ConfigFacturacionRepository();
+
+    // Empleados
+    async listarEmpleados(empresaId: string) {
+        return await this.repo.listarEmpleados(empresaId);
+    }
+
+    async crearEmpleado(empresaId: string, data: any) {
+        return await this.repo.crearEmpleado({
+            ...data,
+            empresa_id: empresaId,
+            id: undefined // Dejar que la DB genere UUID
+        });
+    }
+
+    async actualizarEmpleado(id: string, empresaId: string, data: any) {
+        return await this.repo.actualizarEmpleado(id, empresaId, data);
+    }
+
+    // Configuración
+    async obtenerConfiguracion(empresaId: string) {
+        let config = await this.repo.getConfiguracionVigente(empresaId);
         
-        // 1. Calcular Devengados
-        // Sueldo Básico proporcional a días trabajados (sobre base de 30 días)
-        const sueldoBasico = Math.round((empleado.salario_base / 30) * diasTrabajados);
+        // Si no existe configuración, crear una por defecto
+        if (!config) {
+            console.log(`📋 Creando configuración de nómina por defecto para empresa ${empresaId}`);
+            const anioActual = new Date().getFullYear();
+            
+            config = await this.repo.guardarConfiguracion({
+                empresa_id: empresaId,
+                anio: anioActual,
+                salario_minimo: 1750905,
+                auxilio_transporte: 249095,
+                uvt: 52374,
+                porc_salud_empleado: 4,
+                porc_pension_empleado: 4,
+                fondo_solidaridad_limite: 4,
+                porc_salud_employer: 8.5,
+                porc_pension_employer: 12,
+                porc_caja_comp: 4,
+                porc_sena: 2,
+                porc_icbf: 3,
+                porc_cesantias: 8.33,
+                porc_intereses_cesantias: 12,
+                porc_prima: 8.33,
+                porc_vacaciones: 4.17,
+                porc_recargo_dominical: 80,
+                porc_recargo_festivo: 80,
+                porc_extra_diurna_dominical: 105,
+                porc_recargo_diurno: 25,
+                horas_mensuales: 220,
+                vigente: true
+            });
+        }
         
-        const valorHora = empleado.salario_base / config.horas_mensuales;
+        // Mapear nombres de campos para el frontend
+        return {
+            ...config,
+            porc_salud_empleador: config.porc_salud_employer,
+            porc_pension_empleador: config.porc_pension_employer
+        };
+    }
 
-        const horasDiurnas = extraData.horas_diurnas || 0;
-        const horasDom = extraData.horas_dominicales_diurnas || 0;
-        const horasFest = extraData.horas_festivas_diurnas || 0;
-        const horasExtraDom = extraData.horas_extra_diurna_dominical || 0;
-
-        const valorDiurnas = Math.round(horasDiurnas * valorHora * (1 + (config.porc_recargo_diurno / 100)));
-        const valorDominicales = Math.round(horasDom * valorHora * (1 + (config.porc_recargo_dominical / 100)));
-        const valorFestivas = Math.round(horasFest * valorHora * (1 + (config.porc_recargo_festivo / 100)));
-        const valorExtraDom = Math.round(horasExtraDom * valorHora * (1 + (config.porc_extra_diurna_dominical / 100)));
-
-        let auxilioTransporte = 0;
-        if (empleado.auxilio_transporte && empleado.salario_base <= (config.salario_minimo * 2)) {
-            auxilioTransporte = Math.round((config.auxilio_transporte / 30) * diasTrabajados);
-        }
-
-        const comisiones = Math.round(extraData.comisiones || 0);
-        const totalDevengado = sueldoBasico + auxilioTransporte + valorDiurnas + valorDominicales + valorFestivas + valorExtraDom + comisiones;
-
-        // 2. Calcular Deducciones (Salud y Pension)
-        let baseCotizacion = totalDevengado - auxilioTransporte;
+    async guardarConfiguracion(empresaId: string, data: any) {
+        await this.repo.desactivarConfiguraciones(empresaId);
         
-        if (empleado.salario_integral) {
-            baseCotizacion = totalDevengado * 0.7;
-        }
+        // Mapear nombres del frontend al backend
+        const { porc_salud_empleador, porc_pension_empleador, ...rest } = data;
+        
+        return await this.repo.guardarConfiguracion({
+            ...rest,
+            porc_salud_employer: porc_salud_empleador ?? data.porc_salud_employer,
+            porc_pension_employer: porc_pension_empleador ?? data.porc_pension_employer,
+            empresa_id: empresaId,
+            vigente: true
+        });
+    }
 
-        const saludEmpleado = Math.round(baseCotizacion * (config.porc_salud_empleado / 100));
-        const pensionEmpleado = Math.round(baseCotizacion * (config.porc_pension_empleado / 100));
+    // Cálculo y Generación
+    async calcularNominaEmpleado(empresaId: string, data: {
+        empleado_id: string;
+        dias_trabajados: number;
+        horas_diurnas?: number;
+        horas_dominicales_diurnas?: number;
+        horas_festivas_diurnas?: number;
+        horas_extra_diurna_dominical?: number;
+        comisiones?: number;
+        otras_deducciones?: number;
+        periodo_mes?: string;
+        periodo_anio?: number;
+        usuario_nombre?: string;
+    }) {
+        const config = await this.repo.getConfiguracionVigente(empresaId);
+        if (!config) throw new Error('No hay configuración de nómina vigente. Configure los parámetros primero.');
 
-        let fondoSolidaridad = 0;
-        if (baseCotizacion > config.fondo_solidaridad_limite) {
-             fondoSolidaridad = Math.round(baseCotizacion * 0.01);
-        }
+        const empleado = await this.repo.obtenerEmpleado(data.empleado_id, empresaId);
+        if (!empleado) throw new Error('Empleado no encontrado');
 
-        const otrasDeducciones = Math.round(extraData.otras_deducciones || 0);
-        const totalDeducciones = saludEmpleado + pensionEmpleado + fondoSolidaridad + otrasDeducciones;
-
-        // 3. Neto
+        const diasTrabajados = data.dias_trabajados || 30;
+        const sueldoBase = Number(empleado.salario_base || config.salario_minimo);
+        
+        // Cálculo proporcional del sueldo
+        const sueldoBasico = Math.round((sueldoBase / 30) * diasTrabajados);
+        
+        // Auxilio de transporte (solo si el empleado tiene derecho Y gana menos de 2 SMLV)
+        const tieneDerechoAuxTransporte = empleado.auxilio_transporte === true;
+        const auxTransp = (tieneDerechoAuxTransporte && sueldoBase < (config.salario_minimo * 2))
+            ? Math.round((config.auxilio_transporte / 30) * diasTrabajados) 
+            : 0;
+        
+        // Valor hora para extras
+        const valorHora = sueldoBase / config.horas_mensuales;
+        
+        // Horas extras diurnas (recargo 25%)
+        const horasDiurnas = data.horas_diurnas || 0;
+        const valorExtrasDiurnas = Math.round(valorHora * (1 + config.porc_recargo_diurno / 100) * horasDiurnas);
+        
+        // Horas dominicales diurnas (recargo dominical)
+        const horasDomDiurnas = data.horas_dominicales_diurnas || 0;
+        const valorDomDiurnas = Math.round(valorHora * (1 + config.porc_recargo_dominical / 100) * horasDomDiurnas);
+        
+        // Horas festivas diurnas (recargo festivo)
+        const horasFestDiurnas = data.horas_festivas_diurnas || 0;
+        const valorFestDiurnas = Math.round(valorHora * (1 + config.porc_recargo_festivo / 100) * horasFestDiurnas);
+        
+        // Horas extras dominicales (extra diurna dominical)
+        const horasExtraDom = data.horas_extra_diurna_dominical || 0;
+        const valorExtraDom = Math.round(valorHora * (1 + config.porc_extra_diurna_dominical / 100) * horasExtraDom);
+        
+        // Comisiones
+        const comisiones = data.comisiones || 0;
+        
+        // Total devengado (base para deducciones)
+        const totalDevengado = sueldoBasico + auxTransp + valorExtrasDiurnas + valorDomDiurnas + valorFestDiurnas + valorExtraDom + comisiones;
+        
+        // Base para aportes (sin auxilio de transporte)
+        const baseAportes = totalDevengado - auxTransp;
+        
+        // Deducciones empleado
+        const salud = Math.round(baseAportes * (config.porc_salud_empleado / 100));
+        const pension = Math.round(baseAportes * (config.porc_pension_empleado / 100));
+        
+        // Fondo de solidaridad (solo si gana más de 4 SMLV)
+        const fondoSolidaridad = baseAportes > (config.salario_minimo * 4)
+            ? Math.round(baseAportes * (config.fondo_solidaridad_limite / 100))
+            : 0;
+        
+        // Retención en la fuente (simplificada - solo para salarios altos)
+        const retencionFuente = 0; // Se puede implementar tabla de retención
+        
+        // Otras deducciones
+        const otrasDeducciones = data.otras_deducciones || 0;
+        
+        const totalDeducciones = salud + pension + fondoSolidaridad + retencionFuente + otrasDeducciones;
         const netoPagado = totalDevengado - totalDeducciones;
 
-        // 4. Costos Empresa
-        let exonerado = false;
-        if (totalDevengado < (config.salario_minimo * 10)) {
-            exonerado = true;
-        }
-
-        const saludEmpleador = exonerado ? 0 : baseCotizacion * (config.porc_salud_empleador / 100);
-        const pensionEmpleador = baseCotizacion * (config.porc_pension_empleador / 100);
-        const cajaCompensacion = totalDevengado * (config.porc_caja_comp / 100);
-        const baseParafiscales = totalDevengado - auxilioTransporte; 
-        
-        const sena = exonerado ? 0 : baseParafiscales * (config.porc_sena / 100);
-        const icbf = exonerado ? 0 : baseParafiscales * (config.porc_icbf / 100);
-
-        const porcArl = empleado.alto_riesgo ? 6.960 : 0.522; 
-        const arl = baseCotizacion * (porcArl / 100);
-        
-        const cesantias = totalDevengado * (config.porc_cesantias / 100);
-        const interesesCesantias = cesantias * (config.porc_intereses_cesantias / 100);
-        const prima = totalDevengado * (config.porc_prima / 100);
-        const vacaciones = sueldoBasico * (config.porc_vacaciones / 100);
-
-        const valoresEmpresa = {
-            salud: saludEmpleador,
-            pension: pensionEmpleador,
-            arl: arl,
-            caja: cajaCompensacion,
-            sena: sena,
-            icbf: icbf,
-            provisiones: {
-                cesantias,
-                interesesCesantias,
-                prima,
-                vacaciones
-            }
-        };
-
         return {
             empleado_id: empleado.id,
+            empleado_nombre: `${empleado.nombres || ''} ${empleado.apellidos || ''}`.trim(),
+            empleado_documento: empleado.numero_documento || '',
+            periodo_mes: data.periodo_mes || new Date().toLocaleString('es-ES', { month: 'long' }).toUpperCase(),
+            periodo_anio: data.periodo_anio || new Date().getFullYear(),
+            usuario_nombre: data.usuario_nombre || 'Sistema',
             dias_trabajados: diasTrabajados,
             sueldo_basico: sueldoBasico,
-            auxilio_transporte: auxilioTransporte,
+            auxilio_transporte: auxTransp,
+            horas_extras_diurnas: valorExtrasDiurnas,
+            horas_extras_nocturnas: 0, // No implementado
+            valor_festivas_diurnas: valorFestDiurnas,
+            recargo_nocturno: 0, // No implementado
             horas_diurnas: horasDiurnas,
-            valor_diurnas: valorDiurnas,
-            horas_extras: horasExtraDom, 
-            recargos: valorDiurnas + valorDominicales + valorFestivas,
-            horas_dominicales_diurnas: horasDom,
-            horas_festivas_diurnas: horasFest,
+            horas_dominicales_diurnas: horasDomDiurnas,
+            horas_festivas_diurnas: horasFestDiurnas,
             horas_extra_diurna_dominical: horasExtraDom,
-            valor_dominicales_diurnas: valorDominicales,
-            valor_festivas_diurnas: valorFestivas,
+            valor_dominicales_diurnas: valorDomDiurnas,
             valor_extra_diurna_dominical: valorExtraDom,
             comisiones: comisiones,
-            otros_devengados: 0,
             total_devengado: totalDevengado,
-            salud_empleado: saludEmpleado,
-            pension_empleado: pensionEmpleado,
+            salud: salud,
+            salud_empleado: salud,
+            pension: pension,
+            pension_empleado: pension,
             fondo_solidaridad: fondoSolidaridad,
-            prestamos: otrasDeducciones, 
+            retencion_fuente: retencionFuente,
             otras_deducciones: otrasDeducciones,
             total_deducciones: totalDeducciones,
-            neto_pagado: netoPagado,
-            valores_empresa: JSON.stringify(valoresEmpresa),
-            periodo_mes: extraData.periodo_mes,
-            periodo_anio: extraData.periodo_anio,
-            usuario_nombre: extraData.usuario_nombre,
-            fecha_generacion: new Date()
+            neto_pagado: netoPagado
         };
     }
 
-    /**
-     * Obtener datos de la empresa de forma asíncrona
-     */
-    private static async obtenerDatosEmpresa(): Promise<any> {
-        return new Promise((resolve) => {
-            db.get('SELECT * FROM config_facturacion ORDER BY id DESC LIMIT 1', [], (err, emp: any) => {
-                if (err || !emp) {
-                    console.warn('No se encontraron datos de empresa en config_facturacion, usando valores por defecto');
-                    resolve({
-                        nombre_empresa: 'CASA MONTIS',
-                        nit: 'N/A',
-                        direccion: 'N/A',
-                        ciudad: '',
-                        departamento: '',
-                        telefonos: '[]',
-                        correo_electronico: 'N/A'
-                    });
-                } else {
-                    resolve(emp);
-                }
+    async generarNominaMes(empresaId: string, mes: number, anio: number) {
+        const config = await this.repo.getConfiguracionVigente(empresaId);
+        if (!config) throw new Error('No hay configuraci�n de n�mina vigente');
+
+        const empleados = await this.repo.listarEmpleados(empresaId);
+        const resultados = [];
+
+        for (const emp of empleados) {
+            const nomina = await this.calcularYGuardar(emp, config, mes, anio);
+            resultados.push(nomina);
+        }
+
+        return resultados;
+    }
+
+    private async calcularYGuardar(empleado: any, config: any, mes: number, anio: number) {
+        const sueldoBase = Number(empleado.salario_base || 0);
+        const auxTransp = sueldoBase < (config.salario_minimo * 2) ? config.auxilio_transporte : 0;
+        
+        const salud = Math.round(sueldoBase * (Number(config.porc_salud_empleado) / 100));
+        const pension = Math.round(sueldoBase * (Number(config.porc_pension_empleado) / 100));
+        
+        const neto = sueldoBase + auxTransp - salud - pension;
+
+        const nomina = await this.repo.crearNomina({
+            empresa_id: empleado.empresa_id,
+            empleado_id: empleado.id,
+            mes,
+            anio,
+            fecha: new Date(),
+            monto_total: neto,
+            estado: 'GENERADA'
+        });
+
+        const detalles: Insertable<NominaDetallesTable>[] = [
+            { empresa_id: empleado.empresa_id, nomina_id: nomina.id, tipo: 'SUELDO_BASE', descripcion: 'Sueldo Base', monto: sueldoBase },
+            { empresa_id: empleado.empresa_id, nomina_id: nomina.id, tipo: 'AUX_TRANSPORTE', descripcion: 'Auxilio Transporte', monto: auxTransp },
+            { empresa_id: empleado.empresa_id, nomina_id: nomina.id, tipo: 'DEDUCCION_SALUD', descripcion: 'Salud', monto: -salud },
+            { empresa_id: empleado.empresa_id, nomina_id: nomina.id, tipo: 'DEDUCCION_PENSION', descripcion: 'Pensi�n', monto: -pension }
+        ];
+
+        for (const d of detalles) {
+            await this.repo.agregarDetalle(d);
+        }
+
+        return { ...nomina, detalles };
+    }
+
+    async obtenerNominaCompleta(id: string, empresaId: string) {
+        return await this.repo.obtenerNominaCompleta(id, empresaId);
+    }
+
+    // Guardar detalle de nómina con historial
+    async guardarNominaDetalle(empresaId: string, data: any) {
+        const calculo = await this.calcularNominaEmpleado(empresaId, data);
+        
+        // Buscar si ya existe una nómina para este empleado/periodo
+        const mesNumero = this.getMesNumero(data.periodo_mes);
+        const existente = await this.repo.buscarNominaExistente(
+            empresaId, 
+            data.empleado_id, 
+            mesNumero, 
+            data.periodo_anio
+        );
+
+        let nomina;
+        if (existente) {
+            // Actualizar existente
+            nomina = await this.repo.actualizarNomina(existente.id, empresaId, {
+                monto_total: calculo.neto_pagado,
+                estado: 'ABIERTA'
             });
-        });
-    }
-
-    /**
-     * Generar PDF de colilla de pago
-     */
-    static async generarPDFNomina(nominaDetalle: NominaDetalle, config: ConfiguracionNomina): Promise<Buffer> {
-        const empresa = await this.obtenerDatosEmpresa();
-        
-        return new Promise((resolve, reject) => {
-            const doc = new PDFDocument({ margin: 50 });
-            const buffers: Buffer[] = [];
-            
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => resolve(Buffer.concat(buffers)));
-
-            // Encabezado Compartido
-            this.dibujarHeaderEmpresa(doc, empresa);
-            doc.fontSize(14).font('Helvetica-Bold').text('COMPROBANTE DE NÓMINA', { align: 'center' });
-            doc.fontSize(10).font('Helvetica-Bold').text(`Versión: ${nominaDetalle.version || 1}`, { align: 'center' });
-            doc.moveDown(0.5);
-
-            // Información Empleado
-            if (nominaDetalle.empleado) {
-                const e = nominaDetalle.empleado;
-                doc.fontSize(10).font('Helvetica');
-                doc.text(`Empleado: ${e.nombres} ${e.apellidos}`);
-                doc.text(`Documento: ${e.numero_documento}`);
-                doc.text(`Cargo: ${e.cargo}`);
-                doc.text(`Salario Base: $${Math.round(e.salario_base).toLocaleString('es-CO')}`);
-            }
-            doc.moveDown(0.5);
-            
-            doc.text(`Días Trabajados: ${nominaDetalle.dias_trabajados}`);
-            doc.moveDown();
-
-            const tableTop = doc.y;
-            const col1 = 50; const col2 = 250;
-            
-            doc.fontSize(12).text('DEVENGADOS', col1, tableTop, { underline: true });
-            doc.text('DEDUCCIONES', col2, tableTop, { underline: true });
-            doc.moveDown();
-            
-            let y = doc.y;
-            doc.fontSize(10);
-            
-            // Devengados
-            doc.text('Sueldo Básico:', col1, y);
-            doc.text(`$${Math.round(nominaDetalle.sueldo_basico).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-            y += 15;
-            
-            if (nominaDetalle.auxilio_transporte > 0) {
-                doc.text('Aux. Transporte:', col1, y);
-                doc.text(`$${Math.round(nominaDetalle.auxilio_transporte).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                y += 15;
-            }
-
-            if (nominaDetalle.valor_diurnas && nominaDetalle.valor_diurnas > 0) {
-                doc.text(`Rec. Diurno (${Math.round(nominaDetalle.horas_diurnas || 0)}h):`, col1, y);
-                doc.text(`$${Math.round(nominaDetalle.valor_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                y += 15;
-            }
-
-            if (nominaDetalle.valor_dominicales_diurnas && nominaDetalle.valor_dominicales_diurnas > 0) {
-                doc.text(`Rec. Dominical (${Math.round(nominaDetalle.horas_dominicales_diurnas || 0)}h):`, col1, y);
-                doc.text(`$${Math.round(nominaDetalle.valor_dominicales_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                y += 15;
-            }
-
-            if (nominaDetalle.valor_festivas_diurnas && nominaDetalle.valor_festivas_diurnas > 0) {
-                doc.text(`Rec. Festivo (${Math.round(nominaDetalle.horas_festivas_diurnas || 0)}h):`, col1, y);
-                doc.text(`$${Math.round(nominaDetalle.valor_festivas_diurnas).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                y += 15;
-            }
-
-            if (nominaDetalle.valor_extra_diurna_dominical && nominaDetalle.valor_extra_diurna_dominical > 0) {
-                doc.text(`H. Extra Dom (${Math.round(nominaDetalle.horas_extra_diurna_dominical || 0)}h):`, col1, y);
-                doc.text(`$${Math.round(nominaDetalle.valor_extra_diurna_dominical).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                y += 15;
-            }
-
-            if (nominaDetalle.comisiones > 0) {
-                doc.text('Comisiones:', col1, y);
-                doc.text(`$${Math.round(nominaDetalle.comisiones).toLocaleString('es-CO')}`, col1 + 100, y, { align: 'right', width: 80 });
-                y += 15;
-            }
-            
-            doc.font('Helvetica-Bold').text('TOTAL DEVENGADO:', col1, y + 10);
-            doc.text(`$${Math.round(nominaDetalle.total_devengado).toLocaleString('es-CO')}`, col1 + 100, y + 10, { align: 'right', width: 80 });
-            doc.font('Helvetica');
-
-            // Deducciones
-            let y2 = tableTop + 25;
-            doc.text('Salud (4%):', col2, y2);
-            doc.text(`$${Math.round(nominaDetalle.salud_empleado).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
-            y2 += 15;
-            
-            doc.text('Pensión (4%):', col2, y2);
-            doc.text(`$${Math.round(nominaDetalle.pension_empleado).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
-            y2 += 15;
-            
-            if (nominaDetalle.otras_deducciones && nominaDetalle.otras_deducciones > 0) {
-                doc.text('Otros (Adelantos):', col2, y2);
-                doc.text(`$${Math.round(nominaDetalle.otras_deducciones).toLocaleString('es-CO')}`, col2 + 100, y2, { align: 'right', width: 80 });
-                y2 += 15;
-            }
-            
-            doc.font('Helvetica-Bold').text('TOTAL DEDUCCIONES:', col2, y2 + 10);
-            doc.text(`$${Math.round(nominaDetalle.total_deducciones).toLocaleString('es-CO')}`, col2 + 100, y2 + 10, { align: 'right', width: 80 });
-            doc.font('Helvetica');
-
-            const finalY = Math.max(y + 30, y2 + 30);
-            doc.y = finalY;
-
-            // Trazabilidad
-            doc.moveDown(1);
-            doc.fontSize(8).font('Helvetica-Oblique');
-            doc.text(`Periodo: ${nominaDetalle.periodo_mes || 'N/A'} ${nominaDetalle.periodo_anio || ''}`, 50);
-            doc.text(`Generado el: ${new Date(nominaDetalle.fecha_generacion || Date.now()).toLocaleString()}`, 50);
-            doc.text(`Calculado por: ${nominaDetalle.usuario_nombre || 'Sistema'}`, 50);
-            
-            // NETO
-            doc.moveDown(4);
-            doc.fontSize(14).font('Helvetica-Bold').text(`NETO A PAGAR: $${Math.round(nominaDetalle.neto_pagado).toLocaleString('es-CO')}`, { align: 'center' });
-            doc.font('Helvetica');
-
-            // Firmas
-            doc.moveDown(4);
-            const firmaY = doc.y;
-            doc.moveTo(50, firmaY).lineTo(200, firmaY).stroke();
-            doc.text('Firma Empleador', 50, firmaY + 5, { width: 150, align: 'center' });
-            
-            doc.moveTo(350, firmaY).lineTo(500, firmaY).stroke();
-            doc.text('Firma Empleado', 350, firmaY + 5, { width: 150, align: 'center' });
-
-            doc.end();
-        });
-    }
-
-    /**
-     * Generar PDF de liquidación (Colombia - Reforzado)
-     */
-    static async generarPDFLiquidacion(liquidacion: any, empleado: Empleado): Promise<Buffer> {
-        const empresa = await this.obtenerDatosEmpresa();
-
-        return new Promise((resolve, reject) => {
-            const doc = new PDFDocument({ margin: 40 });
-            const buffers: Buffer[] = [];
-            
-            doc.on('data', buffers.push.bind(buffers));
-            doc.on('end', () => resolve(Buffer.concat(buffers)));
-
-            // Header Estandarizado
-            this.dibujarHeaderEmpresa(doc, empresa);
-                doc.fontSize(13).font('Helvetica-Bold').text('LIQUIDACIÓN DEFINITIVA DE PRESTACIONES SOCIALES', { align: 'center', underline: true });
-                doc.moveDown(0.5);
-
-                // Información General
-                doc.fontSize(9).font('Helvetica-Bold');
-                const colA = 40; const colB = 300;
-                let currentY = doc.y;
-
-                doc.text('INFORMACIÓN DEL TRABAJADOR', colA, currentY);
-                doc.text('INFORMACIÓN DEL CONTRATO', colB, currentY);
-                currentY += 15;
-                doc.font('Helvetica').fontSize(8);
-                
-                const formatDateLocal = (d: any) => {
-                    const date = d instanceof Date ? d : new Date(d);
-                    const year = date.getFullYear();
-                    const month = String(date.getMonth() + 1).padStart(2, '0');
-                    const day = String(date.getDate()).padStart(2, '0');
-                    return `${day}/${month}/${year}`;
-                };
-
-                doc.text(`Nombre: ${empleado.nombres} ${empleado.apellidos}`, colA, currentY);
-                doc.text(`Contrato: ${liquidacion.tipo_contrato}`, colB, currentY);
-                currentY += 12;
-                doc.text(`Documento: ${empleado.numero_documento}`, colA, currentY);
-                doc.text(`Motivo: ${liquidacion.motivo_retiro.replace(/_/g, ' ')}`, colB, currentY);
-                currentY += 12;
-                doc.text(`Cargo: ${empleado.cargo}`, colA, currentY);
-                doc.text(`Fecha Ingreso: ${formatDateLocal(liquidacion.fecha_inicio_contrato)}`, colB, currentY);
-                currentY += 12;
-                doc.text(`Salario Base: $${Math.round(liquidacion.bases.salario_base).toLocaleString()}`, colA, currentY);
-                doc.text(`Fecha Retiro: ${formatDateLocal(liquidacion.fecha_fin_contrato)}`, colB, currentY);
-                currentY += 12;
-                doc.text(`Base Prestaciones: $${Math.round(liquidacion.bases.base_prestaciones).toLocaleString()}`, colA, currentY);
-                doc.text(`Días Laborados: ${liquidacion.dias_laborados_total}`, colB, currentY);
-                
-                doc.moveDown(2);
-                currentY = doc.y;
-
-                const drawRow = (label: string, formula: string, value: number, dias?: number) => {
-                    doc.font('Helvetica-Bold').fontSize(9).text(label, colA, currentY);
-                    doc.font('Helvetica').fontSize(8).text(formula + (dias ? ` [Días: ${dias}]` : ''), colA + 20, currentY + 12);
-                    doc.font('Helvetica-Bold').fontSize(9).text(`$${Math.round(value).toLocaleString()}`, 450, currentY, { align: 'right', width: 100 });
-                    currentY += 30;
-                };
-
-                const d = liquidacion.detalles;
-                drawRow('CESANTÍAS', d.cesantias.formula, d.cesantias.valor, d.cesantias.dias);
-                drawRow('INTERESES CESANTÍAS', d.intereses.formula, d.intereses.valor);
-                drawRow('PRIMA DE SERVICIOS', d.prima.formula, d.prima.valor, d.prima.dias);
-                drawRow('VACACIONES', d.vacaciones.formula, d.vacaciones.valor, d.vacaciones.dias);
-                
-                if (d.indemnizacion.valor > 0) {
-                    drawRow('INDEMNIZACIÓN', `Legal (Motivo: ${d.indemnizacion.motivo})`, d.indemnizacion.valor);
-                }
-
-                if (d.salario_pendiente.valor_bruto > 0) {
-                    currentY += 10;
-                    doc.font('Helvetica-Bold').fontSize(9).text('SALARIO PENDIENTE Y DEDUCCIONES', colA, currentY);
-                    currentY += 15;
-                    const sp = d.salario_pendiente;
-                    doc.font('Helvetica').fontSize(8);
-                    doc.text(`Sueldo (${sp.dias} días a $${sp.valor_dia.toLocaleString()})`, colA + 20, currentY);
-                    doc.text(`$${sp.valor_bruto.toLocaleString()}`, 450, currentY, { align: 'right', width: 100 });
-                    currentY += 12;
-                    if (sp.aux_transporte > 0) {
-                        doc.text('Auxilio de Transporte Proporcional', colA + 20, currentY);
-                        doc.text(`$${sp.aux_transporte.toLocaleString()}`, 450, currentY, { align: 'right', width: 100 });
-                        currentY += 12;
-                    }
-                    doc.font('Helvetica-Oblique').text('Dcto. Salud (4%)', colA + 20, currentY);
-                    doc.text(`- $${sp.salud.toLocaleString()}`, 450, currentY, { align: 'right', width: 100 });
-                    currentY += 12;
-                    doc.text('Dcto. Pensión (4%)', colA + 20, currentY);
-                    doc.text(`- $${sp.pension.toLocaleString()}`, 450, currentY, { align: 'right', width: 100 });
-                    currentY += 15;
-                }
-
-                doc.moveTo(colA, currentY).lineTo(550, currentY).stroke();
-                currentY += 10;
-                doc.font('Helvetica-Bold').fontSize(12).text('TOTAL A PAGAR:', colA, currentY);
-                doc.text(`$${Math.round(liquidacion.total_liquidacion).toLocaleString()}`, 400, currentY, { align: 'right', width: 150 });
-                
-                currentY += 40;
-                doc.font('Helvetica-Oblique').fontSize(7).text(`Generado por: ${liquidacion.usuario_genero || 'Sistema'} | Fecha Sistema: ${new Date().toLocaleString()} | Normativa: ${liquidacion.version_normativa}`, colA, currentY);
-                
-                currentY += 20;
-                doc.font('Helvetica-Bold').fontSize(9).text('PAZ Y SALVO Y CONFORMIDAD', colA, currentY);
-                currentY += 15;
-                const legalText = `Certifico que he recibido a satisfacción la suma de $${Math.round(liquidacion.total_liquidacion).toLocaleString()} pesos colombianos, por concepto de mi liquidación definitiva de contrato. Con este pago me declaro a paz y salvo con ${empresa.nombre_empresa} por todo concepto laboral (salarios, prestaciones, vacaciones, indemnizaciones y demás alcances legales).`;
-                doc.font('Helvetica').fontSize(8).text(legalText, colA, currentY, { align: 'justify', width: 510 });
-
-                currentY += 60;
-                doc.moveTo(colA, currentY).lineTo(200, currentY).stroke();
-                doc.text('Firma Empleador / Representante', colA, currentY + 5, { width: 160, align: 'center' });
-
-                doc.moveTo(350, currentY).lineTo(510, currentY).stroke();
-                doc.text('Firma Trabajador', 350, currentY + 5, { width: 160, align: 'center' });
-                doc.text(`C.C. ${empleado.numero_documento}`, 350, currentY + 15, { width: 160, align: 'center' });
-
-                doc.end();
-        });
-    }
-
-    /**
-     * Parsea una fecha YYYY-MM-DD a objeto Date local para evitar desfases de zona horaria
-     */
-    private static parseLocalDate(dateInput: string | Date): Date {
-        if (dateInput instanceof Date) return dateInput;
-        if (!dateInput) return new Date();
-        
-        // Si ya viene con formato ISO completo, intentar parsear
-        if (dateInput.includes('T')) return new Date(dateInput);
-
-        const parts = dateInput.split('-');
-        if (parts.length === 3) {
-            const year = parseInt(parts[0]);
-            const month = parseInt(parts[1]) - 1;
-            const day = parseInt(parts[2]);
-            return new Date(year, month, day);
-        }
-        return new Date(dateInput);
-    }
-
-    /**
-     * Calcular Liquidación de Prestaciones Sociales (Colombia)
-     */
-    static async calcularLiquidacion(
-        empleado: Empleado, 
-        fechaRetiro: Date | string, 
-        config: ConfiguracionNomina,
-        motivoRetiro: string,
-        params: any = {}
-    ): Promise<any> {
-        const fechaInicio = this.parseLocalDate(empleado.fecha_inicio);
-        const fechaFin = this.parseLocalDate(fechaRetiro);
-        
-        // Cálculo de días laborados usando convención 360 días (30 días por mes)
-        // Para prestaciones sociales en Colombia se usa (Año*360 + Mes*30 + Día)
-        const calcularDias360 = (fInicio: Date, fFin: Date) => {
-            const d1 = fInicio.getDate();
-            const m1 = fInicio.getMonth() + 1;
-            const y1 = fInicio.getFullYear();
-            
-            let d2 = fFin.getDate();
-            const m2 = fFin.getMonth() + 1;
-            const y2 = fFin.getFullYear();
-
-            // Ajuste para el último día del mes (convención 30 días)
-            // Si el mes tiene 31 días y es el día 31, se toma como 30
-            // Si es febrero (28 o 29) y es el último día, se toma como 30 para cálculos laborales
-            const isLastDayOfMonth = (date: Date) => {
-                const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-                return nextDay.getMonth() !== date.getMonth();
-            };
-
-            const adjustedD2 = isLastDayOfMonth(fFin) ? 30 : d2;
-            const adjustedD1 = (isLastDayOfMonth(fInicio) && d1 > 28) ? 30 : d1;
-
-            return ((y2 - y1) * 360) + ((m2 - m1) * 30) + (adjustedD2 - adjustedD1) + 1;
-        };
-
-        const diasLaboradosTotal = calcularDias360(fechaInicio, fechaFin);
-        
-        let baseSalarial = params.salarioEsFijo === false && params.promedio12Meses 
-            ? params.promedio12Meses 
-            : (params.baseLiquidacionManual || empleado.salario_base);
-        
-        let incluyeAuxilio = params.incluirAuxilioTransporte !== undefined
-            ? params.incluirAuxilioTransporte
-            : (empleado.auxilio_transporte && (baseSalarial <= (config.salario_minimo * 2)));
-        
-        let basePrestaciones = baseSalarial + (incluyeAuxilio ? config.auxilio_transporte : 0);
-        let baseVacaciones = baseSalarial;
-
-        // Para días de cesantías y prima, también usamos convención 360
-        const calcularDias360Proporcional = (fInicio: Date, fFin: Date, inicioPeriodo: Date) => {
-            const realInicio = fInicio > inicioPeriodo ? fInicio : inicioPeriodo;
-            return calcularDias360(realInicio, fFin);
-        };
-
-        const diasCesantias = params.diasCesantiasPendientes ?? calcularDias360Proporcional(fechaInicio, fechaFin, new Date(fechaFin.getFullYear(), 0, 1));
-        const diasPrima = params.diasPrimaPendientes ?? calcularDias360Proporcional(fechaInicio, fechaFin, new Date(fechaFin.getFullYear(), fechaFin.getMonth() < 6 ? 0 : 6, 1));
-        const diasVacaciones = params.diasVacacionesPendientes ?? (diasCesantias);
-
-        const cesantias = (basePrestaciones * diasCesantias) / 360;
-        const interesesCesantias = (cesantias * 0.12 * diasCesantias) / 360;
-        const primaServicios = (basePrestaciones * diasPrima) / 360;
-        const vacaciones = (baseVacaciones * diasVacaciones) / 720;
-
-        let indemnizacion = 0;
-        let motivoIndemnizacion = "";
-
-        if (motivoRetiro === 'DESPIDO_SIN_JUSTA_CAUSA') {
-            // REGLA PRIORITARIA: El período de prueba bloquea la indemnización (Art. 76 CST)
-            const esPeriodoPruebaActivo = empleado.es_periodo_prueba && 
-                                         empleado.fecha_fin_periodo_prueba && 
-                                         new Date(fechaFin) <= new Date(empleado.fecha_fin_periodo_prueba);
-
-            if (esPeriodoPruebaActivo) {
-                indemnizacion = 0;
-                motivoIndemnizacion = "Periodo de prueba (Art. 76 CST) - Sin indemnización";
-            } else {
-                const smmlv10 = config.salario_minimo * 10;
-                const valorDia = baseSalarial / 30;
-
-                if (empleado.tipo_contrato === 'INDEFINIDO') {
-                    if (baseSalarial <= smmlv10) {
-                        // <= 10 SMMLV: 30 días año 1 + 20 días subsiguientes (proporcional)
-                        if (diasLaboradosTotal <= 360) {
-                            const diasIndem = (30 * diasLaboradosTotal) / 360;
-                            indemnizacion = valorDia * diasIndem;
-                        } else {
-                            const diasAdicionales = diasLaboradosTotal - 360;
-                            const diasIndemSub = (20 * diasAdicionales) / 360;
-                            indemnizacion = (valorDia * 30) + (valorDia * diasIndemSub);
-                        }
-                    } else {
-                        // > 10 SMMLV: 20 días año 1 + 15 días subsiguientes (proporcional)
-                        if (diasLaboradosTotal <= 360) {
-                            const diasIndem = (20 * diasLaboradosTotal) / 360;
-                            indemnizacion = valorDia * diasIndem;
-                        } else {
-                            const diasAdicionales = diasLaboradosTotal - 360;
-                            const diasIndemSub = (15 * diasAdicionales) / 360;
-                            indemnizacion = (valorDia * 20) + (valorDia * diasIndemSub);
-                        }
-                    }
-                    motivoIndemnizacion = "Indefinido Art. 64 CST (Proporcional)";
-                } else if (empleado.tipo_contrato === 'TERMINO_FIJO' && empleado.fecha_fin) {
-                    // Término Fijo: Salarios faltantes hasta el plazo estipulado (Art. 64 CST)
-                    const fechaVence = new Date(empleado.fecha_fin);
-                    if (fechaVence > fechaFin) {
-                        const diffFaltante = fechaVence.getTime() - fechaFin.getTime();
-                        const diasFaltantes = Math.max(0, Math.ceil(diffFaltante / (1000 * 60 * 60 * 24)));
-                        indemnizacion = valorDia * diasFaltantes;
-                        motivoIndemnizacion = `Término Fijo - ${diasFaltantes} días faltantes`;
-                    }
-                }
-            }
+        } else {
+            // Crear nueva
+            nomina = await this.repo.crearNomina({
+                empresa_id: empresaId,
+                empleado_id: data.empleado_id,
+                mes: mesNumero,
+                anio: data.periodo_anio,
+                fecha: new Date(),
+                monto_total: calculo.neto_pagado,
+                estado: 'ABIERTA'
+            });
         }
 
-        const isLastDayOfMonth = (date: Date) => {
-            const nextDay = new Date(date.getFullYear(), date.getMonth(), date.getDate() + 1);
-            return nextDay.getMonth() !== date.getMonth();
-        };
-
-        const diasSueldoPendientes = params.diasSueldoPendientes ?? (isLastDayOfMonth(fechaFin) ? 30 : fechaFin.getDate());
-        const valorDiaSueldo = Math.floor(baseSalarial / 30);
-        const salarioPendiente = valorDiaSueldo * diasSueldoPendientes;
-        const auxTranspPendiente = incluyeAuxilio ? Math.floor((config.auxilio_transporte / 30) * diasSueldoPendientes) : 0;
+        // Guardar los detalles en la tabla de detalles
+        await this.repo.eliminarDetallesNomina(nomina.id, empresaId);
         
-        const saludPendiente = Math.round(salarioPendiente * 0.04);
-        const pensionPendiente = Math.round(salarioPendiente * 0.04);
-        const netoSalarioPendiente = salarioPendiente + auxTranspPendiente - saludPendiente - pensionPendiente;
+        const detalles = [
+            { tipo: 'SUELDO_BASE', descripcion: 'Sueldo Básico', monto: calculo.sueldo_basico },
+            { tipo: 'AUX_TRANSPORTE', descripcion: 'Auxilio Transporte', monto: calculo.auxilio_transporte },
+            { tipo: 'HORAS_EXTRAS', descripcion: 'Horas Extras Diurnas', monto: calculo.horas_extras_diurnas },
+            { tipo: 'RECARGO_DOMINICAL', descripcion: 'Recargo Dominical', monto: calculo.valor_dominicales_diurnas || 0 },
+            { tipo: 'RECARGO_FESTIVO', descripcion: 'Recargo Festivo', monto: calculo.valor_festivas_diurnas || 0 },
+            { tipo: 'HORAS_EXTRA_DOM', descripcion: 'H. Extra Dominical', monto: calculo.valor_extra_diurna_dominical || 0 },
+            { tipo: 'COMISIONES', descripcion: 'Comisiones', monto: calculo.comisiones },
+            { tipo: 'SALUD', descripcion: 'Aporte Salud', monto: -calculo.salud },
+            { tipo: 'PENSION', descripcion: 'Aporte Pensión', monto: -calculo.pension },
+            { tipo: 'OTRAS_DEDUCCIONES', descripcion: 'Otras Deducciones', monto: -calculo.otras_deducciones },
+        ];
 
-        const totalLiquidacion = Math.round(cesantias) + Math.round(interesesCesantias) + Math.round(primaServicios) + Math.round(vacaciones) + Math.round(indemnizacion) + netoSalarioPendiente;
+        for (const det of detalles.filter(d => d.monto !== 0)) {
+            await this.repo.agregarDetalle({
+                empresa_id: empresaId,
+                nomina_id: nomina.id,
+                tipo: det.tipo,
+                descripcion: det.descripcion,
+                monto: det.monto
+            });
+        }
+
+        // Obtener pagos registrados
+        const pagos = await this.repo.obtenerPagosNomina(nomina.id, empresaId);
+        const totalPagado = pagos.reduce((sum, p) => sum + Number(p.valor), 0);
+        const saldoPendiente = calculo.neto_pagado - totalPagado;
 
         return {
-            empleado_id: empleado.id,
-            fecha_inicio_contrato: fechaInicio,
-            fecha_fin_contrato: fechaFin,
-            tipo_contrato: empleado.tipo_contrato,
-            motivo_retiro: motivoRetiro,
-            dias_laborados_total: diasLaboradosTotal,
-            bases: {
-                salario_base: baseSalarial,
-                incluye_auxilio_transporte: incluyeAuxilio,
-                base_prestaciones: basePrestaciones,
-                base_vacaciones: baseVacaciones,
-                es_salario_variable: params.salarioEsFijo === false
+            detalle: {
+                ...calculo,
+                id: nomina.id,
+                estado: nomina.estado
             },
-            detalles: {
-                cesantias: { valor: Math.round(cesantias), dias: diasCesantias, formula: "(Base Prestaciones * Días) / 360" },
-                intereses: { valor: Math.round(interesesCesantias), formula: "(Cesantías * 0.12 * Días) / 360" },
-                prima: { valor: Math.round(primaServicios), dias: diasPrima, formula: "(Base Prestaciones * Días) / 360" },
-                vacaciones: { valor: Math.round(vacaciones), dias: diasVacaciones, formula: "(Base Salarial * Días) / 720" },
-                indemnizacion: { valor: Math.round(indemnizacion), motivo: motivoIndemnizacion },
-                salario_pendiente: {
-                    valor_bruto: salarioPendiente,
-                    aux_transporte: auxTranspPendiente,
-                    salud: saludPendiente,
-                    pension: pensionPendiente,
-                    neto: netoSalarioPendiente,
-                    dias: diasSueldoPendientes,
-                    valor_dia: valorDiaSueldo
-                }
-            },
-            total_liquidacion: Math.round(totalLiquidacion),
-            version_normativa: "Ley 789 de 2002 / CST"
+            pagos,
+            saldo_pendiente: saldoPendiente,
+            info: existente ? 'Nómina actualizada correctamente' : 'Nómina guardada correctamente'
         };
     }
 
-    private static calcularDiasProporcionalesAnio(inicio: Date, fin: Date): number {
-        const corte = new Date(fin.getFullYear(), 0, 1);
-        const realInicio = inicio > corte ? inicio : corte;
-        const diff = Math.abs(fin.getTime() - realInicio.getTime());
-        return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
+    private getMesNumero(mesNombre: string): number {
+        const meses: { [key: string]: number } = {
+            'ENERO': 1, 'FEBRERO': 2, 'MARZO': 3, 'ABRIL': 4,
+            'MAYO': 5, 'JUNIO': 6, 'JULIO': 7, 'AGOSTO': 8,
+            'SEPTIEMBRE': 9, 'OCTUBRE': 10, 'NOVIEMBRE': 11, 'DICIEMBRE': 12
+        };
+        return meses[mesNombre?.toUpperCase()] || new Date().getMonth() + 1;
     }
 
-    private static calcularDiasProporcionalesSemestre(inicio: Date, fin: Date): number {
-        const mesFin = fin.getMonth();
-        const corte = new Date(fin.getFullYear(), mesFin < 6 ? 0 : 6, 1);
-        const realInicio = inicio > corte ? inicio : corte;
-        const diff = Math.abs(fin.getTime() - realInicio.getTime());
-        return Math.ceil(diff / (1000 * 60 * 60 * 24)) + 1;
-    }
-
-    private static dibujarHeaderEmpresa(doc: PDFKit.PDFDocument, emp: any) {
-        // Nombre Empresa
-        const nombre = emp.nombre_empresa || 'CASA MONTIS';
-        doc.fontSize(14).font('Helvetica-Bold').text(nombre.toUpperCase(), { align: 'center' });
+    // Obtener historial de nómina
+    async obtenerHistorialNomina(empresaId: string, empleadoId: string, periodoMes?: string, periodoAnio?: number) {
+        const mesNumero = periodoMes ? this.getMesNumero(periodoMes) : undefined;
         
-        // NIT y Responsabilidad IVA
-        let ivaTexto = '';
-        if (emp.responsable_iva === 1 || emp.responsable_iva === "1" || emp.responsable_iva === true) {
-            ivaTexto = 'RESPONSABLE DE IVA';
-        } else if (emp.responsabilidad_tributaria && emp.responsabilidad_tributaria !== 'null') {
-            ivaTexto = emp.responsabilidad_tributaria.toUpperCase();
-        } else {
-            ivaTexto = 'NO RESPONSABLE DE IVA';
-        }
+        const nominas = await this.repo.buscarNominasEmpleado(empresaId, empleadoId, mesNumero, periodoAnio);
         
-        const nit = emp.nit && emp.nit !== 'null' ? emp.nit : 'N/A';
-        doc.fontSize(10).font('Helvetica').text(`NIT: ${nit}`, { align: 'center' });
-        doc.fontSize(9).text(ivaTexto, { align: 'center' });
-        
-        // Ubicación (Priorizar Ciudad/Depto, fallback a Ubicación Geográfica)
-        const direccion = emp.direccion && emp.direccion !== 'null' ? emp.direccion : '';
-        const ciudadStr = emp.ciudad && emp.ciudad !== "null" ? emp.ciudad : '';
-        const deptoStr = emp.departamento && emp.departamento !== "null" ? emp.departamento : '';
-        
-        let ubicacionFull = direccion;
-        if (ciudadStr || deptoStr) {
-            const loc = [ciudadStr, deptoStr].filter(Boolean).join(' - ');
-            ubicacionFull += (ubicacionFull ? ' - ' : '') + loc;
-        } else if (emp.ubicacion_geografica && emp.ubicacion_geografica !== "null") {
-            ubicacionFull += (ubicacionFull ? ' - ' : '') + emp.ubicacion_geografica;
-        }
-        
-        if (ubicacionFull) {
-            doc.text(ubicacionFull, { align: 'center' });
-        }
-        
-        // Contacto (Teléfonos y Email)
-        let tels = '';
-        try {
-            if (emp.telefonos) {
-                let parsed;
-                if (typeof emp.telefonos === 'string') {
-                    parsed = JSON.parse(emp.telefonos);
-                } else {
-                    parsed = emp.telefonos;
+        const nominasConDetalles = await Promise.all(
+            nominas.map(async (n) => {
+                const detalles = await this.repo.obtenerDetallesNomina(n.id, empresaId);
+                const pagos = await this.repo.obtenerPagosNomina(n.id, empresaId);
+                const empleado = await this.repo.obtenerEmpleado(n.empleado_id, empresaId);
+                
+                // Calcular total_devengado y total_deducciones desde los detalles
+                let total_devengado = 0;
+                let total_deducciones = 0;
+                
+                for (const det of detalles) {
+                    const monto = Number(det.monto) || 0;
+                    if (monto >= 0) {
+                        total_devengado += monto;
+                    } else {
+                        total_deducciones += Math.abs(monto);
+                    }
                 }
                 
-                if (Array.isArray(parsed)) {
-                    tels = parsed.filter((t: any) => t && String(t).trim()).join(' - ');
-                } else {
-                    tels = String(emp.telefonos);
+                const neto_pagado = total_devengado - total_deducciones;
+                
+                // Generar historial de cambios para esta nómina
+                const historialNomina: any[] = [];
+                
+                // Agregar evento de creación
+                historialNomina.push({
+                    id: `${n.id}-creacion`,
+                    nomina_detalle_id: n.id,
+                    version: 1,
+                    fecha: n.fecha,
+                    cambio: 'Creación de nómina mensual',
+                    usuario: 'Sistema'
+                });
+                
+                // Agregar eventos de pagos
+                for (const pago of pagos) {
+                    historialNomina.push({
+                        id: `${n.id}-pago-${pago.id}`,
+                        nomina_detalle_id: n.id,
+                        version: 1,
+                        fecha: pago.fecha,
+                        cambio: `Pago registrado: $${Number(pago.valor).toLocaleString('es-CO')} (${pago.tipo || 'QUINCENA'})`,
+                        usuario: 'Sistema'
+                    });
                 }
+                
+                return {
+                    ...n,
+                    empleado_nombre: empleado ? `${empleado.nombres} ${empleado.apellidos}` : '',
+                    empleado_documento: empleado?.numero_documento || '',
+                    periodo_mes: this.getNombreMes(n.mes),
+                    periodo_anio: n.anio,
+                    total_devengado,
+                    total_deducciones,
+                    neto_pagado,
+                    pdf_path: 'dynamic', // Indicar que el PDF se puede generar dinámicamente
+                    pdf_version: 1,
+                    version: 1,
+                    detalles,
+                    pagos_registrados: pagos,
+                    historial_cambios: historialNomina
+                };
+            })
+        );
+
+        // Combinar todos los historiales
+        const todosHistoriales = nominasConDetalles.flatMap(n => n.historial_cambios || []);
+
+        return {
+            nominas: nominasConDetalles,
+            pagos: [],
+            historial: todosHistoriales
+        };
+    }
+
+    private getNombreMes(mes: number): string {
+        const meses = ['', 'ENERO', 'FEBRERO', 'MARZO', 'ABRIL', 'MAYO', 'JUNIO', 
+                       'JULIO', 'AGOSTO', 'SEPTIEMBRE', 'OCTUBRE', 'NOVIEMBRE', 'DICIEMBRE'];
+        return meses[mes] || '';
+    }
+
+    // Registrar pago
+    async registrarPago(empresaId: string, nominaId: string, data: { valor: number; fecha?: string; tipo?: string; observaciones?: string }) {
+        const pago = await this.repo.registrarPago({
+            empresa_id: empresaId,
+            nomina_id: nominaId,
+            valor: data.valor,
+            fecha: data.fecha ? new Date(data.fecha) : new Date(),
+            tipo: data.tipo || 'QUINCENA',
+            observaciones: data.observaciones || null
+        });
+        return pago;
+    }
+
+    // Generar PDF de nómina guardada
+    async generarPDFNomina(empresaId: string, nominaId: string): Promise<Buffer> {
+        const nomina = await this.repo.obtenerNominaCompleta(nominaId, empresaId);
+        if (!nomina) throw new Error('Nómina no encontrada');
+
+        const empleado = await this.repo.obtenerEmpleado(nomina.empleado_id, empresaId);
+        const empresa = await this.configFactRepo.findByEmpresaId(empresaId);
+
+        // Reconstruir los valores desde los detalles guardados
+        const detallesMap: { [key: string]: number } = {};
+        let total_devengado = 0;
+        let total_deducciones = 0;
+
+        for (const det of nomina.detalles || []) {
+            const monto = Number(det.monto) || 0;
+            detallesMap[det.tipo] = Math.abs(monto);
+            if (monto >= 0) {
+                total_devengado += monto;
+            } else {
+                total_deducciones += Math.abs(monto);
             }
-            if (emp.telefono2 && emp.telefono2 !== 'null' && !tels.includes(emp.telefono2)) {
-                tels = tels ? `${tels} - ${emp.telefono2}` : emp.telefono2;
-            }
-        } catch(e) {
-            tels = emp.telefonos || emp.telefono2 || '';
         }
 
-        const email = emp.correo_electronico || emp.email;
-        const emailDisplay = email && email !== 'null' ? email : 'N/A';
+        return this.generarPDFBuffer({
+            empleado_nombre: empleado ? `${empleado.nombres} ${empleado.apellidos}` : '',
+            empleado_documento: empleado?.numero_documento || '',
+            periodo_mes: this.getNombreMes(nomina.mes),
+            periodo_anio: nomina.anio,
+            dias_trabajados: 30, // TODO: guardar en detalles si se requiere
+            sueldo_basico: detallesMap['SUELDO_BASE'] || 0,
+            auxilio_transporte: detallesMap['AUX_TRANSPORTE'] || 0,
+            horas_extras_diurnas: detallesMap['HORAS_EXTRAS'] || 0,
+            valor_dominicales_diurnas: detallesMap['RECARGO_DOMINICAL'] || 0,
+            valor_festivas_diurnas: detallesMap['RECARGO_FESTIVO'] || 0,
+            valor_extra_diurna_dominical: detallesMap['HORAS_EXTRA_DOM'] || 0,
+            comisiones: detallesMap['COMISIONES'] || 0,
+            salud: detallesMap['SALUD'] || 0,
+            pension: detallesMap['PENSION'] || 0,
+            fondo_solidaridad: detallesMap['FONDO_SOLIDARIDAD'] || 0,
+            otras_deducciones: detallesMap['OTRAS_DEDUCCIONES'] || 0,
+            total_devengado,
+            total_deducciones,
+            neto_pagado: total_devengado - total_deducciones
+        }, empresa);
+    }
 
-        doc.text(`Email: ${emailDisplay} - Tel: ${tels || 'N/A'}`, { align: 'center' });
-        doc.moveDown(0.7);
+    // Generar PDF preview (sin guardar)
+    async generarPDFPreview(empresaId: string, nominaDetalle: any): Promise<Buffer> {
+        const empresa = await this.configFactRepo.findByEmpresaId(empresaId);
+        return this.generarPDFBuffer(nominaDetalle, empresa);
+    }
+
+    private generarPDFBuffer(nominaDetalle: any, empresa: any): Buffer {
+        return new Promise((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            const doc = new PDFDocument({ margin: 50 });
+
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            // Encabezado con datos de la empresa
+            const nombreEmpresa = (empresa as any)?.nombre_empresa || empresa?.razon_social || 'Empresa';
+            const nitEmpresa = (empresa as any)?.nit || empresa?.rut || 'N/A';
+            const direccionEmpresa = empresa?.direccion || '';
+            const ciudadEmpresa = (empresa as any)?.ciudad || empresa?.giro || '';
+            const deptoEmpresa = (empresa as any)?.departamento || '';
+            const emailEmpresa = (empresa as any)?.correo_electronico || empresa?.email || '';
+            
+            // Construir lista de teléfonos desde telefonos[] y telefono2
+            const telefonosArray = (empresa as any)?.telefonos || [];
+            const telefono2 = (empresa as any)?.telefono2 || '';
+            const todosLosTelefonos = [...(Array.isArray(telefonosArray) ? telefonosArray : []), telefono2].filter(Boolean);
+            const telefonoStr = todosLosTelefonos.join(' - ');
+            
+            doc.fontSize(18).font('Helvetica-Bold').text(nombreEmpresa.toUpperCase(), { align: 'center' });
+            doc.fontSize(11).font('Helvetica').text(`NIT: ${nitEmpresa}`, { align: 'center' });
+            if (direccionEmpresa) {
+                doc.text(direccionEmpresa, { align: 'center' });
+            }
+            if (ciudadEmpresa || deptoEmpresa) {
+                doc.text(`${ciudadEmpresa}${ciudadEmpresa && deptoEmpresa ? ' - ' : ''}${deptoEmpresa}`, { align: 'center' });
+            }
+            if (emailEmpresa) {
+                doc.text(`Email: ${emailEmpresa}`, { align: 'center' });
+            }
+            if (telefonoStr) {
+                doc.text(`Tel: ${telefonoStr}`, { align: 'center' });
+            }
+            doc.moveDown();
+            doc.fontSize(16).font('Helvetica-Bold').text('COMPROBANTE DE NÓMINA', { align: 'center' });
+            doc.font('Helvetica');
+            doc.moveDown();
+
+            // Información del empleado
+            doc.fontSize(12);
+            doc.text(`Empleado: ${nominaDetalle.empleado_nombre || 'N/A'}`);
+            doc.text(`Documento: ${nominaDetalle.empleado_documento || 'N/A'}`);
+            doc.text(`Período: ${nominaDetalle.periodo_mes} ${nominaDetalle.periodo_anio}`);
+            doc.text(`Días Trabajados: ${nominaDetalle.dias_trabajados || 30}`);
+            doc.moveDown();
+
+            // Devengados
+            doc.fontSize(14).text('DEVENGADOS', { underline: true });
+            doc.fontSize(11);
+            doc.text(`Sueldo Básico: $${(nominaDetalle.sueldo_basico || 0).toLocaleString('es-CO')}`);
+            if (nominaDetalle.auxilio_transporte > 0) {
+                doc.text(`Auxilio Transporte: $${nominaDetalle.auxilio_transporte.toLocaleString('es-CO')}`);
+            }
+            if (nominaDetalle.horas_extras_diurnas > 0) {
+                doc.text(`Horas Extras Diurnas: $${nominaDetalle.horas_extras_diurnas.toLocaleString('es-CO')}`);
+            }
+            if (nominaDetalle.valor_dominicales_diurnas > 0) {
+                doc.text(`Recargo Dominical: $${nominaDetalle.valor_dominicales_diurnas.toLocaleString('es-CO')}`);
+            }
+            if (nominaDetalle.valor_festivas_diurnas > 0) {
+                doc.text(`Recargo Festivo: $${nominaDetalle.valor_festivas_diurnas.toLocaleString('es-CO')}`);
+            }
+            if (nominaDetalle.valor_extra_diurna_dominical > 0) {
+                doc.text(`H. Extra Dominical: $${nominaDetalle.valor_extra_diurna_dominical.toLocaleString('es-CO')}`);
+            }
+            if (nominaDetalle.comisiones > 0) {
+                doc.text(`Comisiones: $${nominaDetalle.comisiones.toLocaleString('es-CO')}`);
+            }
+            doc.text(`Total Devengado: $${(nominaDetalle.total_devengado || 0).toLocaleString('es-CO')}`);
+            doc.moveDown();
+
+            // Deducciones
+            doc.fontSize(14).text('DEDUCCIONES', { underline: true });
+            doc.fontSize(11);
+            doc.text(`Salud (4%): $${(nominaDetalle.salud || nominaDetalle.salud_empleado || 0).toLocaleString('es-CO')}`);
+            doc.text(`Pensión (4%): $${(nominaDetalle.pension || nominaDetalle.pension_empleado || 0).toLocaleString('es-CO')}`);
+            if (nominaDetalle.fondo_solidaridad > 0) {
+                doc.text(`Fondo Solidaridad: $${nominaDetalle.fondo_solidaridad.toLocaleString('es-CO')}`);
+            }
+            if (nominaDetalle.otras_deducciones > 0) {
+                doc.text(`Otras Deducciones: $${nominaDetalle.otras_deducciones.toLocaleString('es-CO')}`);
+            }
+            doc.text(`Total Deducciones: $${(nominaDetalle.total_deducciones || 0).toLocaleString('es-CO')}`);
+            doc.moveDown();
+
+            // Neto a pagar
+            doc.fontSize(16).text(`NETO A PAGAR: $${(nominaDetalle.neto_pagado || 0).toLocaleString('es-CO')}`, { align: 'right' });
+            doc.moveDown(2);
+
+            // Firmas
+            doc.fontSize(10);
+            doc.text('_________________________', 100, doc.y);
+            doc.text('_________________________', 350, doc.y - 14);
+            doc.text('Firma Empleador', 120, doc.y + 5);
+            doc.text('Firma Empleado', 375, doc.y - 9);
+
+            doc.end();
+        }) as unknown as Buffer;
+    }
+
+    // ==================== LIQUIDACIÓN ====================
+    async calcularLiquidacion(empresaId: string, data: {
+        empleado_id: string;
+        fecha_retiro: string;
+        motivo_retiro: string;
+        base_liquidacion_manual?: number;
+        salario_fijo?: boolean;
+        promedio_12_meses?: number;
+        incluir_auxilio_transporte?: boolean;
+        dias_vacaciones?: number;
+        dias_prima?: number;
+        dias_cesantias?: number;
+        dias_sueldo_pendientes?: number;
+    }) {
+        const config = await this.repo.getConfiguracionVigente(empresaId);
+        if (!config) throw new Error('No hay configuración de nómina vigente');
+
+        const empleado = await this.repo.obtenerEmpleado(data.empleado_id, empresaId);
+        if (!empleado) throw new Error('Empleado no encontrado');
+
+        const fechaRetiro = new Date(data.fecha_retiro);
+        const fechaIngreso = empleado.fecha_inicio ? new Date(empleado.fecha_inicio) : new Date();
+        
+        // Calcular días laborados totales
+        const diasLaboradosTotal = Math.floor((fechaRetiro.getTime() - fechaIngreso.getTime()) / (1000 * 60 * 60 * 24));
+        
+        // Base de cálculo
+        const salarioBase = data.base_liquidacion_manual || Number(empleado.salario_base) || config.salario_minimo;
+        const auxTransporte = (data.incluir_auxilio_transporte !== false && empleado.auxilio_transporte) 
+            ? config.auxilio_transporte 
+            : 0;
+        const basePrestaciones = salarioBase + auxTransporte;
+        
+        // Función auxiliar para calcular días en base 30/360 (convención laboral colombiana)
+        // Del 27/01 al 27/02 = exactamente 30 días (1 mes)
+        const calcularDias30_360 = (fechaInicio: Date, fechaFin: Date): number => {
+            const y1 = fechaInicio.getFullYear();
+            const m1 = fechaInicio.getMonth();
+            let d1 = fechaInicio.getDate();
+            
+            const y2 = fechaFin.getFullYear();
+            const m2 = fechaFin.getMonth();
+            let d2 = fechaFin.getDate();
+            
+            // Reglas de ajuste 30/360:
+            // Si el día es 31, se convierte en 30
+            if (d1 === 31) d1 = 30;
+            if (d2 === 31) d2 = 30;
+            
+            // Fórmula 30/360: cada mes tiene 30 días, año tiene 360
+            return ((y2 - y1) * 360) + ((m2 - m1) * 30) + (d2 - d1);
+        };
+        
+        // Días laborados totales en base 30/360
+        const diasLaborados30_360 = calcularDias30_360(fechaIngreso, fechaRetiro);
+        
+        // Días del año actual trabajados para cesantías (base 30/360)
+        const inicioAnio = new Date(fechaRetiro.getFullYear(), 0, 1);
+        const fechaInicioCalculo = fechaIngreso > inicioAnio ? fechaIngreso : inicioAnio;
+        const diasAnioActual = calcularDias30_360(fechaInicioCalculo, fechaRetiro);
+        
+        // Días del semestre para prima (base 30/360)
+        const inicioSemestre = fechaRetiro.getMonth() < 6 
+            ? new Date(fechaRetiro.getFullYear(), 0, 1)
+            : new Date(fechaRetiro.getFullYear(), 6, 1);
+        const fechaInicioPrima = fechaIngreso > inicioSemestre ? fechaIngreso : inicioSemestre;
+        const diasSemestre = calcularDias30_360(fechaInicioPrima, fechaRetiro);
+        
+        // Usar días personalizados o calculados
+        const diasCesantias = data.dias_cesantias ?? diasAnioActual;
+        const diasPrima = data.dias_prima ?? diasSemestre;
+        // Vacaciones: días totales trabajados (para el cálculo se usará base 720)
+        const diasVacaciones = data.dias_vacaciones ?? diasLaborados30_360;
+        const diasSueldoPendiente = data.dias_sueldo_pendientes ?? Math.min(fechaRetiro.getDate(), 30);
+
+        // CÁLCULOS DE PRESTACIONES (Base 30/360)
+        // Cesantías: (Salario + Aux) * días_año / 360
+        const valorCesantias = Math.round((basePrestaciones * diasCesantias) / 360);
+        
+        // Intereses sobre cesantías: Cesantías * días_año * 12% / 360
+        const valorIntereses = Math.round((valorCesantias * diasCesantias * 0.12) / 360);
+        
+        // Prima de servicios: (Salario + Aux) * días_semestre / 360
+        const valorPrima = Math.round((basePrestaciones * diasPrima) / 360);
+        
+        // Vacaciones: Salario * días_totales / 720 (sin aux transporte, 15 días por año = 360/720)
+        const valorVacaciones = Math.round((salarioBase * diasVacaciones) / 720);
+        
+        // Salario pendiente
+        const sueldoPendienteBruto = Math.round((salarioBase / 30) * diasSueldoPendiente);
+        const auxTransportePendiente = Math.round((auxTransporte / 30) * diasSueldoPendiente);
+        const saludPendiente = Math.round(sueldoPendienteBruto * 0.04);
+        const pensionPendiente = Math.round(sueldoPendienteBruto * 0.04);
+        const sueldoPendienteNeto = sueldoPendienteBruto + auxTransportePendiente - saludPendiente - pensionPendiente;
+        
+        // INDEMNIZACIÓN (solo para despido sin justa causa)
+        let valorIndemnizacion = 0;
+        let motivoIndemnizacion = '';
+        
+        if (data.motivo_retiro === 'DESPIDO_SIN_JUSTA_CAUSA') {
+            // Verificar si está en período de prueba (usar campos si existen)
+            const emp = empleado as any;
+            const enPeriodoPrueba = emp.es_periodo_prueba && 
+                emp.fecha_fin_periodo_prueba && 
+                new Date(data.fecha_retiro) <= new Date(emp.fecha_fin_periodo_prueba);
+            
+            if (enPeriodoPrueba) {
+                motivoIndemnizacion = 'En período de prueba - Sin derecho a indemnización (Art. 76 CST)';
+            } else {
+                const aniosTrabajados = diasLaboradosTotal / 365;
+                
+                if (empleado.tipo_contrato === 'INDEFINIDO') {
+                    // Contrato indefinido - Ley 789/2002
+                    if (salarioBase < config.salario_minimo * 10) {
+                        // Menos de 10 SMMLV
+                        const diasPrimerAnio = Math.min(diasLaboradosTotal, 365);
+                        const diasRestantes = Math.max(0, diasLaboradosTotal - 365);
+                        valorIndemnizacion = Math.round(
+                            (salarioBase / 30) * 30 * (diasPrimerAnio / 365) + // 30 días primer año
+                            (salarioBase / 30) * 20 * (diasRestantes / 365)    // 20 días por año siguiente
+                        );
+                        motivoIndemnizacion = 'Contrato indefinido (<10 SMMLV): 30 días año 1 + 20 días/año subsiguiente';
+                    } else {
+                        // 10 SMMLV o más
+                        const diasPrimerAnio = Math.min(diasLaboradosTotal, 365);
+                        const diasRestantes = Math.max(0, diasLaboradosTotal - 365);
+                        valorIndemnizacion = Math.round(
+                            (salarioBase / 30) * 20 * (diasPrimerAnio / 365) + // 20 días primer año
+                            (salarioBase / 30) * 15 * (diasRestantes / 365)    // 15 días por año siguiente
+                        );
+                        motivoIndemnizacion = 'Contrato indefinido (≥10 SMMLV): 20 días año 1 + 15 días/año subsiguiente';
+                    }
+                } else if (empleado.tipo_contrato === 'FIJO' && empleado.fecha_fin) {
+                    // Contrato a término fijo - salarios faltantes hasta el vencimiento
+                    const fechaFinContrato = new Date(empleado.fecha_fin);
+                    const diasFaltantes = Math.floor((fechaFinContrato.getTime() - fechaRetiro.getTime()) / (1000 * 60 * 60 * 24));
+                    if (diasFaltantes > 0) {
+                        valorIndemnizacion = Math.round((salarioBase / 30) * diasFaltantes);
+                        motivoIndemnizacion = `Contrato fijo: ${diasFaltantes} días restantes hasta vencimiento`;
+                    }
+                }
+            }
+        }
+        
+        // TOTAL LIQUIDACIÓN
+        const totalLiquidacion = valorCesantias + valorIntereses + valorPrima + valorVacaciones + 
+                                 sueldoPendienteNeto + valorIndemnizacion;
+        
+        return {
+            empleado_id: data.empleado_id,
+            empleado_nombre: `${empleado.nombres} ${empleado.apellidos}`,
+            empleado_documento: empleado.numero_documento,
+            fecha_ingreso: empleado.fecha_inicio,
+            fecha_retiro: data.fecha_retiro,
+            motivo_retiro: data.motivo_retiro,
+            dias_laborados_total: diasLaborados30_360,
+            bases: {
+                salario_base: salarioBase,
+                auxilio_transporte: auxTransporte,
+                base_prestaciones: basePrestaciones,
+                es_salario_variable: data.salario_fijo === false,
+                incluye_auxilio_transporte: data.incluir_auxilio_transporte !== false && empleado.auxilio_transporte
+            },
+            detalles: {
+                cesantias: { dias: diasCesantias, valor: valorCesantias },
+                intereses: { dias: diasCesantias, porcentaje: 12, valor: valorIntereses },
+                prima: { dias: diasPrima, valor: valorPrima },
+                vacaciones: { dias: diasVacaciones, valor: valorVacaciones },
+                salario_pendiente: {
+                    dias: diasSueldoPendiente,
+                    valor_bruto: sueldoPendienteBruto,
+                    aux_transporte: auxTransportePendiente,
+                    salud: saludPendiente,
+                    pension: pensionPendiente,
+                    neto: sueldoPendienteNeto
+                },
+                indemnizacion: {
+                    valor: valorIndemnizacion,
+                    motivo: motivoIndemnizacion
+                }
+            },
+            total_liquidacion: totalLiquidacion
+        };
+    }
+
+    async generarPDFLiquidacion(empresaId: string, liquidacion: any): Promise<Buffer> {
+        const empresa = await this.configFactRepo.findByEmpresaId(empresaId);
+        
+        return new Promise((resolve, reject) => {
+            const chunks: Buffer[] = [];
+            const doc = new PDFDocument({ margin: 50 });
+
+            doc.on('data', (chunk: Buffer) => chunks.push(chunk));
+            doc.on('end', () => resolve(Buffer.concat(chunks)));
+            doc.on('error', reject);
+
+            // Encabezado con datos de la empresa
+            const nombreEmpresa = (empresa as any)?.nombre_empresa || empresa?.razon_social || 'Empresa';
+            const nitEmpresa = (empresa as any)?.nit || empresa?.rut || 'N/A';
+            const direccionEmpresa = empresa?.direccion || '';
+            const ciudadEmpresa = (empresa as any)?.ciudad || empresa?.giro || '';
+            const deptoEmpresa = (empresa as any)?.departamento || '';
+            const emailEmpresa = (empresa as any)?.correo_electronico || empresa?.email || '';
+            
+            // Construir lista de teléfonos desde telefonos[] y telefono2
+            const telefonosArray = (empresa as any)?.telefonos || [];
+            const telefono2 = (empresa as any)?.telefono2 || '';
+            const todosLosTelefonos = [...(Array.isArray(telefonosArray) ? telefonosArray : []), telefono2].filter(Boolean);
+            const telefonoStr = todosLosTelefonos.join(' - ');
+            
+            doc.fontSize(18).font('Helvetica-Bold').text(nombreEmpresa.toUpperCase(), { align: 'center' });
+            doc.fontSize(11).font('Helvetica').text(`NIT: ${nitEmpresa}`, { align: 'center' });
+            if (direccionEmpresa) {
+                doc.text(direccionEmpresa, { align: 'center' });
+            }
+            if (ciudadEmpresa || deptoEmpresa) {
+                doc.text(`${ciudadEmpresa}${ciudadEmpresa && deptoEmpresa ? ' - ' : ''}${deptoEmpresa}`, { align: 'center' });
+            }
+            if (emailEmpresa) {
+                doc.text(`Email: ${emailEmpresa}`, { align: 'center' });
+            }
+            if (telefonoStr) {
+                doc.text(`Tel: ${telefonoStr}`, { align: 'center' });
+            }
+            doc.moveDown();
+            doc.fontSize(16).font('Helvetica-Bold').text('LIQUIDACIÓN DE PRESTACIONES SOCIALES', { align: 'center' });
+            doc.font('Helvetica');
+            doc.moveDown();
+
+            // Información del empleado
+            doc.fontSize(12);
+            doc.text(`Empleado: ${liquidacion.empleado_nombre || 'N/A'}`);
+            doc.text(`Documento: ${liquidacion.empleado_documento || 'N/A'}`);
+            doc.text(`Fecha Ingreso: ${new Date(liquidacion.fecha_ingreso).toLocaleDateString('es-CO')}`);
+            doc.text(`Fecha Retiro: ${new Date(liquidacion.fecha_retiro).toLocaleDateString('es-CO')}`);
+            doc.text(`Días Laborados: ${liquidacion.dias_laborados_total}`);
+            doc.text(`Motivo: ${liquidacion.motivo_retiro?.replace(/_/g, ' ')}`);
+            doc.moveDown();
+
+            // Base de cálculo
+            doc.fontSize(14).text('BASE DE CÁLCULO', { underline: true });
+            doc.fontSize(11);
+            doc.text(`Salario Base: $${liquidacion.bases.salario_base.toLocaleString('es-CO')}`);
+            doc.text(`Auxilio Transporte: $${liquidacion.bases.auxilio_transporte.toLocaleString('es-CO')}`);
+            doc.text(`Base Prestaciones: $${liquidacion.bases.base_prestaciones.toLocaleString('es-CO')}`);
+            doc.moveDown();
+
+            // Prestaciones
+            doc.fontSize(14).text('PRESTACIONES SOCIALES', { underline: true });
+            doc.fontSize(11);
+            doc.text(`Cesantías (${liquidacion.detalles.cesantias.dias} días): $${liquidacion.detalles.cesantias.valor.toLocaleString('es-CO')}`);
+            doc.text(`Intereses Cesantías: $${liquidacion.detalles.intereses.valor.toLocaleString('es-CO')}`);
+            doc.text(`Prima de Servicios (${liquidacion.detalles.prima.dias} días): $${liquidacion.detalles.prima.valor.toLocaleString('es-CO')}`);
+            doc.text(`Vacaciones (${liquidacion.detalles.vacaciones.dias} días): $${liquidacion.detalles.vacaciones.valor.toLocaleString('es-CO')}`);
+            doc.moveDown();
+
+            // Salario pendiente
+            if (liquidacion.detalles.salario_pendiente.neto > 0) {
+                doc.fontSize(14).text('SALARIO PENDIENTE', { underline: true });
+                doc.fontSize(11);
+                doc.text(`Sueldo Bruto (${liquidacion.detalles.salario_pendiente.dias} días): $${liquidacion.detalles.salario_pendiente.valor_bruto.toLocaleString('es-CO')}`);
+                doc.text(`(-) Salud 4%: $${liquidacion.detalles.salario_pendiente.salud.toLocaleString('es-CO')}`);
+                doc.text(`(-) Pensión 4%: $${liquidacion.detalles.salario_pendiente.pension.toLocaleString('es-CO')}`);
+                doc.text(`Neto: $${liquidacion.detalles.salario_pendiente.neto.toLocaleString('es-CO')}`);
+                doc.moveDown();
+            }
+
+            // Indemnización
+            if (liquidacion.detalles.indemnizacion.valor > 0) {
+                doc.fontSize(14).text('INDEMNIZACIÓN', { underline: true });
+                doc.fontSize(11);
+                doc.text(`Valor: $${liquidacion.detalles.indemnizacion.valor.toLocaleString('es-CO')}`);
+                doc.text(`Motivo: ${liquidacion.detalles.indemnizacion.motivo}`);
+                doc.moveDown();
+            }
+
+            // Total
+            doc.moveDown();
+            doc.fontSize(16).text(`TOTAL LIQUIDACIÓN: $${liquidacion.total_liquidacion.toLocaleString('es-CO')}`, { align: 'right' });
+            doc.moveDown(2);
+
+            // Firmas
+            doc.fontSize(10);
+            doc.text('_________________________', 100, doc.y);
+            doc.text('_________________________', 350, doc.y - 14);
+            doc.text('Firma Empleador', 120, doc.y + 5);
+            doc.text('Firma Empleado', 375, doc.y - 9);
+
+            doc.end();
+        }) as unknown as Buffer;
+    }
+
+    // Eliminar historial de nómina por periodo
+    async eliminarHistorialPorPeriodo(empresaId: string, periodoMes: string, periodoAnio: number) {
+        return await this.repo.eliminarHistorialPorPeriodo(empresaId, periodoMes, periodoAnio);
+    }
+
+    // Eliminar historial de nómina por fechas
+    async eliminarHistorialPorFechas(empresaId: string, fechaInicio: string, fechaFin: string) {
+        return await this.repo.eliminarHistorialPorFechas(empresaId, fechaInicio, fechaFin);
     }
 }
