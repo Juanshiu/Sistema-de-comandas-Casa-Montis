@@ -169,7 +169,7 @@ export interface Sesion {
 }
 
 export interface LoginRequest {
-  usuario: string;
+  email: string;
   password: string;
 }
 
