@@ -3,6 +3,18 @@
 import { useState, useEffect } from 'react';
 import { Mesa, Salon } from '@/types';
 import { apiService } from '@/services/api';
+import { AlertTriangle } from 'lucide-react';
+
+interface LimitesLicencia {
+  max_usuarios: number;
+  max_mesas: number;
+  plan: string;
+  estado: string;
+  usuarios_actuales: number;
+  mesas_actuales: number;
+  puede_crear_usuarios: boolean;
+  puede_crear_mesas: boolean;
+}
 
 export default function GestionMesas() {
   const [mesas, setMesas] = useState<Mesa[]>([]);
@@ -10,6 +22,7 @@ export default function GestionMesas() {
   const [loading, setLoading] = useState(true);
   const [modalAbierto, setModalAbierto] = useState(false);
   const [mesaEditando, setMesaEditando] = useState<Mesa | null>(null);
+  const [limitesLicencia, setLimitesLicencia] = useState<LimitesLicencia | null>(null);
   const [formData, setFormData] = useState({
     numero: '',
     capacidad: 1,
@@ -29,6 +42,14 @@ export default function GestionMesas() {
       ]);
       setMesas(mesasData);
       setSalones(salonesData);
+
+      // Cargar límites de licencia
+      try {
+        const limites = await apiService.getLimitesLicencia();
+        setLimitesLicencia(limites);
+      } catch (e) {
+        console.warn('No se pudieron cargar los límites de licencia');
+      }
     } catch (error) {
       console.error('Error al cargar datos:', error);
     } finally {
@@ -72,7 +93,7 @@ export default function GestionMesas() {
       const mesaData = {
         numero: formData.numero.trim(), // Mantener como string
         capacidad: formData.capacidad,
-        salon_id: formData.salon_id ? parseInt(formData.salon_id) : undefined
+        salon_id: formData.salon_id ? formData.salon_id : undefined
       };
 
       if (mesaEditando) {
@@ -117,19 +138,54 @@ export default function GestionMesas() {
     );
   }
 
+  const puedeCrearMesas = limitesLicencia?.puede_crear_mesas !== false;
+
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <h2 className="text-2xl font-bold text-gray-800">
           🪑 Gestión de Mesas
         </h2>
-        <button
-          onClick={() => abrirModal()}
-          className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
-        >
-          + Nueva Mesa
-        </button>
+        <div className="flex items-center gap-4">
+          {limitesLicencia && (
+            <div className="text-sm text-gray-600">
+              <span className={`font-medium ${!puedeCrearMesas ? 'text-red-600' : ''}`}>
+                {limitesLicencia.mesas_actuales}/{limitesLicencia.max_mesas}
+              </span>
+              <span className="ml-1">mesas</span>
+              <span className="ml-2 text-xs text-gray-400">
+                (Plan {limitesLicencia.plan})
+              </span>
+            </div>
+          )}
+          <button
+            onClick={() => abrirModal()}
+            disabled={!puedeCrearMesas}
+            className={`px-4 py-2 rounded-lg transition-colors font-medium ${
+              puedeCrearMesas
+                ? 'bg-blue-600 text-white hover:bg-blue-700'
+                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+            }`}
+            title={!puedeCrearMesas ? 'Has alcanzado el límite de mesas de tu plan' : ''}
+          >
+            + Nueva Mesa
+          </button>
+        </div>
       </div>
+
+      {/* Alerta de límite alcanzado */}
+      {limitesLicencia && !puedeCrearMesas && (
+        <div className="flex items-center gap-2 p-4 bg-amber-50 border border-amber-200 rounded-lg text-amber-800">
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" />
+          <div>
+            <p className="font-medium">Límite de mesas alcanzado</p>
+            <p className="text-sm">
+              Tu plan {limitesLicencia.plan} permite hasta {limitesLicencia.max_mesas} mesas. 
+              Para agregar más mesas, contacta al administrador para actualizar tu plan.
+            </p>
+          </div>
+        </div>
+      )}
 
       {/* Lista de mesas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
