@@ -58,6 +58,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     try {
+      // Decodificar el token para verificar si es de impersonación
+      const parts = token.split('.');
+      if (parts.length === 3) {
+        const payload = JSON.parse(atob(parts[1]));
+        
+        // Si es un token de impersonación, cargar datos directamente del token
+        if (payload.impersonated === true) {
+          setUsuario({
+            id: payload.userId,
+            nombre_completo: payload.nombre,
+            usuario: payload.email.split('@')[0], // Generar usuario desde el email
+            email: payload.email,
+            rol_nombre: payload.rol,
+            empresa_id: payload.empresaId,
+            es_superusuario: false
+          });
+          setPermisos(payload.permisos || []);
+          setIsLoading(false);
+          return;
+        }
+      }
+
+      // Si no es token de impersonación, validar normalmente con el servidor
       const response = await fetch(`${API_BASE_URL}/auth/session`, {
         headers: {
           'Authorization': `Bearer ${token}`
@@ -96,8 +119,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Error al iniciar sesión');
+        const errorData = await response.json();
+        // Crear error con código para errores de licencia
+        const error = new Error(errorData.error || 'Error al iniciar sesión');
+        if (errorData.codigo) {
+          (error as any).codigo = errorData.codigo;
+        }
+        throw error;
       }
 
       const data: LoginResponse = await response.json();
@@ -143,7 +171,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return true;
     }
     
-    return permisos.includes(permiso);
+    return Array.isArray(permisos) && permisos.includes(permiso);
   };
 
   // Verificar sesión al montar el componente
