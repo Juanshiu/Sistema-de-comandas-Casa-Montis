@@ -659,7 +659,6 @@ Sistema-de-comandas-Casa-Montis/
 │   │   ├── test-server.js
 │   │   └── ...                           # Otros scripts de prueba
 │   │
-│   ├── .env                              # Variables de entorno (no commiteado)
 │   ├── .env.example                      # Ejemplo de variables de entorno
 │   ├── .gitignore
 │   ├── CONTRATO.TXT                      # Template de contrato
